@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { User, Lock, LogIn, UserPlus } from 'lucide-react'
+import { Lock, LogIn, UserPlus } from 'lucide-react'
 
 export default function LoginPage() {
-  const [nombres, setNombres] = useState('')
   const [dni, setDni] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -13,7 +12,6 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    // Autenticar usando el DNI ingresado en el campo 'dni'
     const cleanDni = dni.trim().replace(/\D/g, '')
     
     if (cleanDni.length < 8) {
@@ -68,37 +66,19 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-4 text-left">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Usuario o Nombres <span className="text-rose-500">*</span>
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <User size={17} />
-              </div>
-              <input
-                type="text"
-                value={nombres}
-                onChange={e => setNombres(e.target.value)}
-                placeholder="Ejemplo: Juan Pérez Quispe"
-                className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] focus:ring-1 focus:ring-[#00a3e8] transition-all"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Contraseña o DNI <span className="text-rose-500">*</span>
+              Número de DNI / Usuario <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                 <Lock size={17} />
               </div>
               <input
-                type="password"
+                type="text"
                 value={dni}
                 onChange={e => setDni(e.target.value.replace(/\D/g, ''))}
                 maxLength={8}
                 required
-                placeholder="Ejemplo: Ingresa tu DNI o tu Clave asignada si es Coordinador (Jefifoto)"
+                placeholder="Ingrese su DNI de 8 dígitos"
                 className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] focus:ring-1 focus:ring-[#00a3e8] transition-all"
               />
             </div>
@@ -137,3 +117,4 @@ export default function LoginPage() {
     </div>
   )
 }
+
