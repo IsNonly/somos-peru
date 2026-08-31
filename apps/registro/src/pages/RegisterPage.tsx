@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase, DISTRITOS, ROLES, generarToken, generarClave } from '../lib/supabase'
 import type { Rol } from '../lib/supabase'
 import { 
@@ -10,6 +10,12 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState<{ token: string; clave: string } | null>(null)
+
+  // Listas dinámicas de colegios según distrito seleccionado
+  const [colegiosVota, setColegiosVota] = useState<string[]>([])
+  const [colegiosAsignado, setColegiosAsignado] = useState<string[]>([])
+  const [cargandoColegiosVota, setCargandoColegiosVota] = useState(false)
+  const [cargandoColegiosAsignado, setCargandoColegiosAsignado] = useState(false)
 
   const [form, setForm] = useState({
     nombres: '',
@@ -27,6 +33,42 @@ export default function RegisterPage() {
   })
 
   const set = (k: string, v: string | boolean) => setForm(p => ({ ...p, [k]: v }))
+
+  // Cargar colegios de donde vota
+  useEffect(() => {
+    if (!form.distritoDondeVota) {
+      setColegiosVota([])
+      return
+    }
+    setCargandoColegiosVota(true)
+    supabase
+      .from('colegios')
+      .select('nombre')
+      .eq('distrito', form.distritoDondeVota)
+      .order('nombre')
+      .then(({ data }) => {
+        setColegiosVota((data || []).map(c => c.nombre))
+        setCargandoColegiosVota(false)
+      })
+  }, [form.distritoDondeVota])
+
+  // Cargar colegios del distrito asignado
+  useEffect(() => {
+    if (!form.distritoAsignado) {
+      setColegiosAsignado([])
+      return
+    }
+    setCargandoColegiosAsignado(true)
+    supabase
+      .from('colegios')
+      .select('nombre')
+      .eq('distrito', form.distritoAsignado)
+      .order('nombre')
+      .then(({ data }) => {
+        setColegiosAsignado((data || []).map(c => c.nombre))
+        setCargandoColegiosAsignado(false)
+      })
+  }, [form.distritoAsignado])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -84,7 +126,7 @@ export default function RegisterPage() {
 
   if (done) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-[#c9e6f8]">
         <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-xl text-center space-y-6 fade-in border border-sky-100">
           <div className="w-16 h-16 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center mx-auto">
             <CheckCircle2 size={36} />
@@ -117,7 +159,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen py-8 px-4 flex justify-center items-start">
+    <div className="min-h-screen py-8 px-4 flex justify-center items-start bg-[#c9e6f8]">
       <div className="w-full max-w-2xl bg-white rounded-[28px] p-6 sm:p-9 shadow-2xl border border-sky-100 fade-in">
         
         {/* Cabecera idéntica */}
@@ -234,7 +276,10 @@ export default function RegisterPage() {
                   </div>
                   <select
                     value={form.distritoDondeVota}
-                    onChange={e => set('distritoDondeVota', e.target.value)}
+                    onChange={e => {
+                      set('distritoDondeVota', e.target.value)
+                      set('localVotacion', '')
+                    }}
                     className="w-full pl-10 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-[#00a3e8] appearance-none"
                   >
                     <option value="">Seleccione Distrito</option>
@@ -254,13 +299,36 @@ export default function RegisterPage() {
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-sky-500">
                     <Building2 size={18} />
                   </div>
-                  <input
-                    type="text"
-                    value={form.localVotacion}
-                    onChange={e => set('localVotacion', e.target.value)}
-                    placeholder={form.distritoDondeVota ? "Nombre del colegio o local" : "Primero seleccione un distrito"}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8]"
-                  />
+                  {colegiosVota.length > 0 ? (
+                    <select
+                      value={form.localVotacion}
+                      onChange={e => set('localVotacion', e.target.value)}
+                      className="w-full pl-10 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-[#00a3e8] appearance-none"
+                    >
+                      <option value="">Seleccione un local de votación ({colegiosVota.length})</option>
+                      {colegiosVota.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      disabled={!form.distritoDondeVota}
+                      value={form.localVotacion}
+                      onChange={e => set('localVotacion', e.target.value)}
+                      placeholder={
+                        cargandoColegiosVota
+                          ? "Cargando colegios..."
+                          : form.distritoDondeVota
+                            ? "Escriba el nombre del local..."
+                            : "Primero seleccione un distrito"
+                      }
+                      className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] disabled:bg-slate-50"
+                    />
+                  )}
+                  {colegiosVota.length > 0 && (
+                    <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  )}
                 </div>
               </div>
             </div>
@@ -318,7 +386,10 @@ export default function RegisterPage() {
                   </div>
                   <select
                     value={form.distritoAsignado}
-                    onChange={e => set('distritoAsignado', e.target.value)}
+                    onChange={e => {
+                      set('distritoAsignado', e.target.value)
+                      set('localAsignado', '')
+                    }}
                     className="w-full pl-10 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-[#00a3e8] appearance-none"
                   >
                     <option value="">Seleccione Distrito</option>
@@ -338,13 +409,36 @@ export default function RegisterPage() {
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-sky-500">
                     <Building2 size={18} />
                   </div>
-                  <input
-                    type="text"
-                    value={form.localAsignado}
-                    onChange={e => set('localAsignado', e.target.value)}
-                    placeholder={form.distritoAsignado ? "Nombre del colegio asignado" : "Primero seleccione un distrito"}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8]"
-                  />
+                  {colegiosAsignado.length > 0 ? (
+                    <select
+                      value={form.localAsignado}
+                      onChange={e => set('localAsignado', e.target.value)}
+                      className="w-full pl-10 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-[#00a3e8] appearance-none"
+                    >
+                      <option value="">Seleccione el local asignado ({colegiosAsignado.length})</option>
+                      {colegiosAsignado.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      disabled={!form.distritoAsignado}
+                      value={form.localAsignado}
+                      onChange={e => set('localAsignado', e.target.value)}
+                      placeholder={
+                        cargandoColegiosAsignado
+                          ? "Cargando locales..."
+                          : form.distritoAsignado
+                            ? "Escriba el local asignado..."
+                            : "Primero seleccione un distrito"
+                      }
+                      className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] disabled:bg-slate-50"
+                    />
+                  )}
+                  {colegiosAsignado.length > 0 && (
+                    <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  )}
                 </div>
               </div>
             </div>
