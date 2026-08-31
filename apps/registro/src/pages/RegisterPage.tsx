@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase, DISTRITOS, generarToken, generarClave } from '../lib/supabase'
 import type { Rol } from '../lib/supabase'
 import {
@@ -117,6 +117,58 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
 
 const inputCls = 'w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] focus:ring-1 focus:ring-[#00a3e8]'
 const selectCls = 'w-full pl-10 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-[#00a3e8] appearance-none'
+
+function PantallaExito({ done }: { done: { token: string; nombres: string; dni: string } }) {
+  const [secs, setSecs] = useState(5)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      setSecs(s => {
+        if (s <= 1) {
+          window.location.href = '/login'
+          return 0
+        }
+        return s - 1
+      })
+    }, 1000)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [])
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#c9e6f8]">
+      <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-xl text-center space-y-5 border border-sky-100">
+        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
+          <CheckCircle2 size={36} />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-800">Registro Exitoso!</h2>
+        <p className="text-slate-500 text-sm">
+          <strong>{done.nombres}</strong>, tus datos fueron registrados en el padrón oficial de Somos Perú.
+        </p>
+        <div className="bg-sky-50 border border-sky-100 rounded-2xl p-5 text-left space-y-3">
+          <div>
+            <p className="text-xs uppercase font-semibold text-sky-600">Token de Acreditación</p>
+            <p className="text-2xl font-mono font-bold text-sky-700 tracking-wider">{done.token}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase font-semibold text-sky-600">Tu DNI es tu Clave de Acceso</p>
+            <p className="text-lg font-mono font-bold text-slate-700">{done.dni}</p>
+          </div>
+        </div>
+        <p className="text-xs text-slate-400">Guarda este token. Lo necesitarás para ingresar a la App el día de las elecciones.</p>
+        <div className="space-y-2">
+          <p className="text-xs text-slate-400">Redirigiendo al inicio de sesión en <span className="font-bold text-[#00a3e8]">{secs}s</span>...</p>
+          <div className="w-full bg-slate-100 rounded-full h-1.5">
+            <div className="bg-[#00a3e8] h-1.5 rounded-full transition-all duration-1000" style={{ width: `${(secs / 5) * 100}%` }} />
+          </div>
+        </div>
+        <a href="/login" className="block w-full py-3.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-2xl shadow-lg shadow-sky-500/25 transition-all text-center text-sm">
+          → Ir a Iniciar Sesión ahora
+        </a>
+      </div>
+    </div>
+  )
+}
 
 function SectionHeader({ num, title }: { num: string; title: string }) {
   return (
@@ -278,33 +330,7 @@ export default function RegisterPage() {
   }
 
   if (done) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-[#c9e6f8]">
-        <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-xl text-center space-y-6 border border-sky-100">
-          <div className="w-16 h-16 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle2 size={36} />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-800">Registro Exitoso!</h2>
-          <p className="text-slate-500 text-sm">
-            <strong>{done.nombres}</strong>, tus datos fueron registrados en el padrón oficial de Somos Perú.
-          </p>
-          <div className="bg-sky-50/70 border border-sky-100 rounded-2xl p-5 text-left space-y-3">
-            <div>
-              <p className="text-xs uppercase font-semibold text-sky-600">Token de Acreditación</p>
-              <p className="text-2xl font-mono font-bold text-sky-700">{done.token}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase font-semibold text-sky-600">Tu DNI es tu Clave de Acceso</p>
-              <p className="text-lg font-mono font-bold text-slate-700">{done.dni}</p>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400">Guarda este token. Lo necesitarás para ingresar a la App el día de las elecciones.</p>
-          <a href="/login" className="block w-full py-3.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-2xl shadow-lg shadow-sky-500/25 transition-all text-center">
-            Ir a Iniciar Sesión
-          </a>
-        </div>
-      </div>
-    )
+    return <PantallaExito done={done} />
   }
 
   return (

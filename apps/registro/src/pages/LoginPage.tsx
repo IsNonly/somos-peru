@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Eye, EyeOff, Shield, ArrowLeft, LogIn } from 'lucide-react'
+import { User, Lock, LogIn, UserPlus } from 'lucide-react'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [show, setShow] = useState(false)
+  const [nombres, setNombres] = useState('')
+  const [dni, setDni] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -13,71 +12,99 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-    if (err) setError('Credenciales incorrectas. Verifique su correo y contraseña.')
+
+    // Autenticar con DNI como email y contraseña
+    const cleanDni = dni.trim().replace(/\D/g, '')
+    const email = `${cleanDni}@somosperu.com`
+
+    const { error: err } = await supabase.auth.signInWithPassword({
+      email,
+      password: cleanDni,
+    })
+
+    if (err) {
+      setError('Credenciales incorrectas. Verifique su DNI e inténtelo de nuevo.')
+    }
     setLoading(false)
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#c9e6f8] p-4">
-      <div className="w-full max-w-md bg-white border border-sky-100 rounded-[28px] p-8 sm:p-9 shadow-2xl fade-in text-center">
-        {/* Logo */}
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#00a3e8] mb-4 shadow-lg shadow-sky-500/25">
-          <Shield size={32} className="text-white" strokeWidth={2} />
-        </div>
-        
-        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Acceso a Registro</h1>
-        <p className="text-slate-500 text-xs mt-1 font-medium">Panel de Coordinación • Somos Perú 2026</p>
+      <div className="w-full max-w-sm bg-white border border-sky-100 rounded-[24px] p-8 shadow-xl text-center">
 
-        <form onSubmit={handleLogin} className="mt-6 space-y-4 text-left">
+        {/* Logo Somos Perú */}
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-20 h-20 mb-3 flex items-center justify-center">
+            <svg viewBox="0 0 100 100" className="w-20 h-20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {/* Corazón rojo */}
+              <path d="M50 80 C50 80 15 55 15 32 C15 20 24 12 35 12 C42 12 48 16 50 20 C52 16 58 12 65 12 C76 12 85 20 85 32 C85 55 50 80 50 80Z"
+                fill="#e53e3e" stroke="#c53030" strokeWidth="2"/>
+              {/* Texto SOMOS dentro del corazón */}
+              <text x="50" y="36" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="Arial">SOMOS</text>
+              {/* Franja bandera peruana */}
+              <rect x="22" y="42" width="14" height="16" fill="#e53e3e" rx="1"/>
+              <rect x="36" y="42" width="14" height="16" fill="white" rx="1"/>
+              <rect x="50" y="42" width="14" height="16" fill="#e53e3e" rx="1"/>
+              {/* PERÚ */}
+              <text x="50" y="68" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold" fontFamily="Arial">PERÚ</text>
+            </svg>
+          </div>
+
+          <h1 className="text-base font-extrabold text-slate-800 uppercase tracking-wide leading-tight">
+            Elecciones Regionales y<br />Municipales 2026
+          </h1>
+          <p className="text-[11px] font-bold text-[#00a3e8] uppercase tracking-widest mt-1 border-b-2 border-[#e53e3e] pb-1">
+            Plataforma de Capacitación y Seguimiento
+          </p>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-4 text-left">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Correo electrónico
+              Usuario o Nombres <span className="text-rose-500">*</span>
             </label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              autoFocus
-              placeholder="coordinador@somosperu.pe"
-              className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#00a3e8] transition-all"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <User size={17} />
+              </div>
+              <input
+                type="text"
+                value={nombres}
+                onChange={e => setNombres(e.target.value)}
+                placeholder="Ejemplo: Juan Pérez Quispe"
+                className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] focus:ring-1 focus:ring-[#00a3e8] transition-all"
+              />
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Contraseña o DNI
+              Contraseña o DNI <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Lock size={17} />
+              </div>
               <input
-                type={show ? 'text' : 'password'}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
+                type="password"
+                value={dni}
+                onChange={e => setDni(e.target.value.replace(/\D/g, ''))}
+                maxLength={8}
                 required
-                placeholder="••••••••"
-                className="w-full bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 pr-12 text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#00a3e8] transition-all"
+                placeholder="Ejemplo: Ingresa tu DNI o tu Clave asignada si es Coordinador (Jefifoto)"
+                className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] focus:ring-1 focus:ring-[#00a3e8] transition-all"
               />
-              <button
-                type="button"
-                onClick={() => setShow(!show)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                {show ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
             </div>
           </div>
 
           {error && (
-            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-100 rounded-xl p-3">
-              {error}
-            </p>
+            <p className="text-rose-600 text-xs bg-rose-50 border border-rose-100 rounded-xl p-3">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-xl shadow-md shadow-sky-500/25 transition-all active:scale-[0.99] disabled:opacity-50 text-sm flex items-center justify-center gap-2"
+            className="w-full py-3.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-xl shadow-md shadow-sky-500/20 transition-all active:scale-[0.99] disabled:opacity-60 text-sm flex items-center justify-center gap-2 mt-1"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -90,13 +117,13 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-center">
+        <div className="mt-5 pt-4 border-t border-slate-100">
           <a
             href="/"
-            className="inline-flex items-center gap-1.5 text-sky-600 hover:text-sky-700 text-xs font-bold transition-colors"
+            className="inline-flex items-center gap-1.5 text-sky-500 hover:text-sky-700 text-xs font-bold transition-colors"
           >
-            <ArrowLeft size={14} />
-            <span>Volver al formulario de registro</span>
+            <UserPlus size={14} />
+            <span>¿Aún no estás inscrito? Regístrate aquí</span>
           </a>
         </div>
       </div>
