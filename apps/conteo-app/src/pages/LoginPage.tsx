@@ -1,72 +1,135 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, User, CreditCard, ArrowRight, CheckSquare } from 'lucide-react'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [pass, setPass] = useState('')
+  const [nombre, setNombre] = useState('')
+  const [dni, setDni] = useState('')
   const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true); setError('')
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password: pass })
-    if (err) setError('Acceso Denegado: Tus credenciales no se encuentran confirmadas o están bloqueadas.')
+    setLoading(true)
+    setError('')
+
+    const cleanDni = dni.trim()
+    const email = `${cleanDni}@somosperu2026.pe`
+    const { error: err } = await supabase.auth.signInWithPassword({
+      email,
+      password: cleanDni,
+    })
+
+    if (err) {
+      // Intentar también como correo normal por si ingresaron correo
+      const { error: err2 } = await supabase.auth.signInWithPassword({
+        email: cleanDni,
+        password: cleanDni,
+      })
+      if (err2) {
+        setError('Acceso Denegado: Tus credenciales no se encuentran confirmadas o están bloqueadas.')
+      }
+    }
     setLoading(false)
   }
 
   return (
-    <div className="min-h-svh flex flex-col items-center justify-center p-5 bg-[#0a0a14]">
-      <div className="w-full max-w-sm space-y-7 fade-in">
-        <div className="text-center">
-          <div className="inline-flex w-16 h-16 items-center justify-center rounded-2xl bg-brand-red mb-4">
-            <ShieldCheck size={32} className="text-white" strokeWidth={1.5} />
+    <div className="min-h-screen flex flex-col justify-between bg-[#0b0f19] text-white p-5 sm:p-8">
+      {/* Top Navbar */}
+      <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 text-indigo-400">
+          <div className="p-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10">
+            <CheckSquare size={22} className="text-indigo-400" />
           </div>
-          <h1 className="text-white text-xl font-bold">Conteo de Votos</h1>
-          <p className="text-white/40 text-sm mt-1">Somos Perú — ERM 2026</p>
+          <span className="font-extrabold text-xl tracking-tight text-white">VotoReal</span>
         </div>
+        <span className="text-[10px] font-bold font-mono tracking-wider px-2 py-0.5 rounded-full bg-[#161d31] text-indigo-400 border border-indigo-500/20">
+          MÓVIL
+        </span>
+      </div>
 
-        <form onSubmit={login} className="space-y-4">
-          <div className="bg-[#14141f] border border-white/8 rounded-2xl p-1 space-y-1">
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="Correo electrónico"
-              required
-              className="w-full px-4 py-3.5 bg-transparent text-white text-sm placeholder-white/25 outline-none"
-            />
-            <div className="h-px bg-white/5" />
-            <div className="relative">
-              <input
-                type={show ? 'text' : 'password'}
-                value={pass}
-                onChange={e => setPass(e.target.value)}
-                placeholder="Contraseña"
-                required
-                className="w-full px-4 py-3.5 bg-transparent text-white text-sm placeholder-white/25 outline-none pr-12"
-              />
-              <button type="button" onClick={() => setShow(!show)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30">
-                {show ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
+      {/* Main Card */}
+      <div className="w-full max-w-md mx-auto my-auto py-8">
+        <div className="bg-[#121829] border border-white/5 rounded-3xl p-7 sm:p-8 shadow-2xl shadow-black/50 space-y-6">
+          <div className="text-center space-y-1">
+            <h1 className="text-2xl font-extrabold text-white">Acceso al Sistema</h1>
+            <p className="text-slate-400 text-xs">Registra tus datos de control electoral</p>
           </div>
 
-          {error && (
-            <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
-              {error}
-            </p>
-          )}
+          <form onSubmit={login} className="space-y-4">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-2">
+                Nombre y Apellido
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <User size={18} />
+                </div>
+                <input
+                  type="text"
+                  value={nombre}
+                  onChange={e => setNombre(e.target.value)}
+                  placeholder="Primer nombre y primer apellido"
+                  className="w-full pl-10 pr-4 py-3.5 bg-[#0e1322] border border-white/10 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition-all"
+                />
+              </div>
+            </div>
 
-          <button type="submit" disabled={loading}
-            className="w-full py-4 bg-brand-red hover:bg-red-600 text-white font-bold rounded-2xl text-sm transition-all disabled:opacity-50 active:scale-[0.98]">
-            {loading ? 'Verificando…' : 'Ingresar'}
-          </button>
-        </form>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-2">
+                DNI / Clave de Acceso
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <CreditCard size={18} />
+                </div>
+                <input
+                  type={show ? 'text' : 'password'}
+                  required
+                  value={dni}
+                  onChange={e => setDni(e.target.value)}
+                  placeholder="Ingresa tu DNI de 8 dígitos"
+                  className="w-full pl-10 pr-12 py-3.5 bg-[#0e1322] border border-white/10 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShow(!show)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-3 py-4 bg-gradient-to-r from-[#6366f1] via-[#3b82f6] to-[#0ea5e9] hover:opacity-95 text-white font-bold rounded-2xl text-sm transition-all shadow-lg shadow-indigo-500/25 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <span>Ingresar al Sistema</span>
+                  <ArrowRight size={17} strokeWidth={2.5} />
+                </>
+              )}
+            </button>
+          </form>
+        </div>
       </div>
+
+      {/* Footer */}
+      <p className="text-center text-slate-500 text-xs py-2">
+        Elecciones de Alcaldía — Control de Actas
+      </p>
     </div>
   )
 }

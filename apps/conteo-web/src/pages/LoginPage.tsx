@@ -1,137 +1,131 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Eye, EyeOff, ShieldCheck, Vote, Sparkles } from 'lucide-react'
+import { Check, Lock, User, Sun } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
-  const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true); setError('')
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password: pass })
-    if (err) setError('Credenciales incorrectas. Verifique su usuario y contraseña.')
+    setLoading(true)
+    setError('')
+    
+    // Permitir ingresar "admin" directo o correo
+    let userEmail = email.trim()
+    if (!userEmail.includes('@')) {
+      userEmail = `${userEmail}@somosperu2026.pe`
+    }
+
+    const { error: err } = await supabase.auth.signInWithPassword({
+      email: userEmail,
+      password: pass,
+    })
+
+    if (err) {
+      // Intentar también con correo crudo ingresado
+      const { error: err2 } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: pass,
+      })
+      if (err2) {
+        setError('Credenciales incorrectas. Verifique su usuario y contraseña.')
+      }
+    }
     setLoading(false)
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a14] p-4 relative overflow-hidden">
-      {/* Luces de fondo y atmósfera */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-gradient-to-tr from-[#E8534A]/20 via-[#E8534A]/5 to-transparent rounded-full blur-[130px]" />
-        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px]" />
+    <div className="min-h-screen flex flex-col justify-between items-center p-4 sm:p-6 relative overflow-hidden bg-gradient-to-br from-[#d4e9f7] via-[#ebf4f6] to-[#c7e5df]">
+      {/* Botón superior derecho "Modo claro" */}
+      <div className="w-full flex justify-end">
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/90 shadow-sm border border-slate-200/80 text-xs font-medium text-slate-700 hover:bg-white transition-all"
+        >
+          <span>☀️</span>
+          <span>Modo claro</span>
+        </button>
       </div>
 
-      <div className="relative w-full max-w-md fade-in">
-        {/* Encabezado con Logo y Branding */}
-        <div className="text-center mb-7">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/80 text-xs font-semibold uppercase tracking-wider mb-4 shadow-lg backdrop-blur-md">
-            <Vote size={14} className="text-[#E8534A]" />
-            <span>Centro de Cómputo Oficial 2026</span>
-          </div>
-          
-          <div className="flex justify-center mb-3">
-            <div className="relative">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#E8534A] to-[#b92c24] flex items-center justify-center shadow-2xl shadow-[#E8534A]/30 border border-white/20">
-                <ShieldCheck size={36} className="text-white" strokeWidth={1.8} />
-              </div>
-              <div className="absolute -bottom-1 -right-1 p-1 bg-[#0a0a14] rounded-full">
-                <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-[#0a0a14] animate-pulse" />
-              </div>
-            </div>
-          </div>
-
-          <h1 className="text-white font-extrabold text-2xl tracking-tight">
-            SOMOS PERÚ <span className="text-[#E8534A]">2026</span>
-          </h1>
-          <p className="text-white/50 text-xs mt-1">Sistema Integrado de Escrutinio y Conteo Rápido</p>
+      {/* Tarjeta Central Flotante */}
+      <div className="w-full max-w-[420px] my-auto bg-white rounded-[28px] p-8 sm:p-10 shadow-2xl shadow-slate-400/20 border border-slate-100 fade-in text-center">
+        
+        {/* Icono central de Voto Real */}
+        <div className="w-16 h-16 rounded-2xl bg-[#00838f] flex items-center justify-center mx-auto mb-4 shadow-lg shadow-[#00838f]/30">
+          <Check size={36} className="text-white" strokeWidth={3} />
         </div>
 
-        {/* Tarjeta de Formulario Glassmorphism */}
-        <div className="bg-[#121224]/80 backdrop-blur-xl border border-white/10 rounded-3xl p-7 sm:p-8 shadow-2xl relative">
-          <div className="mb-5 pb-4 border-b border-white/5 flex items-center justify-between">
-            <div>
-              <h2 className="text-white font-semibold text-base">Acceso al Centro de Mando</h2>
-              <p className="text-white/40 text-xs">Ingrese sus credenciales autorizadas</p>
-            </div>
-            <span className="text-[10px] font-mono font-medium px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              EN VIVO
-            </span>
-          </div>
+        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Voto Real</h1>
+        <p className="text-slate-500 text-xs mt-1">Plataforma Electoral Profesional — LIMA • ONPE</p>
 
-          <form onSubmit={login} className="space-y-4">
-            <div>
-              <label className="block text-white/60 text-xs font-semibold uppercase tracking-wider mb-2">
-                Correo Electrónico
-              </label>
+        <h2 className="text-sm font-bold text-slate-800 mt-6 mb-5">Acceso de Administrador</h2>
+
+        <form onSubmit={login} className="space-y-4 text-left">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Usuario
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <User size={18} />
+              </div>
               <input
-                type="email"
+                type="text"
+                required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                required
-                placeholder="ejemplo@somosperu.pe"
-                className="w-full bg-[#0a0a14]/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/25 outline-none focus:border-[#E8534A] focus:ring-2 focus:ring-[#E8534A]/20 transition-all"
+                placeholder="admin"
+                className="w-full pl-10 pr-4 py-3 bg-[#f8fafc] border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#00838f] transition-all"
               />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-white/60 text-xs font-semibold uppercase tracking-wider mb-2">
-                Contraseña
-              </label>
-              <div className="relative">
-                <input
-                  type={show ? 'text' : 'password'}
-                  value={pass}
-                  onChange={e => setPass(e.target.value)}
-                  required
-                  placeholder="••••••••••••"
-                  className="w-full bg-[#0a0a14]/80 border border-white/10 rounded-xl px-4 py-3 pr-12 text-white text-sm placeholder-white/25 outline-none focus:border-[#E8534A] focus:ring-2 focus:ring-[#E8534A]/20 transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShow(!show)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
-                >
-                  {show ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Contraseña
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Lock size={18} />
               </div>
+              <input
+                type="password"
+                required
+                value={pass}
+                onChange={e => setPass(e.target.value)}
+                placeholder="••••••••••"
+                className="w-full pl-10 pr-4 py-3 bg-[#f8fafc] border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#00838f] transition-all"
+              />
             </div>
+          </div>
 
-            {error && (
-              <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-xs flex items-center gap-2">
-                <span>⚠️</span>
-                <span>{error}</span>
-              </div>
+          {error && (
+            <p className="text-red-500 text-xs bg-red-50 border border-red-100 rounded-lg p-2.5">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2 py-3.5 bg-[#00838f] hover:bg-[#00737d] text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-[#00838f]/20 active:scale-[0.99] disabled:opacity-50 flex items-center justify-center"
+          >
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <span>Iniciar sesión</span>
             )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 py-3.5 bg-gradient-to-r from-[#E8534A] to-[#d4382f] hover:from-[#f05c54] hover:to-[#E8534A] text-white font-bold rounded-xl text-sm shadow-lg shadow-[#E8534A]/25 transition-all transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Validando acceso...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} />
-                  <span>Ingresar al Sistema</span>
-                </>
-              )}
-            </button>
-          </form>
-        </div>
-
-        {/* Footer institucional */}
-        <p className="text-center text-white/25 text-xs mt-6">
-          Partido Democrático Somos Perú • Elecciones Regionales y Municipales 2026
-        </p>
+          </button>
+        </form>
       </div>
+
+      {/* Footer */}
+      <p className="text-center text-slate-500 text-xs pb-2">
+        Sistema Electoral © 2026 • Solo acceso autorizado
+      </p>
     </div>
   )
 }
