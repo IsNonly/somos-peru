@@ -13,8 +13,15 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    // Autenticar con DNI como email y contraseña
+    // Autenticar usando el DNI ingresado en el campo 'dni'
     const cleanDni = dni.trim().replace(/\D/g, '')
+    
+    if (cleanDni.length < 8) {
+      setError('El DNI debe tener 8 dígitos.')
+      setLoading(false)
+      return
+    }
+
     const email = `${cleanDni}@somosperu.com`
 
     const { error: err } = await supabase.auth.signInWithPassword({
