@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Lock, LogIn, UserPlus } from 'lucide-react'
+import { Lock, LogIn, UserPlus, User } from 'lucide-react'
 
 export default function LoginPage() {
   const [dni, setDni] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -13,6 +14,7 @@ export default function LoginPage() {
     setError('')
 
     const cleanDni = dni.trim().replace(/\D/g, '')
+    const cleanPassword = password.trim()
     
     if (cleanDni.length < 8) {
       setError('El DNI debe tener 8 dígitos.')
@@ -24,11 +26,11 @@ export default function LoginPage() {
 
     const { error: err } = await supabase.auth.signInWithPassword({
       email,
-      password: cleanDni,
+      password: cleanPassword, // Usa la contraseña que digite (que por defecto es su DNI)
     })
 
     if (err) {
-      setError('Credenciales incorrectas. Verifique su DNI e inténtelo de nuevo.')
+      setError('Credenciales incorrectas. Verifique su DNI y Contraseña.')
     }
     setLoading(false)
   }
@@ -66,11 +68,11 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-4 text-left">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Número de DNI / Usuario <span className="text-rose-500">*</span>
+              D.N.I. (Usuario) <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Lock size={17} />
+                <User size={17} />
               </div>
               <input
                 type="text"
@@ -78,7 +80,26 @@ export default function LoginPage() {
                 onChange={e => setDni(e.target.value.replace(/\D/g, ''))}
                 maxLength={8}
                 required
-                placeholder="Ingrese su DNI de 8 dígitos"
+                placeholder="Ejemplo: 95128549"
+                className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] focus:ring-1 focus:ring-[#00a3e8] transition-all"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              Contraseña <span className="text-rose-500">*</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Lock size={17} />
+              </div>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                placeholder="Ingrese su contraseña (su DNI)"
                 className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] focus:ring-1 focus:ring-[#00a3e8] transition-all"
               />
             </div>
@@ -117,4 +138,5 @@ export default function LoginPage() {
     </div>
   )
 }
+
 
