@@ -24,11 +24,30 @@ export default function LoginPage() {
 
     const email = `${cleanDni}@somosperu.com`
 
-    const { error: err } = await supabase.auth.signInWithPassword({
+    // 1. Intentar iniciar sesión usando la contraseña ingresada
+    let { error: err } = await supabase.auth.signInWithPassword({
       email,
-      password: cleanPassword, // Usa la contraseña que digite (que por defecto es su DNI)
+      password: cleanPassword,
     })
 
+    // 2. Si falla y la contraseña ingresada es el DNI, intentar recuperar la clave_acceso generada
+    if (err && cleanPassword === cleanDni) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('clave_acceso')
+        .eq('dni', cleanDni)
+        .single()
+
+      if (profile?.clave_acceso) {
+        const { error: errFallback } = await supabase.auth.signInWithPassword({
+          email,
+          password: profile.clave_acceso,
+        })
+        err = errFallback
+      }
+    }
+
+    // 3. Fallback adicional por si es la clave generada
     if (err) {
       setError('Credenciales incorrectas. Verifique su DNI y Contraseña.')
     }
