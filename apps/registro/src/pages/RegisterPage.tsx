@@ -287,7 +287,7 @@ export default function RegisterPage() {
       const token = generarToken(cleanDni)
       const clave = generarClave()
       const email = `${cleanDni}@somosperu.com`
-      const password = cleanDni.length >= 6 ? cleanDni : `SP2026_${cleanDni}`
+      const password = cleanDni // El password es exactamente el DNI siempre
 
       const { data: authData, error: authErr } = await supabase.auth.signUp({
         email, password,
