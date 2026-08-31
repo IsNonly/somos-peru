@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Outfit', sans-serif; background: #0f0f1a; color: #f1f1f1; min-height: 100vh; }
+
+/* Leaflet dark mode */
+.leaflet-container { background: #1a1a2e; }
+.leaflet-tile { filter: brightness(0.7) saturate(0.6) hue-rotate(200deg); }
+.leaflet-popup-content-wrapper { background: #1a1a2e; color: #fff; border: 1px solid rgba(255,255,255,0.1); }
+.leaflet-popup-tip { background: #1a1a2e; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0f0f1a; }
+::-webkit-scrollbar-thumb { background: #E8534A; border-radius: 3px; }
+
+@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+.fade-in { animation: fadeIn 0.25s ease; }
