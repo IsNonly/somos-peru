@@ -84,11 +84,14 @@ export default function RegisterPage() {
     setLoading(true)
     setError('')
     try {
-      const token = generarToken(form.dni)
+      const cleanDni = form.dni.trim()
+      const token = generarToken(cleanDni)
       const clave = generarClave()
 
-      const email = `${form.dni}@somosperu2026.pe`
-      const password = form.dni
+      // Usar un dominio estándar válido para Supabase Auth (@somosperu.com)
+      const email = `${cleanDni}@somosperu.com`
+      // Supabase requiere contraseñas de al menos 6 caracteres (el DNI tiene 8)
+      const password = cleanDni.length >= 6 ? cleanDni : `SP2026_${cleanDni}`
 
       const { data: authData, error: authErr } = await supabase.auth.signUp({
         email,
@@ -97,12 +100,15 @@ export default function RegisterPage() {
       })
       if (authErr) throw authErr
 
-      const { error: profileErr } = await supabase.from('profiles').insert({
-        id: authData.user!.id,
+      const userId = authData.user?.id
+      if (!userId) throw new Error('No se pudo generar el identificador de usuario.')
+
+      const { error: profileErr } = await supabase.from('profiles').upsert({
+        id: userId,
         nombre_completo: form.nombres,
-        dni: form.dni,
+        dni: cleanDni,
         celular: form.celular,
-        correo: form.correo || email,
+        correo: email,
         distrito_vota: form.distritoDondeVota || null,
         local_votacion: form.localVotacion || null,
         rol: form.rol,

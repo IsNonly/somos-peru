@@ -15,21 +15,14 @@ export default function LoginPage() {
     setError('')
 
     const cleanDni = dni.trim()
-    const email = `${cleanDni}@somosperu2026.pe`
+    const email = cleanDni.includes('@') ? cleanDni : `${cleanDni}@somosperu.com`
     const { error: err } = await supabase.auth.signInWithPassword({
       email,
       password: cleanDni,
     })
 
     if (err) {
-      // Intentar también como correo normal por si ingresaron correo
-      const { error: err2 } = await supabase.auth.signInWithPassword({
-        email: cleanDni,
-        password: cleanDni,
-      })
-      if (err2) {
-        setError('Acceso Denegado: Tus credenciales no se encuentran confirmadas o están bloqueadas.')
-      }
+      setError('Acceso Denegado: Tus credenciales no se encuentran confirmadas o están bloqueadas.')
     }
     setLoading(false)
   }
