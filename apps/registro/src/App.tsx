@@ -34,10 +34,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/dashboard" />} />
+        <Route path="/" element={<RegisterPage />} />
         <Route path="/registro" element={<RegisterPage />} />
-        <Route path="/" element={user ? <Layout /> : <Navigate to="/login" />}>
-          <Route index element={<Navigate to="/dashboard" />} />
+        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/dashboard" />} />
+        <Route path="/admin" element={user ? <Layout /> : <Navigate to="/login" />}>
+          <Route index element={<Navigate to="/admin/dashboard" />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="personeros" element={<PersonerosPage />} />
           <Route path="capacitacion" element={<CapacitacionPage />} />
