@@ -1,19 +1,28 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { supabase, CANDIDATOS_PROVINCIALES, haversineM } from '../lib/supabase'
+import {
+  supabase, CANDIDATOS_METROPOLITANA, VOTOS_ESPECIALES,
+  getCandidatosDistrital, haversineM,
+} from '../lib/supabase'
+import type { Candidato } from '../lib/supabase'
 import { procesarActa } from '../lib/ocr'
 import { subirImagenActa } from '../lib/storage'
 import {
   Camera, RefreshCw, Send, CheckCircle, AlertTriangle,
-  Loader, MapPin, Key, ChevronDown, ChevronUp,
+  Loader, MapPin, Key, ChevronDown, ChevronUp, Minus, Plus,
 } from 'lucide-react'
 
 type Modo = 'MANUAL' | 'IMAGEN'
 type Fase = 'setup' | 'captura' | 'revision' | 'enviado'
+type Nivel = 'metro' | 'distrital'
 
-interface VotoRow { candidato: string; provincial: number; distrital: number }
-
-const initVotos = (): VotoRow[] =>
-  CANDIDATOS_PROVINCIALES.map(c => ({ candidato: c, provincial: 0, distrital: 0 }))
+// Busca el candidato cuyo nombre o partido más se parece al texto reconocido por OCR
+function matchCandidato(lista: Candidato[], texto: string): Candidato | undefined {
+  const t = texto.toLowerCase()
+  return lista.find(c =>
+    t.includes(c.partido.toLowerCase().slice(0, 6)) || c.partido.toLowerCase().includes(t.slice(0, 6)) ||
+    (!!c.nombre && (t.includes(c.nombre.toLowerCase().slice(0, 6)) || c.nombre.toLowerCase().includes(t.slice(0, 6))))
+  )
+}
 
 // Carga la clave Gemini guardada en Supabase (tabla config)
 async function getGeminiKey(userId: string): Promise<string> {
@@ -39,7 +48,8 @@ export default function ConteoPage() {
   const [mesa, setMesa]               = useState('')
   const [modo, setModo]               = useState<Modo>('MANUAL')
   const [fase, setFase]               = useState<Fase>('setup')
-  const [votos, setVotos]             = useState<VotoRow[]>(initVotos())
+  const [votosMetro, setVotosMetro]         = useState<Record<string, number>>({})
+  const [votosDistrital, setVotosDistrital] = useState<Record<string, number>>({})
   const [imgSrc, setImgSrc]           = useState<string | null>(null)
   const [imgMime, setImgMime]         = useState('image/jpeg')
   const [ocrLoading, setOcrLoading]   = useState(false)
@@ -52,6 +62,8 @@ export default function ConteoPage() {
   const [geminiKey, setGeminiKey]     = useState('')
   const [showKeyInput, setShowKeyInput] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const candidatosDistrital = getCandidatosDistrital(perfil?.distrito_asignado)
 
   useEffect(() => {
     const init = async () => {
@@ -132,20 +144,17 @@ export default function ConteoPage() {
           setOcrMetodo(resultado.metodo)
 
           if (resultado.votos.length > 0) {
-            // Mapear resultados OCR a los candidatos conocidos
-            const nuevos = initVotos()
+            // Mapear resultados OCR a los candidatos conocidos (metro y distrital)
+            const nuevosMetro: Record<string, number> = {}
+            const nuevosDistrital: Record<string, number> = {}
             resultado.votos.forEach(v => {
-              // Buscar candidato más cercano en la lista
-              const idx = nuevos.findIndex(n =>
-                n.candidato.toLowerCase().includes(v.partido.toLowerCase().slice(0, 6)) ||
-                v.partido.toLowerCase().includes(n.candidato.toLowerCase().slice(0, 6))
-              )
-              if (idx >= 0) {
-                nuevos[idx].provincial = v.provincial
-                nuevos[idx].distrital  = v.distrital
-              }
+              const cMetro = matchCandidato(CANDIDATOS_METROPOLITANA, v.partido)
+              if (cMetro && v.provincial > 0) nuevosMetro[cMetro.id] = v.provincial
+              const cDist = matchCandidato(candidatosDistrital, v.partido)
+              if (cDist && v.distrital > 0) nuevosDistrital[cDist.id] = v.distrital
             })
-            setVotos(nuevos)
+            setVotosMetro(nuevosMetro)
+            setVotosDistrital(nuevosDistrital)
           }
         } catch {
           setError('No se pudo procesar el acta automáticamente. Ingresa los votos manualmente.')
@@ -159,13 +168,13 @@ export default function ConteoPage() {
     e.target.value = ''
   }
 
-  const setVoto = (i: number, campo: 'provincial' | 'distrital', val: string) => {
-    const n = parseInt(val) || 0
-    setVotos(prev => prev.map((v, idx) => idx === i ? { ...v, [campo]: Math.max(0, n) } : v))
+  const cambiarVoto = (nivel: Nivel, id: string, delta: number) => {
+    const setter = nivel === 'metro' ? setVotosMetro : setVotosDistrital
+    setter(prev => ({ ...prev, [id]: Math.max(0, (prev[id] || 0) + delta) }))
   }
 
-  const totalProv = votos.reduce((a, v) => a + v.provincial, 0)
-  const totalDist = votos.reduce((a, v) => a + v.distrital, 0)
+  const totalProv = Object.values(votosMetro).reduce((a, b) => a + b, 0)
+  const totalDist = Object.values(votosDistrital).reduce((a, b) => a + b, 0)
 
   // ── Enviar acta ─────────────────────────────────────────────────────────
   const enviar = async () => {
@@ -212,10 +221,20 @@ export default function ConteoPage() {
       if (actaErr) throw actaErr
 
       // Insertar votos (filtrar ceros)
-      const filas = votos.flatMap(v => [
-        { acta_id: acta.id, mesa_numero: mesa, distrito: perfil?.distrito_asignado ?? null, nivel: 'PROVINCIAL', partido: v.candidato, cantidad: v.provincial },
-        { acta_id: acta.id, mesa_numero: mesa, distrito: perfil?.distrito_asignado ?? null, nivel: 'DISTRITAL',  partido: v.candidato, cantidad: v.distrital  },
-      ]).filter(f => f.cantidad > 0)
+      const distritoActa = perfil?.distrito_asignado ?? perfil?.distrito_vota ?? null
+      const listaMetro     = [...CANDIDATOS_METROPOLITANA, ...VOTOS_ESPECIALES]
+      const listaDistrital = [...candidatosDistrital, ...VOTOS_ESPECIALES]
+
+      const filas = [
+        ...Object.entries(votosMetro).map(([id, cantidad]) => {
+          const c = listaMetro.find(x => x.id === id)
+          return { acta_id: acta.id, mesa_numero: mesa, distrito: distritoActa, nivel: 'PROVINCIAL', partido: c?.partido ?? id, candidato: c?.nombre || null, cantidad }
+        }),
+        ...Object.entries(votosDistrital).map(([id, cantidad]) => {
+          const c = listaDistrital.find(x => x.id === id)
+          return { acta_id: acta.id, mesa_numero: mesa, distrito: distritoActa, nivel: 'DISTRITAL', partido: c?.partido ?? id, candidato: c?.nombre || null, cantidad }
+        }),
+      ].filter(f => f.cantidad > 0)
 
       if (filas.length) await supabase.from('votos').insert(filas)
 
@@ -417,35 +436,42 @@ export default function ConteoPage() {
         </div>
       )}
 
-      {/* Tabla votos */}
-      <div className="bg-[#14141f] border border-white/8 rounded-2xl overflow-hidden">
-        <div className="grid grid-cols-[1fr_76px_76px] bg-black/30 px-3 py-2.5 text-white/40 text-xs uppercase tracking-wide">
-          <span>Partido / Tipo</span>
-          <span className="text-center">Provincial</span>
-          <span className="text-center">Distrital</span>
+      {/* Alcaldía Metropolitana */}
+      <SeccionVotos
+        titulo={`Alcaldía Metropolitana (Lima — ${CANDIDATOS_METROPOLITANA.length} candidatos)`}
+        total={totalProv}
+        candidatos={CANDIDATOS_METROPOLITANA}
+        votos={votosMetro}
+        onDelta={(id, d) => cambiarVoto('metro', id, d)}
+      />
+
+      {/* Alcaldía Distrital */}
+      <SeccionVotos
+        titulo={`Alcaldía Distrital (${perfil?.distrito_asignado ?? 'Distrito'} — ${candidatosDistrital.length} candidatos)`}
+        total={totalDist}
+        candidatos={candidatosDistrital}
+        votos={votosDistrital}
+        onDelta={(id, d) => cambiarVoto('distrital', id, d)}
+      />
+
+      {/* Resumen */}
+      <div className="bg-[#14141f] border border-white/8 rounded-2xl p-4 grid grid-cols-3 gap-2 text-center">
+        <div>
+          <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Total Metro</p>
+          <p className="text-white text-lg font-extrabold tabular-nums">{totalProv}</p>
         </div>
-        <div className="divide-y divide-white/5 max-h-[42vh] overflow-y-auto">
-          {votos.map((v, i) => (
-            <div key={i} className="grid grid-cols-[1fr_76px_76px] items-center px-3 py-2 gap-1.5">
-              <p className="text-white/80 text-xs leading-tight truncate pr-1">{v.candidato}</p>
-              <input type="number" min={0} max={999} value={v.provincial || ''}
-                onChange={e => setVoto(i, 'provincial', e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-lg px-1.5 py-1.5 text-white text-xs text-center w-full outline-none focus:border-brand-red/50" />
-              <input type="number" min={0} max={999} value={v.distrital || ''}
-                onChange={e => setVoto(i, 'distrital', e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-lg px-1.5 py-1.5 text-white text-xs text-center w-full outline-none focus:border-brand-red/50" />
-            </div>
-          ))}
+        <div>
+          <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Total Distrital</p>
+          <p className="text-white text-lg font-extrabold tabular-nums">{totalDist}</p>
         </div>
-        <div className="grid grid-cols-[1fr_76px_76px] px-3 py-3 bg-black/20 border-t border-white/5 text-xs font-bold">
-          <span className="text-white/50">SUBTOTAL</span>
-          <span className="text-center text-white tabular-nums">{totalProv}</span>
-          <span className="text-center text-white tabular-nums">{totalDist}</span>
+        <div>
+          <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Gran Total</p>
+          <p className="text-brand-red text-lg font-extrabold tabular-nums">{totalProv + totalDist}</p>
         </div>
       </div>
 
       {/* Porcentaje sobre votos válidos */}
-      {totalProv > 0 && (
+      {(totalProv > 0 || totalDist > 0) && (
         <p className="text-white/25 text-xs text-center">
           Porcentaje sobre votos válidos, nulos e impugnados
         </p>
@@ -466,6 +492,71 @@ export default function ConteoPage() {
           ? <><Loader size={16} className="animate-spin" /> Sincronizando foto con el servidor…</>
           : <><Send size={16} /> Transmitir Acta</>}
       </button>
+    </div>
+  )
+}
+
+// ── Sección de candidatos (Metropolitana o Distrital) ───────────────────────
+function SeccionVotos({ titulo, total, candidatos, votos, onDelta }: {
+  titulo: string; total: number; candidatos: Candidato[]
+  votos: Record<string, number>; onDelta: (id: string, delta: number) => void
+}) {
+  return (
+    <div className="bg-[#14141f] border border-white/8 rounded-2xl overflow-hidden">
+      <div className="flex items-center justify-between px-3.5 py-2.5 bg-black/30">
+        <p className="text-white/50 text-[10px] font-bold uppercase tracking-wide leading-tight pr-2">{titulo}</p>
+        <div className="text-right flex-shrink-0">
+          <p className="text-white/30 text-[9px] uppercase tracking-widest">Votos</p>
+          <p className="text-white text-base font-extrabold tabular-nums">{total}</p>
+        </div>
+      </div>
+      <div className="divide-y divide-white/5 max-h-[42vh] overflow-y-auto p-2 space-y-1.5">
+        {candidatos.map(c => (
+          <FilaCandidato key={c.id} candidato={c} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
+        ))}
+        {VOTOS_ESPECIALES.map(c => (
+          <FilaCandidato key={c.id} candidato={c} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Fila individual con controles +/- ────────────────────────────────────────
+function FilaCandidato({ candidato, value, onDelta }: {
+  candidato: Candidato; value: number; onDelta: (delta: number) => void
+}) {
+  return (
+    <div className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl border transition-all ${
+      value > 0 ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/8 bg-white/[0.02]'
+    }`}>
+      <div
+        className="w-8 h-8 rounded-lg flex items-center justify-center text-[0.55rem] font-black flex-shrink-0"
+        style={{ background: candidato.color + '22', border: `2px solid ${candidato.color}66`, color: candidato.color }}
+      >
+        {candidato.letra}
+      </div>
+      <div className="flex-1 min-w-0">
+        {candidato.nombre ? (
+          <>
+            <p className="text-white text-xs font-bold leading-tight truncate">{candidato.nombre}</p>
+            <p className="text-white/40 text-[10px] leading-tight mt-0.5 truncate">{candidato.partido}</p>
+          </>
+        ) : (
+          <p className="text-white text-xs font-bold leading-tight truncate">{candidato.partido}</p>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <button type="button" onClick={() => onDelta(-1)} disabled={value === 0}
+          className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-white/60 disabled:opacity-30 flex items-center justify-center transition-all">
+          <Minus size={13} />
+        </button>
+        <span className="w-7 text-center text-sm font-extrabold tabular-nums text-white">{value}</span>
+        <button type="button" onClick={() => onDelta(1)}
+          className="w-7 h-7 rounded-lg bg-brand-red hover:bg-red-600 text-white flex items-center justify-center transition-all">
+          <Plus size={13} />
+        </button>
+      </div>
     </div>
   )
 }
