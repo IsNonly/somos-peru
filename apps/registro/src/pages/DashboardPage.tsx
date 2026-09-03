@@ -45,12 +45,12 @@ export default function DashboardPage() {
       ])
 
       if (profiles) {
-        const personeros   = profiles.filter(p => p.rol === 'Personero de Mesa').length
+        const personeros   = profiles.filter(p => p.rol === 'Personero de Mesa' || p.rol === 'Personero de Local de Votación').length
         const coordinadores = profiles.filter(p => p.rol?.includes('Coordinador')).length
         const credenciales = profiles.filter(p => p.credencial_estado === 'Confirmado').length
         const quizAprobados = profiles.filter(p => p.quiz_estado === 'Aprobado').length
         const videosOk = profiles.reduce((a, p) => a + (p.videos_vistos >= 2 ? 1 : 0), 0)
-        const pdfsOk   = profiles.reduce((a, p) => a + (p.pdfs_vistos >= 2 ? 1 : 0), 0)
+        const pdfsOk   = profiles.reduce((a, p) => a + (p.pdfs_vistos >= 1 ? 1 : 0), 0)
         const actas    = profiles.filter(p => p.acta_transmitida).length
 
         setStats({

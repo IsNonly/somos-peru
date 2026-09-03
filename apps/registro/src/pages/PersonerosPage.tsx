@@ -20,6 +20,7 @@ const BADGE_ROL: Record<string, string> = {
   'Coordinador Zonal':        'bg-cyan-500/20 text-cyan-300',
   'Coordinador de Local':     'bg-green-500/20 text-green-300',
   'Personero de Mesa':        'bg-orange-500/20 text-orange-300',
+  'Personero de Local de Votación': 'bg-pink-500/20 text-pink-300',
 }
 
 const BADGE_CRED: Record<string, { cls: string; icon: any }> = {

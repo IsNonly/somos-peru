@@ -11,6 +11,7 @@ export type Rol =
   | 'Coordinador Zonal'
   | 'Coordinador de Local'
   | 'Personero de Mesa'
+  | 'Personero de Local de Votación'
 
 export interface Profile {
   id: string
@@ -59,6 +60,7 @@ export const ROLES: Rol[] = [
   'Coordinador Zonal',
   'Coordinador de Local',
   'Personero de Mesa',
+  'Personero de Local de Votación',
 ]
 
 // Genera token SP-LM2026-{DNI}

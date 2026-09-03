@@ -4,10 +4,10 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const NAV = [
-  { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/personeros',   icon: Users,            label: 'Personeros' },
-  { to: '/capacitacion', icon: BookOpen,         label: 'Capacitaciones' },
-  { to: '/credenciales', icon: Award,            label: 'Credenciales' },
+  { to: '/admin/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/admin/personeros',   icon: Users,            label: 'Personeros' },
+  { to: '/admin/capacitacion', icon: BookOpen,         label: 'Capacitaciones' },
+  { to: '/admin/credenciales', icon: Award,            label: 'Credenciales' },
 ]
 
 export default function Layout() {

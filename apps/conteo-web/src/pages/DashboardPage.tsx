@@ -53,7 +53,9 @@ export default function DashboardPage() {
     return () => { supabase.removeChannel(channel) }
   }, [load])
 
-  const mesasConReporte = [...new Set(resultados.map(r => r.mesas_con_reporte))].reduce((a, b) => a + b, 0)
+  const mesasConReporte = Object.values(
+    resultados.reduce((acc, r) => { acc[r.distrito] = r.mesas_con_reporte; return acc }, {} as Record<string, number>)
+  ).reduce((a, b) => a + b, 0)
   const distritosConReporte = [...new Set(resultados.map(r => r.distrito))].length
   const pctAvance = ((mesasConReporte / totalMetas) * 100).toFixed(2)
 
