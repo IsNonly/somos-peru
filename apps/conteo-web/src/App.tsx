@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage'
 import MapaPage from './pages/MapaPage'
 import ResultadosPage from './pages/ResultadosPage'
 import CoordinadoresPage from './pages/CoordinadoresPage'
+import PadronPage from './pages/PadronPage'
 import Layout from './components/Layout'
 import type { User } from '@supabase/supabase-js'
 
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="mapa"          element={<MapaPage />} />
           <Route path="resultados"    element={<ResultadosPage />} />
           <Route path="coordinadores" element={<CoordinadoresPage />} />
+          <Route path="padron"        element={<PadronPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

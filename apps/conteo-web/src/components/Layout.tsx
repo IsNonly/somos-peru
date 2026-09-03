@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Map, BarChart3, Users, LogOut, Menu, ShieldCheck, Radio } from 'lucide-react'
+import { LayoutDashboard, Map, BarChart3, Users, ClipboardList, LogOut, Menu, ShieldCheck, Radio } from 'lucide-react'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
@@ -8,6 +8,7 @@ const NAV = [
   { to: '/mapa',          icon: Map,             label: 'Mapa Electoral' },
   { to: '/resultados',    icon: BarChart3,        label: 'Resultados y Actas' },
   { to: '/coordinadores', icon: Users,            label: 'Coordinadores' },
+  { to: '/padron',        icon: ClipboardList,    label: 'Padrón' },
 ]
 
 export default function Layout() {
