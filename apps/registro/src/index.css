@@ -20,3 +20,21 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 .fade-in { animation: fadeIn 0.25s ease; }
+
+/* ─── Impresión de la Constancia de Participación ─────────── */
+@media print {
+  @page { size: A4 landscape; margin: 0; }
+  body { background: #fff !important; }
+  body * { visibility: hidden !important; }
+  .constancia-print, .constancia-print * { visibility: visible !important; }
+  .constancia-print {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .constancia-print .constancia-lienzo { box-shadow: none !important; }
+  .no-print { display: none !important; }
+}
