@@ -12,6 +12,18 @@ export const ROL_MESA = 'Personero de Mesa'
 export const ROL_COORD_DIST = 'Coordinador de Distritos'
 export const ROL_ZONAL = 'Coordinador Provincial'
 
+// El padrón (PADRON_SOMOSPERU.xlsx) trae varios nombres para el mismo rol.
+// Normalizamos a los 4 canónicos + Administrador.
+export function rolNorm(rol: string | null | undefined): string {
+  const r = norm(rol)
+  if (r === 'PERSONERO DE MESA') return ROL_MESA
+  if (r === 'COORDINADOR DE LOCAL' || r === 'PERSONERO DE LOCAL DE VOTACION') return ROL_LOCAL
+  if (r === 'COORDINADOR ZONAL' || r === 'COORDINADOR PROVINCIAL') return ROL_ZONAL
+  if (r === 'COORDINADOR DISTRITAL' || r === 'COORDINADOR DE DISTRITOS') return ROL_COORD_DIST
+  if (r.includes('ADMINISTRADOR')) return 'Administrador General'
+  return rol ?? ''
+}
+
 export interface Colegio {
   id: string; nombre: string; distrito: string | null
   direccion: string | null; total_mesas: number | null; electores: number | null
@@ -91,10 +103,10 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
       if (!vivo) return
 
       const acreditado = (p: Perfil) => p.credencial_estado === 'Confirmado' || p.quiz_estado === 'Aprobado'
-      const coordsDistritales = perfiles.filter(p => p.rol === ROL_COORD_DIST)
+      const coordsDistritales = perfiles.filter(p => rolNorm(p.rol) === ROL_COORD_DIST)
         .map(p => ({ ...p, acreditado: acreditado(p) }))
         .sort((a, b) => (a.distrito_asignado ?? '').localeCompare(b.distrito_asignado ?? '', 'es'))
-      const zonales = perfiles.filter(p => p.rol === ROL_ZONAL)
+      const zonales = perfiles.filter(p => rolNorm(p.rol) === ROL_ZONAL)
 
       // PCV y lista de personeros por (distrito+colegio)
       const pcvMap = new Map<string, Persona>()
@@ -102,9 +114,9 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
       for (const p of perfiles) {
         const k = claveLocal(p.distrito_asignado || p.distrito_vota, p.local_asignado || p.local_votacion)
         if (k.endsWith('||')) continue
-        if (p.rol === ROL_LOCAL) {
+        if (rolNorm(p.rol) === ROL_LOCAL) {
           if (!pcvMap.has(k)) pcvMap.set(k, { nombre: p.nombre_completo, dni: p.dni, celular: p.celular })
-        } else if (p.rol === ROL_MESA) {
+        } else if (rolNorm(p.rol) === ROL_MESA) {
           const arr = persListMap.get(k) ?? []
           arr.push({ nombre: p.nombre_completo, dni: p.dni, celular: p.celular })
           persListMap.set(k, arr)
@@ -160,7 +172,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
         loading: false, colegios, perfiles, coordsDistritales, zonales,
         centros, zonas, sinZonal,
         kpis: {
-          personerosMesa: perfiles.filter(p => p.rol === ROL_MESA).length,
+          personerosMesa: perfiles.filter(p => rolNorm(p.rol) === ROL_MESA).length,
           centros: centros.length,
           centrosConPCV: centros.filter(c => c.pcv).length,
           coordDistritales: coordsDistritales.length,

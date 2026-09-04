@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import {
-  usePanelData, type CentroFila, type ZonaGrupo,
+  usePanelData, rolNorm, type CentroFila, type ZonaGrupo,
   ROL_MESA, ROL_LOCAL, ROL_COORD_DIST, ROL_ZONAL,
 } from '../../lib/panel'
 import {
@@ -76,7 +76,7 @@ export default function PanelGeneral() {
         (p.local_asignado ?? '').toLowerCase().includes(s) ||
         (p.distrito_asignado ?? '').toLowerCase().includes(s))) return false
       if (fDist && p.distrito_asignado !== fDist && p.distrito_vota !== fDist) return false
-      if (fRol && p.rol !== fRol) return false
+      if (fRol && rolNorm(p.rol) !== fRol) return false
       if (fExp && (fExp === 'si') !== !!p.tiene_experiencia) return false
       if (fMov && (fMov === 'si') !== !!p.cuenta_movilidad) return false
       if (fComp && (fComp === 'si') !== !!p.se_compromete) return false
@@ -538,7 +538,7 @@ function TablaPadron({ perfiles }: { perfiles: ReturnType<typeof usePanelData>['
                 <td className="px-4 py-2.5 font-medium text-slate-800">{p.nombre_completo}</td>
                 <td className="px-4 py-2.5 text-slate-500">{p.celular ?? '—'}</td>
                 <td className="px-4 py-2.5">
-                  <span className="text-[11px] font-bold bg-slate-100 text-slate-600 rounded px-2 py-0.5">{p.rol}</span>
+                  <span className="text-[11px] font-bold bg-slate-100 text-slate-600 rounded px-2 py-0.5">{rolNorm(p.rol)}</span>
                 </td>
                 <td className="px-4 py-2.5 text-slate-600">{p.distrito_asignado ?? p.distrito_vota ?? '—'}</td>
                 <td className="px-4 py-2.5 text-slate-500 max-w-[280px] truncate">{p.local_asignado ?? p.local_votacion ?? '—'}</td>
