@@ -9,6 +9,10 @@ import PersonerosPage from './pages/PersonerosPage'
 import CapacitacionPage from './pages/CapacitacionPage'
 import CredencialesPage from './pages/CredencialesPage'
 import CentrosPage from './pages/CentrosPage'
+import PanelLayout from './pages/panel/PanelLayout'
+import PanelGeneral from './pages/panel/PanelGeneral'
+import PanelCapacitaciones from './pages/panel/PanelCapacitaciones'
+import PanelTrayecto from './pages/panel/PanelTrayecto'
 import Layout from './components/Layout'
 import type { User } from '@supabase/supabase-js'
 
@@ -57,12 +61,19 @@ export default function App() {
         {/* Rutas públicas */}
         <Route path="/" element={<RegisterPage />} />
         <Route path="/registro" element={<RegisterPage />} />
-        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to={esAdmin ? '/admin' : '/capacitate'} />} />
+        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to={esAdmin ? '/panel' : '/capacitate'} />} />
 
         {/* Página de capacitación para personeros registrados */}
         <Route path="/capacitate" element={user ? <CapacitarPage /> : <Navigate to="/login" />} />
 
-        {/* Panel admin: solo Administrador / Coordinador */}
+        {/* Panel ConteoLima: solo Administrador / Coordinador */}
+        <Route path="/panel" element={!user ? <Navigate to="/login" /> : esAdmin ? <PanelLayout /> : <Navigate to="/capacitate" />}>
+          <Route index element={<PanelGeneral />} />
+          <Route path="capacitaciones" element={<PanelCapacitaciones />} />
+          <Route path="trayecto" element={<PanelTrayecto />} />
+        </Route>
+
+        {/* Panel admin clásico: solo Administrador / Coordinador */}
         <Route path="/admin" element={!user ? <Navigate to="/login" /> : esAdmin ? <Layout /> : <Navigate to="/capacitate" />}>
           <Route index element={<Navigate to="/admin/dashboard" />} />
           <Route path="dashboard"    element={<DashboardPage />} />
