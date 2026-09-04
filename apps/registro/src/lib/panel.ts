@@ -28,7 +28,8 @@ export interface Perfil {
 export interface Persona { nombre: string; dni: string | null; celular: string | null }
 export interface CentroFila extends Colegio {
   pcv: Persona | null
-  zonal: (Persona & { distrito: string | null; nColegios: number }) | null
+  zonal: (Persona & { distrito: string | null; nColegios: number; lista: string[] }) | null
+  personeros: Persona[]     // personeros de mesa inscritos en este centro
   nPersoneros: number
   cobertura: number
 }
@@ -95,42 +96,45 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
         .sort((a, b) => (a.distrito_asignado ?? '').localeCompare(b.distrito_asignado ?? '', 'es'))
       const zonales = perfiles.filter(p => p.rol === ROL_ZONAL)
 
-      // PCV y conteo de personeros por (distrito+colegio)
+      // PCV y lista de personeros por (distrito+colegio)
       const pcvMap = new Map<string, Persona>()
-      const persMap = new Map<string, number>()
+      const persListMap = new Map<string, Persona[]>()
       for (const p of perfiles) {
+        const k = claveLocal(p.distrito_asignado || p.distrito_vota, p.local_asignado || p.local_votacion)
+        if (k.endsWith('||')) continue
         if (p.rol === ROL_LOCAL) {
-          const k = claveLocal(p.distrito_asignado || p.distrito_vota, p.local_asignado || p.local_votacion)
-          if (!k.endsWith('||') && !pcvMap.has(k)) pcvMap.set(k, { nombre: p.nombre_completo, dni: p.dni, celular: p.celular })
+          if (!pcvMap.has(k)) pcvMap.set(k, { nombre: p.nombre_completo, dni: p.dni, celular: p.celular })
         } else if (p.rol === ROL_MESA) {
-          const k = claveLocal(p.distrito_asignado || p.distrito_vota, p.local_asignado || p.local_votacion)
-          if (!k.endsWith('||')) persMap.set(k, (persMap.get(k) ?? 0) + 1)
+          const arr = persListMap.get(k) ?? []
+          arr.push({ nombre: p.nombre_completo, dni: p.dni, celular: p.celular })
+          persListMap.set(k, arr)
         }
       }
 
       // Zonal: Coordinador Provincial. local_asignado = lista de colegios separada por coma.
       // key = claveLocal(distrito_asignado del zonal, nombre de colegio de su lista)
-      const zonalMap = new Map<string, Persona & { distrito: string | null; nColegios: number }>()
+      const zonalMap = new Map<string, Persona & { distrito: string | null; nColegios: number; lista: string[] }>()
       for (const z of zonales) {
         const lista = String(z.local_asignado ?? '').split(',').map(s => s.trim()).filter(Boolean)
         if (!lista.length) continue
         for (const nom of lista) {
           const k = claveLocal(z.distrito_asignado || z.distrito_vota, nom)
           if (!k.endsWith('||') && !zonalMap.has(k))
-            zonalMap.set(k, { nombre: z.nombre_completo, dni: z.dni, celular: z.celular, distrito: z.distrito_asignado, nColegios: lista.length })
+            zonalMap.set(k, { nombre: z.nombre_completo, dni: z.dni, celular: z.celular, distrito: z.distrito_asignado, nColegios: lista.length, lista })
         }
       }
 
       const todasFilas: CentroFila[] = colegios.map(c => {
         const k = claveLocal(c.distrito, c.nombre)
-        const nP = persMap.get(k) ?? 0
+        const lst = persListMap.get(k) ?? []
         const tm = c.total_mesas ?? 0
         return {
           ...c,
           pcv: pcvMap.get(k) ?? null,
           zonal: zonalMap.get(k) ?? null,
-          nPersoneros: nP,
-          cobertura: tm ? Math.round((nP / tm) * 100) : 0,
+          personeros: lst,
+          nPersoneros: lst.length,
+          cobertura: tm ? Math.round((lst.length / tm) * 100) : 0,
         }
       })
       const centros = todasFilas.filter(c => c.pcv || c.nPersoneros > 0 || c.zonal)

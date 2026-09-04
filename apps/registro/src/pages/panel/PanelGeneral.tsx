@@ -35,6 +35,8 @@ export default function PanelGeneral() {
   const [chip, setChip] = useState<'todos' | 'multi' | 'unicos' | 'sinzonal'>('todos')
   const [agrupar, setAgrupar] = useState(true)
 
+  const [sel, setSel] = useState<CentroFila | null>(null)
+
   const d = usePanelData({ departamento: fDepto || 'Lima', provincia: fProv || (fDepto ? '' : 'Lima') })
 
   // Opciones de ubigeo (vistas nacionales)
@@ -228,7 +230,7 @@ export default function PanelGeneral() {
           {agrupar ? (
             <div className="space-y-4">
               {sinZonalFiltrado.length > 0 && (
-                <Grid centros={sinZonalFiltrado} />
+                <Grid centros={sinZonalFiltrado} onPick={setSel} />
               )}
               {zonasFiltradas.map(z => (
                 <div key={z.zonal.nombre + z.zonal.dni} className="space-y-2">
@@ -244,7 +246,7 @@ export default function PanelGeneral() {
                       </a>
                     )}
                   </div>
-                  <Grid centros={z.centros} borde="#8b5cf6" />
+                  <Grid centros={z.centros} borde="#8b5cf6" onPick={setSel} />
                 </div>
               ))}
               {sinZonalFiltrado.length === 0 && zonasFiltradas.length === 0 && (
@@ -253,13 +255,131 @@ export default function PanelGeneral() {
             </div>
           ) : (
             centrosFlat.length
-              ? <Grid centros={centrosFlat} />
+              ? <Grid centros={centrosFlat} onPick={setSel} />
               : <p className="text-sm text-slate-400 py-10 text-center">Sin centros con esos filtros.</p>
           )}
         </>
       )}
 
       {tab === 'padron' && <TablaPadron perfiles={perfilesFiltrados} />}
+
+      {sel && <CentroModal c={sel} onClose={() => setSel(null)} />}
+    </div>
+  )
+}
+
+function CentroModal({ c, onClose }: { c: CentroFila; onClose: () => void }) {
+  const [t, setT] = useState<'personeros' | 'zona'>('personeros')
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg mt-16 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 p-4 border-b border-slate-100">
+          <div>
+            <p className="font-extrabold text-slate-900 flex items-center gap-1.5">
+              <Building2 size={16} className="text-slate-400" /> {c.nombre}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+              <MapPin size={11} /> Distrito: <strong>{c.distrito ?? '—'}</strong> · {c.nPersoneros} personero{c.nPersoneros === 1 ? '' : 's'}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-lg leading-none">✕</button>
+        </div>
+
+        <div className="flex gap-2 p-3">
+          <button onClick={() => setT('personeros')}
+            className={`flex-1 text-sm font-bold rounded-lg px-3 py-2 flex items-center justify-center gap-1.5 ${
+              t === 'personeros' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            <Users size={14} /> Personeros ({c.nPersoneros})
+          </button>
+          <button onClick={() => setT('zona')}
+            className={`flex-1 text-sm font-bold rounded-lg px-3 py-2 flex items-center justify-center gap-1.5 ${
+              t === 'zona' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            <GraduationCap size={14} /> Zona ({c.zonal ? c.zonal.nColegios : 0} loc.)
+          </button>
+        </div>
+
+        <div className="p-4 pt-0 space-y-3 max-h-[60vh] overflow-y-auto">
+          {t === 'personeros' ? (
+            <>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wide flex items-center gap-1.5">
+                  🪪 Personero de Centro de Votación (PCV)
+                </p>
+                {c.pcv ? (
+                  <div className="flex items-center justify-between mt-1.5">
+                    <div>
+                      <p className="font-bold text-slate-800 text-sm">{c.pcv.nombre}</p>
+                      <p className="text-xs text-slate-500">DNI: {c.pcv.dni ?? '—'}</p>
+                    </div>
+                    {c.pcv.celular && (
+                      <a href={wa(c.pcv.celular)} target="_blank" rel="noreferrer"
+                        className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {c.pcv.celular}</a>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1.5">
+                    <AlertTriangle size={13} /> Este centro de votación aún no tiene un Personero de Centro asignado.
+                  </p>
+                )}
+              </div>
+
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
+                Personeros de mesa asignados ({c.personeros.length})
+              </p>
+              {c.personeros.length === 0 ? (
+                <p className="text-sm text-slate-400">Ningún personero de mesa inscrito en este centro todavía.</p>
+              ) : (
+                <div className="space-y-2">
+                  {c.personeros.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between border border-slate-200 rounded-xl px-3 py-2"
+                      style={{ borderLeft: '4px solid #16a34a' }}>
+                      <div>
+                        <p className="font-bold text-slate-800 text-sm">{p.nombre}</p>
+                        <p className="text-xs text-slate-500">
+                          <span className="text-emerald-600 font-semibold">Personero de Mesa</span> · DNI: {p.dni ?? '—'}
+                        </p>
+                      </div>
+                      {p.celular
+                        ? <a href={wa(p.celular)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {p.celular}</a>
+                        : <span className="text-emerald-500">✓</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {c.zonal ? (
+                <>
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
+                    <p className="text-[11px] font-bold text-violet-700 uppercase tracking-wide">Zonal (Coordinador Provincial)</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <div>
+                        <p className="font-bold text-slate-800 text-sm">{c.zonal.nombre}</p>
+                        <p className="text-xs text-slate-500">DNI: {c.zonal.dni ?? '—'} · {c.zonal.nColegios} colegios a cargo</p>
+                      </div>
+                      {c.zonal.celular && (
+                        <a href={wa(c.zonal.celular)} target="_blank" rel="noreferrer"
+                          className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {c.zonal.celular}</a>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Colegios de esta zona</p>
+                  <ol className="space-y-1 text-sm list-decimal list-inside">
+                    {c.zonal.lista.map((n, i) => (
+                      <li key={i} className={n.toUpperCase() === c.nombre.toUpperCase() ? 'font-bold text-slate-900' : 'text-slate-600'}>
+                        {n}{n.toUpperCase() === c.nombre.toUpperCase() && ' ← este'}
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              ) : (
+                <p className="text-sm text-slate-400">Este centro no pertenece a ninguna zona multi-colegio.</p>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -315,18 +435,19 @@ function ChipBtn({ active, onClick, label, n }: { active: boolean; onClick: () =
   )
 }
 
-function Grid({ centros, borde }: { centros: CentroFila[]; borde?: string }) {
+function Grid({ centros, borde, onPick }: { centros: CentroFila[]; borde?: string; onPick: (c: CentroFila) => void }) {
   return (
     <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-      {centros.slice(0, 400).map(c => <Card key={c.id} c={c} borde={borde} />)}
+      {centros.slice(0, 400).map(c => <Card key={c.id} c={c} borde={borde} onClick={() => onPick(c)} />)}
     </div>
   )
 }
 
-function Card({ c, borde }: { c: CentroFila; borde?: string }) {
+function Card({ c, borde, onClick }: { c: CentroFila; borde?: string; onClick: () => void }) {
   const cov = c.cobertura >= 100 ? '#16a34a' : c.cobertura >= 40 ? '#d97706' : '#dc2626'
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col gap-3"
+    <div onClick={onClick}
+      className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col gap-3 cursor-pointer hover:shadow-md hover:border-slate-300 transition-shadow"
       style={{ borderLeft: `4px solid ${borde ?? (c.pcv ? '#16a34a' : '#f59e0b')}` }}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-bold text-rose-600 bg-rose-50 rounded px-2 py-0.5 flex items-center gap-1">
