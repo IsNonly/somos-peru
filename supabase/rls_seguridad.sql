@@ -30,11 +30,18 @@ revoke all on function public.clave_acceso_por_dni(text) from public;
 grant execute on function public.clave_acceso_por_dni(text) to anon, authenticated;
 
 -- ── profiles: authenticated = todo; anon = SOLO insert (registro) ────────
+-- Se BORRAN todas las policies previas (había profiles_select_all / _update_all
+-- para {public} que dejaban leer y editar el padrón sin login).
 alter table public.profiles enable row level security;
-drop policy if exists "profiles_own"        on public.profiles;
-drop policy if exists "profiles_admin_read" on public.profiles;
-drop policy if exists "profiles_auth_all"   on public.profiles;
-drop policy if exists "profiles_anon_insert" on public.profiles;
+do $$
+declare p record;
+begin
+  for p in select policyname from pg_policies
+           where schemaname = 'public' and tablename = 'profiles'
+  loop
+    execute format('drop policy if exists %I on public.profiles', p.policyname);
+  end loop;
+end $$;
 create policy "profiles_auth_all"   on public.profiles for all    to authenticated using (true) with check (true);
 -- Registro nuevo: si signUp no devuelve sesión (confirmación de correo activada)
 -- el upsert corre como anon; se permite SOLO insertar (no leer ni editar a otros).
@@ -45,8 +52,9 @@ create policy "profiles_anon_insert" on public.profiles for insert to anon with 
 -- geografía se hace en la app). Lo que se cierra es el acceso ANÓNIMO de lectura.
 
 -- ── Resto de tablas con PII / proceso -> solo authenticated ──────────────
+-- Borra TODAS las policies previas de cada tabla y deja solo *_auth_all.
 do $$
-declare t text;
+declare t text; p record;
 begin
   foreach t in array array[
     'actas', 'asistencias', 'quiz_intentos', 'training_progress', 'training_items', 'app_config'
@@ -54,10 +62,11 @@ begin
   loop
     if to_regclass('public.' || t) is null then continue; end if;
     execute format('alter table public.%I enable row level security', t);
-    execute format('drop policy if exists "%1$s_auth_all" on public.%1$I', t);
-    execute format('drop policy if exists "%1$s_own" on public.%1$I', t);
-    execute format('drop policy if exists "%1$s_admin" on public.%1$I', t);
-    execute format('drop policy if exists "%1$s_admin_read" on public.%1$I', t);
+    for p in select policyname from pg_policies
+             where schemaname = 'public' and tablename = t
+    loop
+      execute format('drop policy if exists %I on public.%I', p.policyname, t);
+    end loop;
     execute format(
       'create policy "%1$s_auth_all" on public.%1$I for all to authenticated using (true) with check (true)', t);
   end loop;
@@ -65,26 +74,33 @@ end $$;
 
 -- ── votos: lectura pública, escritura autenticada ───────────
 alter table public.votos enable row level security;
-drop policy if exists "votos_read_all" on public.votos;
-drop policy if exists "votos_insert_personero" on public.votos;
-drop policy if exists "votos_read_pub" on public.votos;
-drop policy if exists "votos_write_auth" on public.votos;
-drop policy if exists "votos_upd_auth" on public.votos;
+do $$
+declare p record;
+begin
+  for p in select policyname from pg_policies
+           where schemaname = 'public' and tablename = 'votos'
+  loop
+    execute format('drop policy if exists %I on public.votos', p.policyname);
+  end loop;
+end $$;
 create policy "votos_read_pub"  on public.votos for select using (true);
 create policy "votos_write_auth" on public.votos for insert to authenticated with check (true);
 create policy "votos_upd_auth"   on public.votos for update to authenticated using (true) with check (true);
 
 -- ── Data de referencia (no sensible): lectura pública ───────
 do $$
-declare t text;
+declare t text; p record;
 begin
   foreach t in array array['colegios', 'distritos', 'partidos', 'mesas',
     'candidatos_provinciales', 'candidatos_distritales']
   loop
     if to_regclass('public.' || t) is null then continue; end if;
     execute format('alter table public.%I enable row level security', t);
-    execute format('drop policy if exists "%1$s_read_pub" on public.%1$I', t);
-    execute format('drop policy if exists "%1$s_write_auth" on public.%1$I', t);
+    for p in select policyname from pg_policies
+             where schemaname = 'public' and tablename = t
+    loop
+      execute format('drop policy if exists %I on public.%I', p.policyname, t);
+    end loop;
     execute format('create policy "%1$s_read_pub" on public.%1$I for select using (true)', t);
     execute format('create policy "%1$s_write_auth" on public.%1$I for all to authenticated using (true) with check (true)', t);
   end loop;
