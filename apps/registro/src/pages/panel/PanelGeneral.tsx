@@ -124,7 +124,7 @@ export default function PanelGeneral() {
   if (d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>
 
   return (
-    <div className="space-y-4 max-w-[1400px]">
+    <div className="space-y-4 w-full">
 
       {/* 1. JERARQUÍA DISTRITAL */}
       <section className="bg-white border border-slate-200 rounded-2xl p-4">
