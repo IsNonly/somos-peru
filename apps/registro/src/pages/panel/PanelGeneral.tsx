@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
+import { supabase } from '../../lib/supabase'
 import {
   usePanelData, type CentroFila, type ZonaGrupo,
   ROL_MESA, ROL_LOCAL, ROL_COORD_DIST, ROL_ZONAL,
@@ -9,7 +10,7 @@ import {
   AlertTriangle, ChevronRight, MessageCircle, GraduationCap,
 } from 'lucide-react'
 
-const DISTRITOS = [
+const LIMA_METRO = [
   'Ancón','Ate','Barranco','Breña','Carabayllo','Cercado de Lima','Chaclacayo','Chorrillos','Cieneguilla',
   'Comas','El Agustino','Independencia','Jesús María','La Molina','La Victoria','Lince','Los Olivos',
   'Lurigancho-Chosica','Lurín','Magdalena del Mar','Miraflores','Pachacámac','Pucusana','Pueblo Libre',
@@ -22,9 +23,10 @@ const ROLES = [ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST, 'Administrador Ge
 const wa = (tel?: string | null) => tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}` : undefined
 
 export default function PanelGeneral() {
-  const d = usePanelData()
   const [tab, setTab] = useState<'centros' | 'padron'>('centros')
   const [q, setQ] = useState('')
+  const [fDepto, setFDepto] = useState('')
+  const [fProv, setFProv] = useState('')
   const [fDist, setFDist] = useState('')
   const [fRol, setFRol] = useState('')
   const [fExp, setFExp] = useState('')
@@ -32,6 +34,36 @@ export default function PanelGeneral() {
   const [fComp, setFComp] = useState('')
   const [chip, setChip] = useState<'todos' | 'multi' | 'unicos' | 'sinzonal'>('todos')
   const [agrupar, setAgrupar] = useState(true)
+
+  const d = usePanelData({ departamento: fDepto || 'Lima', provincia: fProv || (fDepto ? '' : 'Lima') })
+
+  // Opciones de ubigeo (vistas nacionales)
+  const [departamentos, setDepartamentos] = useState<string[]>([])
+  const [provincias, setProvincias] = useState<string[]>([])
+  const [distritos, setDistritos] = useState<string[]>(LIMA_METRO)
+
+  useEffect(() => {
+    supabase.from('vista_departamentos').select('departamento').then(({ data }) =>
+      setDepartamentos([...new Set((data ?? []).map((r: any) => r.departamento).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'es'))))
+  }, [])
+  useEffect(() => {
+    const dep = fDepto || 'Lima'
+    supabase.from('vista_provincias').select('provincia').eq('departamento', dep).then(({ data }) =>
+      setProvincias([...new Set((data ?? []).map((r: any) => r.provincia).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'es'))))
+  }, [fDepto])
+  useEffect(() => {
+    const dep = fDepto || 'Lima'
+    if (!fDepto && !fProv) { setDistritos(LIMA_METRO); return }
+    if (!fProv) { setDistritos([]); return }
+    supabase.from('vista_ubigeo').select('distrito').eq('departamento', dep).eq('provincia', fProv).order('distrito')
+      .then(({ data }) => setDistritos([...new Set((data ?? []).map((r: any) => r.distrito).filter(Boolean))]))
+  }, [fDepto, fProv])
+
+  const setDepto = (v: string) => { setFDepto(v); setFProv(''); setFDist('') }
+  const setProv = (v: string) => { setFProv(v); setFDist('') }
+  const ambito = fDist || fProv || fDepto || 'Lima Metropolitana'
 
   const perfilesFiltrados = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -138,7 +170,9 @@ export default function PanelGeneral() {
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre, DNI, local…"
               className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-sky-500" />
           </div>
-          <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={DISTRITOS} />
+          <Sel v={fDepto} set={setDepto} all="🗺️ Lima (Metrop.)" opts={departamentos} />
+          <Sel v={fProv} set={setProv} all={fDepto ? 'Todas las provincias' : 'Prov. de Lima'} opts={provincias} />
+          <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={distritos} />
           <Sel v={fRol} set={setFRol} all="🛡️ Todos los roles" opts={ROLES} />
           <Sel v={fExp} set={setFExp} all="⭐ Exp: Todos" opts={[['si', 'Con experiencia'], ['no', 'Sin experiencia']]} />
           <Sel v={fMov} set={setFMov} all="🚗 Mov: Todos" opts={[['si', 'Con movilidad'], ['no', 'Sin movilidad']]} />
@@ -153,7 +187,7 @@ export default function PanelGeneral() {
       {/* 3. INDICADORES */}
       <section>
         <p className="text-sm font-extrabold text-slate-900 mb-2 flex items-center gap-2">
-          <LayoutGrid size={15} /> Indicadores Electorales · Lima Metropolitana
+          <LayoutGrid size={15} /> Indicadores Electorales · {ambito}
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <Kpi color="#3b82f6" icon={Users}      value={d.kpis.personerosMesa} label="Personeros de Mesa" sub="En Lima Metropolitana" />

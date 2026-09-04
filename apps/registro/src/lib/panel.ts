@@ -62,7 +62,9 @@ export interface PanelData {
   kpis: { personerosMesa: number; centros: number; centrosConPCV: number; coordDistritales: number; zonales: number }
 }
 
-export function usePanelData(): PanelData {
+export function usePanelData(scope?: { departamento?: string; provincia?: string }): PanelData {
+  const dep = scope?.departamento || 'Lima'
+  const prov = scope?.provincia || 'Lima'
   const [d, setD] = useState<PanelData>({
     loading: true, colegios: [], perfiles: [], coordsDistritales: [], zonales: [],
     centros: [], zonas: [], sinZonal: [],
@@ -71,12 +73,16 @@ export function usePanelData(): PanelData {
 
   useEffect(() => {
     let vivo = true
+    setD(prev => ({ ...prev, loading: true }))
     ;(async () => {
       const [colegios, perfiles] = await Promise.all([
-        traerTodo<Colegio>((f, t) => supabase.from('colegios')
-          .select('id, nombre, distrito, direccion, total_mesas, electores')
-          .eq('provincia', 'Lima').eq('departamento', 'Lima')
-          .order('distrito').order('nombre').range(f, t)),
+        traerTodo<Colegio>((f, t) => {
+          let cq = supabase.from('colegios')
+            .select('id, nombre, distrito, direccion, total_mesas, electores')
+            .eq('departamento', dep).order('distrito').order('nombre').range(f, t)
+          if (prov) cq = cq.eq('provincia', prov)
+          return cq
+        }),
         traerTodo<Perfil>((f, t) => supabase.from('profiles')
           .select('id, nombre_completo, dni, celular, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, credencial_estado, quiz_estado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos')
           .order('nombre_completo').range(f, t)),
@@ -159,7 +165,7 @@ export function usePanelData(): PanelData {
       })
     })()
     return () => { vivo = false }
-  }, [])
+  }, [dep, prov])
 
   return d
 }
