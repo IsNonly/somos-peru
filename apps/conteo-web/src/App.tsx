@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import CoordinadoresPage from './pages/CoordinadoresPage'
 import PersoneroMonitorPage from './pages/PersoneroMonitorPage'
+import CentrosPage from './pages/CentrosPage'
 import PadronPage from './pages/PadronPage'
 import Layout from './components/Layout'
 import type { User } from '@supabase/supabase-js'
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="dashboard"     element={<DashboardPage />} />
           <Route path="coordinadores" element={<CoordinadoresPage />} />
           <Route path="personeros"    element={<PersoneroMonitorPage />} />
+          <Route path="centros"       element={<CentrosPage />} />
           <Route path="padron"        element={<PadronPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />

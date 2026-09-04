@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Users, CheckCircle2, Menu, RotateCcw, Download } from 'lucide-react'
+import { LayoutDashboard, Users, CheckCircle2, Building2, Menu, RotateCcw, Download } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { FiltrosProvider, useFiltros, type Filtros } from '../lib/filtros'
@@ -8,6 +8,7 @@ const NAV = [
   { to: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/coordinadores', icon: Users,           label: 'Coordinador' },
   { to: '/personeros',    icon: CheckCircle2,    label: 'Personeros' },
+  { to: '/centros',       icon: Building2,       label: 'Centros de Votación' },
 ]
 
 function Reloj() {
