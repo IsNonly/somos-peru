@@ -15,31 +15,37 @@ import type { User } from '@supabase/supabase-js'
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [esAdmin, setEsAdmin] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  // Resuelve si el usuario es directivo (Admin/Coordinador) — el perfil se
-  // busca por DNI porque en cuentas importadas profiles.id != auth.users.id.
-  const resolver = async (u: User | null) => {
-    setUser(u)
-    if (!u) { setEsAdmin(false); setLoading(false); return }
-    const dni = (u.email ?? '').split('@')[0]
-    let { data } = await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()
-    if (!data) {
-      const r = await supabase.from('profiles').select('rol').eq('id', u.id).maybeSingle()
-      data = r.data
-    }
-    const rol = data?.rol || ''
-    setEsAdmin(rol.includes('Administrador') || rol.includes('Coordinador'))
-    setLoading(false)
-  }
+  // Hasta que no se resuelva el rol del usuario logueado NO renderizamos las
+  // rutas (si no, el redirect de /login se evalúa con esAdmin viejo y manda
+  // al admin a /capacitate).
+  const [rolListo, setRolListo] = useState(false)
 
   useEffect(() => {
+    let vivo = true
+
+    // El perfil se busca por DNI: en cuentas importadas profiles.id != auth.users.id.
+    const resolver = async (u: User | null) => {
+      setRolListo(false)
+      setUser(u)
+      if (!u) { if (vivo) { setEsAdmin(false); setRolListo(true) } ; return }
+      const dni = (u.email ?? '').split('@')[0]
+      let { data } = await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()
+      if (!data) {
+        const r = await supabase.from('profiles').select('rol').eq('id', u.id).maybeSingle()
+        data = r.data
+      }
+      if (!vivo) return
+      const rol = data?.rol || ''
+      setEsAdmin(rol.includes('Administrador') || rol.includes('Coordinador'))
+      setRolListo(true)
+    }
+
     supabase.auth.getSession().then(({ data }) => resolver(data.session?.user ?? null))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => resolver(s?.user ?? null))
-    return () => subscription.unsubscribe()
+    return () => { vivo = false; subscription.unsubscribe() }
   }, [])
 
-  if (loading) return (
+  if (!rolListo) return (
     <div className="min-h-screen flex items-center justify-center bg-[#c9e6f8]">
       <div className="w-8 h-8 border-2 border-[#00a3e8] border-t-transparent rounded-full animate-spin" />
     </div>
