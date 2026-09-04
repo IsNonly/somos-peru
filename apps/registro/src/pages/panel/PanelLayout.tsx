@@ -22,14 +22,19 @@ export default function PanelLayout() {
   const nav = useNavigate()
   const [open, setOpen] = useState(true)
   const [nombre, setNombre] = useState('Coordinador')
+  const [rol, setRol] = useState('')
+  const [nombreCompleto, setNombreCompleto] = useState('')
+  const [dni, setDni] = useState('')
 
   useEffect(() => {
     ;(async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const dni = (user.email ?? '').split('@')[0]
-      const { data } = await supabase.from('profiles').select('nombre_completo').eq('dni', dni).maybeSingle()
-      if (data?.nombre_completo) setNombre(data.nombre_completo.split(' ').slice(0, 2).join(' '))
+      const miDni = (user.email ?? '').split('@')[0]
+      const { data } = await supabase.from('profiles').select('nombre_completo, rol').eq('dni', miDni).maybeSingle()
+      if (data?.nombre_completo) { setNombre(data.nombre_completo.split(' ').slice(0, 2).join(' ')); setNombreCompleto(data.nombre_completo) }
+      if (data?.rol) setRol(data.rol)
+      setDni(miDni)
     })()
   }, [])
 
@@ -83,7 +88,7 @@ export default function PanelLayout() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <Outlet />
+          <Outlet context={{ rol, nombreCompleto, dni }} />
         </main>
       </div>
     </div>

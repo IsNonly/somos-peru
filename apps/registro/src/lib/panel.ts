@@ -32,9 +32,11 @@ export interface Perfil {
   id: string; nombre_completo: string; dni: string | null; celular: string | null; rol: string
   distrito_asignado: string | null; distrito_vota: string | null
   local_asignado: string | null; local_votacion: string | null
+  mesa_asignada: string | null
   credencial_estado: string | null; quiz_estado: string | null
   tiene_experiencia: boolean | null; cuenta_movilidad: boolean | null; se_compromete: boolean | null
   videos_vistos: number | null; pdfs_vistos: number | null
+  modificado_por: string | null; modificado_at: string | null
 }
 
 export interface Persona { nombre: string; dni: string | null; celular: string | null }
@@ -75,7 +77,7 @@ export interface PanelData {
   kpis: { personerosMesa: number; centros: number; centrosConPCV: number; coordDistritales: number; zonales: number }
 }
 
-export function usePanelData(scope?: { departamento?: string; provincia?: string }): PanelData {
+export function usePanelData(scope?: { departamento?: string; provincia?: string }): PanelData & { refetch: () => void } {
   const dep = scope?.departamento || 'Lima'
   const prov = scope?.provincia || 'Lima'
   const [d, setD] = useState<PanelData>({
@@ -83,6 +85,8 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
     centros: [], zonas: [], sinZonal: [],
     kpis: { personerosMesa: 0, centros: 0, centrosConPCV: 0, coordDistritales: 0, zonales: 0 },
   })
+
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let vivo = true
@@ -97,7 +101,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
           return cq
         }),
         traerTodo<Perfil>((f, t) => supabase.from('profiles')
-          .select('id, nombre_completo, dni, celular, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, credencial_estado, quiz_estado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos')
+          .select('id, nombre_completo, dni, celular, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, credencial_estado, quiz_estado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos, modificado_por, modificado_at')
           .order('nombre_completo').range(f, t)),
       ])
       if (!vivo) return
@@ -181,7 +185,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
       })
     })()
     return () => { vivo = false }
-  }, [dep, prov])
+  }, [dep, prov, reloadKey])
 
-  return d
+  return { ...d, refetch: () => setReloadKey(k => k + 1) }
 }
