@@ -8,21 +8,34 @@ import DashboardPage from './pages/DashboardPage'
 import PersonerosPage from './pages/PersonerosPage'
 import CapacitacionPage from './pages/CapacitacionPage'
 import CredencialesPage from './pages/CredencialesPage'
+import CentrosPage from './pages/CentrosPage'
 import Layout from './components/Layout'
 import type { User } from '@supabase/supabase-js'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
+  const [esAdmin, setEsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // Resuelve si el usuario es directivo (Admin/Coordinador) — el perfil se
+  // busca por DNI porque en cuentas importadas profiles.id != auth.users.id.
+  const resolver = async (u: User | null) => {
+    setUser(u)
+    if (!u) { setEsAdmin(false); setLoading(false); return }
+    const dni = (u.email ?? '').split('@')[0]
+    let { data } = await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()
+    if (!data) {
+      const r = await supabase.from('profiles').select('rol').eq('id', u.id).maybeSingle()
+      data = r.data
+    }
+    const rol = data?.rol || ''
+    setEsAdmin(rol.includes('Administrador') || rol.includes('Coordinador'))
+    setLoading(false)
+  }
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null)
-      setLoading(false)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => {
-      setUser(s?.user ?? null)
-    })
+    supabase.auth.getSession().then(({ data }) => resolver(data.session?.user ?? null))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => resolver(s?.user ?? null))
     return () => subscription.unsubscribe()
   }, [])
 
@@ -38,15 +51,16 @@ export default function App() {
         {/* Rutas públicas */}
         <Route path="/" element={<RegisterPage />} />
         <Route path="/registro" element={<RegisterPage />} />
-        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/capacitate" />} />
+        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to={esAdmin ? '/admin' : '/capacitate'} />} />
 
         {/* Página de capacitación para personeros registrados */}
         <Route path="/capacitate" element={user ? <CapacitarPage /> : <Navigate to="/login" />} />
 
-        {/* Panel admin (solo coordinadores/admins que acceden directamente) */}
-        <Route path="/admin" element={user ? <Layout /> : <Navigate to="/login" />}>
+        {/* Panel admin: solo Administrador / Coordinador */}
+        <Route path="/admin" element={!user ? <Navigate to="/login" /> : esAdmin ? <Layout /> : <Navigate to="/capacitate" />}>
           <Route index element={<Navigate to="/admin/dashboard" />} />
           <Route path="dashboard"    element={<DashboardPage />} />
+          <Route path="centros"      element={<CentrosPage />} />
           <Route path="personeros"   element={<PersonerosPage />} />
           <Route path="capacitacion" element={<CapacitacionPage />} />
           <Route path="credenciales" element={<CredencialesPage />} />
