@@ -5,26 +5,90 @@ import LoginPage from './pages/LoginPage'
 import ConteoPage from './pages/ConteoPage'
 import HistorialPage from './pages/HistorialPage'
 import BottomNav from './components/BottomNav'
+import GateCapacitacion, { type Pasos } from './components/GateCapacitacion'
+import PersoneroLocalPage from './pages/PersoneroLocalPage'
+import IrAlPanel from './components/IrAlPanel'
 import type { User } from '@supabase/supabase-js'
+
+// "Coordinador de Local" es el nombre viejo del rol; se mantiene por si la
+// migración de BD aún no corrió.
+const ROLES_LOCAL = ['Personero de Local de Votación', 'Coordinador de Local']
+// Roles que ven el panel de supervisión (no cuentan votos).
+const ROLES_COORD = ['Coordinador Provincial', 'Coordinador de Distritos', 'Administrador General']
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [perfil, setPerfil] = useState<any>(null)
+  const [perfilLoading, setPerfilLoading] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null)
       setLoading(false)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setUser(s?.user ?? null))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      setUser(s?.user ?? null)
+      if (event === 'SIGNED_OUT') {
+        try { sessionStorage.removeItem('conteo_intro_ok') } catch { /* modo privado */ }
+      }
+    })
     return () => subscription.unsubscribe()
   }, [])
 
-  if (loading) return (
+  // Cargar el perfil para verificar que completó la capacitación antes de entrar.
+  // Se resuelve por DNI: en la base importada profiles.id no siempre = auth.users.id.
+  useEffect(() => {
+    if (!user) { setPerfil(null); return }
+    let vivo = true
+    setPerfilLoading(true)
+    const dni = (user.email ?? '').split('@')[0]
+    const cols = 'rol, nombre_completo, videos_vistos, pdfs_vistos, quiz_estado, credencial_estado'
+    ;(async () => {
+      let { data } = await supabase.from('profiles').select(cols).eq('dni', dni).maybeSingle()
+      if (!data) {
+        const r = await supabase.from('profiles').select(cols).eq('id', user.id).maybeSingle()
+        data = r.data
+      }
+      if (vivo) { setPerfil(data); setPerfilLoading(false) }
+    })()
+    return () => { vivo = false }
+  }, [user])
+
+  if (loading || (user && perfilLoading)) return (
     <div className="min-h-svh flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-brand-red border-t-transparent rounded-full animate-spin" />
     </div>
   )
+
+  // ── Gate: debe haber completado TODOS los pasos de la capacitación ────────
+  if (user) {
+    const rol: string = perfil?.rol ?? ''
+    // Se exige a personeros (de mesa y de local). Coordinador Provincial /
+    // de Distritos / Administrador entran sin capacitación. Sin perfil -> se exige.
+    const requiereCapacitacion =
+      !rol || /personero/i.test(rol) || ROLES_LOCAL.includes(rol)
+    const pasos: Pasos = {
+      videos:   (perfil?.videos_vistos ?? 0) >= 2,
+      cartilla: (perfil?.pdfs_vistos ?? 0) >= 1,
+      quiz:     perfil?.quiz_estado === 'Aprobado',
+    }
+    const capacitacionOk = pasos.videos && pasos.cartilla && pasos.quiz
+
+    if (requiereCapacitacion && !capacitacionOk) {
+      return <GateCapacitacion perfil={perfil} pasos={pasos} />
+    }
+
+    // Personero de Local de Votación -> panel de asistencia de su local
+    if (ROLES_LOCAL.includes(rol)) {
+      return <PersoneroLocalPage />
+    }
+
+    // Coordinadores / Administrador -> su lugar es el panel web, no el conteo
+    if (ROLES_COORD.includes(rol)) {
+      return <IrAlPanel perfil={perfil} />
+    }
+  }
 
   return (
     <BrowserRouter>

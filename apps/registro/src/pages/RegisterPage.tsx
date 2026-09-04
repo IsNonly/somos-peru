@@ -1,19 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase, DISTRITOS, generarToken, generarClave } from '../lib/supabase'
+import { supabase, generarToken, generarClave } from '../lib/supabase'
 import type { Rol } from '../lib/supabase'
 import {
   User, Phone, CreditCard, MapPin, Building2, Check,
   LogIn, Shield, CheckCircle2, ChevronDown, X, Send, Edit3,
-  Layers
+  Layers, Landmark, Map as MapIcon
 } from 'lucide-react'
 
 type FormState = {
   nombres: string
   dni: string
   celular: string
+  departamentoVota: string
+  provinciaVota: string
   distritoDondeVota: string
   localVotacion: string
   rol: Rol
+  departamentoAsignado: string
+  provinciaAsignado: string
   distritoAsignado: string
   localesAsignados: string[]
   localAsignado: string
@@ -22,12 +26,14 @@ type FormState = {
   seCompromete: boolean
 }
 
+type ProvinciaRow = { departamento: string; provincia: string }
+
 function ModalRevision({ form, onClose, onConfirm, loading }: {
   form: FormState; onClose: () => void; onConfirm: () => void; loading: boolean
 }) {
-  const esCoordZonal = form.rol === 'Coordinador Zonal'
+  const esCoordProvincial = form.rol === 'Coordinador Provincial'
   const esCoordDistrital = form.rol === 'Coordinador de Distritos'
-  const localMostrado = esCoordZonal ? form.localesAsignados.join(', ') : form.localAsignado
+  const localMostrado = esCoordProvincial ? form.localesAsignados.join(', ') : form.localAsignado
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -56,6 +62,8 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
           <div className="rounded-xl border border-slate-100 overflow-hidden">
             <div className="bg-sky-50 px-4 py-2"><h3 className="text-xs font-extrabold text-[#00a3e8] uppercase tracking-wider">2. Lugar Donde Vota</h3></div>
             <div className="grid grid-cols-2 gap-3 p-4 text-sm">
+              <div><p className="text-xs text-slate-400">Departamento</p><p className="font-semibold text-slate-800">{form.departamentoVota || '—'}</p></div>
+              <div><p className="text-xs text-slate-400">Provincia</p><p className="font-semibold text-slate-800">{form.provinciaVota || '—'}</p></div>
               <div><p className="text-xs text-slate-400">Distrito</p><p className="font-semibold text-slate-800">{form.distritoDondeVota || '—'}</p></div>
               <div><p className="text-xs text-slate-400">Local / Colegio</p><p className="font-semibold text-slate-800">{form.localVotacion || '—'}</p></div>
             </div>
@@ -64,10 +72,18 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
           <div className="rounded-xl border border-slate-100 overflow-hidden">
             <div className="bg-sky-50 px-4 py-2"><h3 className="text-xs font-extrabold text-[#00a3e8] uppercase tracking-wider">3. Asignación Electoral</h3></div>
             <div className="p-4 text-sm space-y-2">
-              <div className="flex gap-6">
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
                 <div>
                   <p className="text-xs text-slate-400">Rol Solicitado</p>
                   <span className="inline-block mt-0.5 px-2 py-0.5 bg-sky-100 text-sky-700 text-xs font-bold rounded-full">{form.rol}</span>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Departamento</p>
+                  <p className="font-semibold text-slate-800">{form.departamentoAsignado || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Provincia</p>
+                  <p className="font-semibold text-slate-800">{form.provinciaAsignado || '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-400">Distrito Asignado</p>
@@ -76,7 +92,7 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
               </div>
               {!esCoordDistrital && (
                 <div>
-                  <p className="text-xs text-slate-400">{esCoordZonal ? 'Colegios / Locales de la Zona' : 'Local Asignado'}</p>
+                  <p className="text-xs text-slate-400">{esCoordProvincial ? 'Colegios / Locales de la Provincia' : 'Local Asignado'}</p>
                   <p className="font-semibold text-slate-800">{localMostrado || '—'}</p>
                 </div>
               )}
@@ -119,14 +135,15 @@ const inputCls = 'w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounde
 const selectCls = 'w-full pl-10 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-[#00a3e8] appearance-none'
 
 function PantallaExito({ done }: { done: { token: string; nombres: string; dni: string } }) {
-  const [secs, setSecs] = useState(5)
+  const [secs, setSecs] = useState(8)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     timerRef.current = setInterval(() => {
       setSecs(s => {
         if (s <= 1) {
-          window.location.href = '/login'
+          // Ya quedó logueado tras el registro -> directo a los pasos de capacitación.
+          window.location.href = '/capacitate'
           return 0
         }
         return s - 1
@@ -135,16 +152,39 @@ function PantallaExito({ done }: { done: { token: string; nombres: string; dni: 
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [])
 
+  const pasos = [
+    'Ver el video de capacitación completo, 2 veces',
+    'Leer la Cartilla del Personero (mín. 1 min)',
+    'Aprobar la evaluación (4 de 5 preguntas)',
+  ]
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#c9e6f8]">
       <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-xl text-center space-y-5 border border-sky-100">
         <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
           <CheckCircle2 size={36} />
         </div>
-        <h2 className="text-2xl font-bold text-slate-800">Registro Exitoso!</h2>
+        <h2 className="text-2xl font-bold text-slate-800">¡Datos registrados!</h2>
         <p className="text-slate-500 text-sm">
-          <strong>{done.nombres}</strong>, tus datos fueron registrados en el padrón oficial de Somos Perú.
+          <strong>{done.nombres}</strong>, quedaste en el padrón. Tu cuenta está
+          <span className="font-bold text-amber-600"> PENDIENTE</span> — falta un último paso.
         </p>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-left">
+          <p className="text-sm font-bold text-amber-800 mb-2">Para habilitar tu cuenta debes completar la capacitación:</p>
+          <ul className="space-y-1.5">
+            {pasos.map((p, i) => (
+              <li key={i} className="flex items-center gap-2 text-xs text-slate-700">
+                <span className="w-4 h-4 rounded-full border border-slate-300 flex-shrink-0" />
+                {p}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-amber-700 mt-2">
+            Sin estos pasos <strong>no podrás ingresar</strong> a la app de conteo el día de las elecciones.
+          </p>
+        </div>
+
         <div className="bg-sky-50 border border-sky-100 rounded-2xl p-5 text-left space-y-3">
           <div>
             <p className="text-xs uppercase font-semibold text-sky-600">Token de Acreditación</p>
@@ -155,15 +195,21 @@ function PantallaExito({ done }: { done: { token: string; nombres: string; dni: 
             <p className="text-lg font-mono font-bold text-slate-700">{done.dni}</p>
           </div>
         </div>
-        <p className="text-xs text-slate-400">Guarda este token. Lo necesitarás para ingresar a la App el día de las elecciones.</p>
+
         <div className="space-y-2">
-          <p className="text-xs text-slate-400">Redirigiendo al inicio de sesión en <span className="font-bold text-[#00a3e8]">{secs}s</span>...</p>
+          <p className="text-xs text-slate-400">
+            Te llevamos a la capacitación en <span className="font-bold text-[#00a3e8]">{secs}s</span>…
+          </p>
           <div className="w-full bg-slate-100 rounded-full h-1.5">
-            <div className="bg-[#00a3e8] h-1.5 rounded-full transition-all duration-1000" style={{ width: `${(secs / 5) * 100}%` }} />
+            <div className="bg-[#00a3e8] h-1.5 rounded-full transition-all duration-1000" style={{ width: `${(secs / 8) * 100}%` }} />
           </div>
         </div>
-        <a href="/login" className="block w-full py-3.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-2xl shadow-lg shadow-sky-500/25 transition-all text-center text-sm">
-          → Ir a Iniciar Sesión ahora
+
+        <a href="/capacitate" className="block w-full py-3.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-2xl shadow-lg shadow-sky-500/25 transition-all text-center text-sm">
+          → Empezar la capacitación ahora
+        </a>
+        <a href="/login" className="block text-xs text-slate-400 hover:text-slate-600">
+          Prefiero iniciar sesión más tarde
         </a>
       </div>
     </div>
@@ -219,6 +265,24 @@ function ToggleBtn({ yes, onChange }: { yes: boolean; onChange: (v: boolean) => 
   )
 }
 
+function GeoSelect({ label, icon, value, onChange, options, disabled, placeholder }: {
+  label: string; icon: React.ReactNode; value: string; onChange: (v: string) => void
+  options: string[]; disabled?: boolean; placeholder: string
+}) {
+  return (
+    <div>
+      <FieldLabel>{label} <Req /></FieldLabel>
+      <SelectWrap icon={icon}>
+        <select value={value} disabled={disabled} onChange={e => onChange(e.target.value)}
+          className={`${selectCls} disabled:bg-slate-50 disabled:text-slate-400`}>
+          <option value="">{placeholder}</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </SelectWrap>
+    </div>
+  )
+}
+
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -230,13 +294,23 @@ export default function RegisterPage() {
   const [cargandoVota, setCargandoVota] = useState(false)
   const [cargandoAsignado, setCargandoAsignado] = useState(false)
 
+  // Ubigeo nacional (CALI.xlsx) para la cascada Departamento → Provincia → Distrito
+  const [departamentos, setDepartamentos] = useState<string[]>([])
+  const [provincias, setProvincias] = useState<ProvinciaRow[]>([])
+  const [distritosVota, setDistritosVota] = useState<string[]>([])
+  const [distritosAsignado, setDistritosAsignado] = useState<string[]>([])
+
   const [form, setForm] = useState<FormState>({
     nombres: '',
     dni: '',
     celular: '',
+    departamentoVota: '',
+    provinciaVota: '',
     distritoDondeVota: '',
     localVotacion: '',
     rol: 'Personero de Mesa',
+    departamentoAsignado: '',
+    provinciaAsignado: '',
     distritoAsignado: '',
     localesAsignados: [],
     localAsignado: '',
@@ -248,20 +322,74 @@ export default function RegisterPage() {
   const set = (k: keyof FormState, v: any) => setForm(p => ({ ...p, [k]: v }))
 
   const esPersonero = form.rol === 'Personero de Mesa' || form.rol === 'Personero de Local de Votación'
-  const esCoordZonal = form.rol === 'Coordinador Zonal'
+  const esCoordProvincial = form.rol === 'Coordinador Provincial'
   const esCoordDistrital = form.rol === 'Coordinador de Distritos'
+
+  // Cascada "lugar de votación": al cambiar un nivel se limpian los inferiores
+  const setDepVota = (v: string) => setForm(p => ({ ...p, departamentoVota: v, provinciaVota: '', distritoDondeVota: '', localVotacion: '' }))
+  const setProvVota = (v: string) => setForm(p => ({ ...p, provinciaVota: v, distritoDondeVota: '', localVotacion: '' }))
+  const setDistVota = (v: string) => setForm(p => ({ ...p, distritoDondeVota: v, localVotacion: '' }))
+
+  // Cascada "asignación electoral"
+  const setDepAsig = (v: string) => setForm(p => ({ ...p, departamentoAsignado: v, provinciaAsignado: '', distritoAsignado: '', localAsignado: '', localesAsignados: [] }))
+  const setProvAsig = (v: string) => setForm(p => ({ ...p, provinciaAsignado: v, distritoAsignado: '', localAsignado: '', localesAsignados: [] }))
+  const setDistAsig = (v: string) => setForm(p => ({ ...p, distritoAsignado: v, localAsignado: '', localesAsignados: [] }))
+
+  const provinciasVota = provincias.filter(p => p.departamento === form.departamentoVota).map(p => p.provincia)
+  const provinciasAsignado = provincias.filter(p => p.departamento === form.departamentoAsignado).map(p => p.provincia)
+
+  const cascadaAsignado = (distLabel: string) => (
+    <>
+      <GeoSelect label="Departamento" icon={<Landmark size={18} />}
+        value={form.departamentoAsignado} onChange={setDepAsig}
+        options={departamentos} placeholder="Seleccione Departamento" />
+      <GeoSelect label="Provincia" icon={<MapIcon size={18} />}
+        value={form.provinciaAsignado} onChange={setProvAsig}
+        options={provinciasAsignado} disabled={!form.departamentoAsignado}
+        placeholder={form.departamentoAsignado ? 'Seleccione Provincia' : 'Primero el departamento'} />
+      <GeoSelect label={distLabel} icon={<MapPin size={18} />}
+        value={form.distritoAsignado} onChange={setDistAsig}
+        options={distritosAsignado} disabled={!form.provinciaAsignado}
+        placeholder={form.provinciaAsignado ? 'Seleccione Distrito' : 'Primero la provincia'} />
+    </>
+  )
+
+  useEffect(() => {
+    supabase.from('vista_departamentos').select('departamento')
+      .then(({ data }) => setDepartamentos((data || []).map((d: any) => d.departamento)))
+    supabase.from('vista_provincias').select('departamento, provincia')
+      .then(({ data }) => setProvincias((data || []) as ProvinciaRow[]))
+  }, [])
+
+  useEffect(() => {
+    if (!form.departamentoVota || !form.provinciaVota) { setDistritosVota([]); return }
+    supabase.from('vista_ubigeo').select('distrito')
+      .eq('departamento', form.departamentoVota).eq('provincia', form.provinciaVota).order('distrito')
+      .then(({ data }) => setDistritosVota((data || []).map((d: any) => d.distrito)))
+  }, [form.departamentoVota, form.provinciaVota])
+
+  useEffect(() => {
+    if (!form.departamentoAsignado || !form.provinciaAsignado) { setDistritosAsignado([]); return }
+    supabase.from('vista_ubigeo').select('distrito')
+      .eq('departamento', form.departamentoAsignado).eq('provincia', form.provinciaAsignado).order('distrito')
+      .then(({ data }) => setDistritosAsignado((data || []).map((d: any) => d.distrito)))
+  }, [form.departamentoAsignado, form.provinciaAsignado])
 
   useEffect(() => {
     if (!form.distritoDondeVota) { setColegiosVota([]); return }
     setCargandoVota(true)
-    supabase.from('colegios').select('nombre').eq('distrito', form.distritoDondeVota).order('nombre')
+    supabase.from('colegios').select('nombre')
+      .eq('departamento', form.departamentoVota).eq('provincia', form.provinciaVota).eq('distrito', form.distritoDondeVota)
+      .order('nombre')
       .then(({ data }) => { setColegiosVota((data || []).map(c => c.nombre)); setCargandoVota(false) })
   }, [form.distritoDondeVota])
 
   useEffect(() => {
     if (!form.distritoAsignado) { setColegiosAsignado([]); return }
     setCargandoAsignado(true)
-    supabase.from('colegios').select('nombre').eq('distrito', form.distritoAsignado).order('nombre')
+    supabase.from('colegios').select('nombre')
+      .eq('departamento', form.departamentoAsignado).eq('provincia', form.provinciaAsignado).eq('distrito', form.distritoAsignado)
+      .order('nombre')
       .then(({ data }) => { setColegiosAsignado((data || []).map(c => ({ nombre: c.nombre, checked: false }))); setCargandoAsignado(false) })
   }, [form.distritoAsignado])
 
@@ -298,7 +426,7 @@ export default function RegisterPage() {
       const userId = authData.user?.id
       if (!userId) throw new Error('No se pudo generar el identificador de usuario.')
 
-      const localGuardado = esCoordZonal ? form.localesAsignados.join(' | ') : form.localAsignado
+      const localGuardado = esCoordProvincial ? form.localesAsignados.join(' | ') : form.localAsignado
 
       const { error: profileErr } = await supabase.from('profiles').upsert({
         id: userId,
@@ -306,9 +434,13 @@ export default function RegisterPage() {
         dni: cleanDni,
         celular: form.celular,
         correo: email,
+        departamento_vota: form.departamentoVota || null,
+        provincia_vota: form.provinciaVota || null,
         distrito_vota: form.distritoDondeVota || null,
         local_votacion: form.localVotacion || null,
         rol: form.rol,
+        departamento_asignado: form.departamentoAsignado || null,
+        provincia_asignado: form.provinciaAsignado || null,
         distrito_asignado: form.distritoAsignado || null,
         local_asignado: localGuardado || null,
         tiene_experiencia: form.tieneExperiencia,
@@ -384,17 +516,17 @@ export default function RegisterPage() {
           <div className="border border-sky-200/80 bg-white rounded-2xl p-5 shadow-sm space-y-4">
             <SectionHeader num="2" title="Mi Lugar de Votación" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <FieldLabel>Distrito donde Vota <Req /></FieldLabel>
-                <SelectWrap icon={<MapPin size={18} />}>
-                  <select value={form.distritoDondeVota}
-                    onChange={e => { set('distritoDondeVota', e.target.value); set('localVotacion', '') }}
-                    className={selectCls}>
-                    <option value="">Seleccione Distrito</option>
-                    {DISTRITOS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </SelectWrap>
-              </div>
+              <GeoSelect label="Departamento" icon={<Landmark size={18} />}
+                value={form.departamentoVota} onChange={setDepVota}
+                options={departamentos} placeholder="Seleccione Departamento" />
+              <GeoSelect label="Provincia" icon={<MapIcon size={18} />}
+                value={form.provinciaVota} onChange={setProvVota}
+                options={provinciasVota} disabled={!form.departamentoVota}
+                placeholder={form.departamentoVota ? 'Seleccione Provincia' : 'Primero el departamento'} />
+              <GeoSelect label="Distrito donde Vota" icon={<MapPin size={18} />}
+                value={form.distritoDondeVota} onChange={setDistVota}
+                options={distritosVota} disabled={!form.provinciaVota}
+                placeholder={form.provinciaVota ? 'Seleccione Distrito' : 'Primero la provincia'} />
               <div>
                 <FieldLabel>Local / Colegio de Votación <Req /></FieldLabel>
                 <SelectWrap icon={<Building2 size={18} />}>
@@ -422,14 +554,14 @@ export default function RegisterPage() {
               {([
                 { id: 'Personero de Mesa', icon: Shield, title: 'Personero de Mesa' },
                 { id: 'Personero de Local de Votación', icon: Building2, title: 'Personero de Local de Votación' },
-                { id: 'Coordinador Zonal', icon: Layers, title: 'Coordinador Zonal' },
+                { id: 'Coordinador Provincial', icon: Layers, title: 'Coordinador Provincial' },
                 { id: 'Coordinador de Distritos', icon: MapPin, title: 'Coordinador Distrital' },
               ] as const).map(item => {
                 const Icon = item.icon
                 const sel = form.rol === item.id
                 return (
                   <button key={item.id} type="button"
-                    onClick={() => { set('rol', item.id as Rol); set('distritoAsignado', ''); set('localAsignado', ''); set('localesAsignados', []) }}
+                    onClick={() => setForm(p => ({ ...p, rol: item.id as Rol, departamentoAsignado: '', provinciaAsignado: '', distritoAsignado: '', localAsignado: '', localesAsignados: [] }))}
                     className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${sel ? 'bg-[#00a3e8] border-[#00a3e8] text-white shadow-md shadow-sky-500/20' : 'bg-white border-slate-200 text-slate-700 hover:border-sky-300'}`}>
                     <div className={sel ? 'text-white' : 'text-slate-500'}><Icon size={20} /></div>
                     <span className="text-xs font-bold leading-tight">{item.title}</span>
@@ -441,17 +573,7 @@ export default function RegisterPage() {
             {/* Personero de Mesa / Local */}
             {esPersonero && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div>
-                  <FieldLabel>Distrito Asignado <Req /></FieldLabel>
-                  <SelectWrap icon={<MapPin size={18} />}>
-                    <select value={form.distritoAsignado}
-                      onChange={e => { set('distritoAsignado', e.target.value); set('localAsignado', '') }}
-                      className={selectCls}>
-                      <option value="">Seleccione Distrito</option>
-                      {DISTRITOS.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </SelectWrap>
-                </div>
+                {cascadaAsignado('Distrito Asignado')}
                 <div>
                   <FieldLabel>Local de Votación Asignado <Req /></FieldLabel>
                   <SelectWrap icon={<Building2 size={18} />}>
@@ -471,27 +593,19 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Coordinador Zonal: multi-select */}
-            {esCoordZonal && (
+            {/* Coordinador Provincial: multi-select de locales */}
+            {esCoordProvincial && (
               <div className="space-y-4 pt-2">
-                <div>
-                  <FieldLabel>Distrito Asignado (Seleccione Distrito de la Zona) <Req /></FieldLabel>
-                  <SelectWrap icon={<MapPin size={18} />}>
-                    <select value={form.distritoAsignado}
-                      onChange={e => { set('distritoAsignado', e.target.value); set('localesAsignados', []) }}
-                      className={selectCls}>
-                      <option value="">Seleccione Distrito de la Zona</option>
-                      {DISTRITOS.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </SelectWrap>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {cascadaAsignado('Distrito de la Provincia')}
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <FieldLabel>Colegios / Locales de la Zona <Req /></FieldLabel>
+                    <FieldLabel>Colegios / Locales de la Provincia <Req /></FieldLabel>
                     <span className="text-xs text-slate-400">(Escoger de 1 a más colegios)</span>
                   </div>
                   {cargandoAsignado && <p className="text-xs text-slate-400 py-2">Cargando colegios...</p>}
-                  {!cargandoAsignado && !form.distritoAsignado && <p className="text-xs text-slate-400 py-2">Primero seleccione un distrito de la zona</p>}
+                  {!cargandoAsignado && !form.distritoAsignado && <p className="text-xs text-slate-400 py-2">Primero seleccione un distrito</p>}
                   {!cargandoAsignado && colegiosAsignado.length > 0 && (
                     <>
                       <SelectWrap icon={<Building2 size={18} />}>
@@ -518,16 +632,10 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Coordinador Distrital: solo distrito */}
+            {/* Coordinador Distrital: hasta distrito */}
             {esCoordDistrital && (
-              <div className="pt-2">
-                <FieldLabel>Distrito Asignado (Donde es Coordinador) <Req /></FieldLabel>
-                <SelectWrap icon={<MapPin size={18} />}>
-                  <select value={form.distritoAsignado} onChange={e => set('distritoAsignado', e.target.value)} className={selectCls}>
-                    <option value="">Seleccione Distrito del que es Coordinador</option>
-                    {DISTRITOS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </SelectWrap>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                {cascadaAsignado('Distrito del que es Coordinador')}
               </div>
             )}
           </div>

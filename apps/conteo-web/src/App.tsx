@@ -3,9 +3,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
-import MapaPage from './pages/MapaPage'
-import ResultadosPage from './pages/ResultadosPage'
 import CoordinadoresPage from './pages/CoordinadoresPage'
+import PersoneroMonitorPage from './pages/PersoneroMonitorPage'
 import PadronPage from './pages/PadronPage'
 import Layout from './components/Layout'
 import type { User } from '@supabase/supabase-js'
@@ -22,11 +21,14 @@ export default function App() {
       setLoading(false)
       return
     }
-    const { data } = await supabase
-      .from('profiles')
-      .select('rol')
-      .eq('id', u.id)
-      .single()
+    // El perfil se resuelve por DNI (parte antes del @ del email de login):
+    // en la base importada profiles.id no siempre coincide con auth.users.id.
+    const dni = (u.email ?? '').split('@')[0]
+    let { data } = await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()
+    if (!data) {
+      const r = await supabase.from('profiles').select('rol').eq('id', u.id).maybeSingle()
+      data = r.data
+    }
 
     const rol = data?.rol || ''
     // Solo roles directivos pueden acceder al centro de cómputo / dashboard
@@ -60,9 +62,8 @@ export default function App() {
         <Route path="/" element={user && isAdmin ? <Layout /> : <Navigate to="/login" />}>
           <Route index element={<Navigate to="/dashboard" />} />
           <Route path="dashboard"     element={<DashboardPage />} />
-          <Route path="mapa"          element={<MapaPage />} />
-          <Route path="resultados"    element={<ResultadosPage />} />
           <Route path="coordinadores" element={<CoordinadoresPage />} />
+          <Route path="personeros"    element={<PersoneroMonitorPage />} />
           <Route path="padron"        element={<PadronPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />

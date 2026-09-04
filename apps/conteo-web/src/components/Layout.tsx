@@ -1,97 +1,131 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Map, BarChart3, Users, ClipboardList, LogOut, Menu, ShieldCheck, Radio } from 'lucide-react'
-import { useState } from 'react'
+import { LayoutDashboard, Users, CheckCircle2, Menu, RotateCcw, Download } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { FiltrosProvider, useFiltros, type Filtros } from '../lib/filtros'
 
 const NAV = [
-  { to: '/dashboard',     icon: LayoutDashboard, label: 'Centro de Mando' },
-  { to: '/mapa',          icon: Map,             label: 'Mapa Electoral' },
-  { to: '/resultados',    icon: BarChart3,        label: 'Resultados y Actas' },
-  { to: '/coordinadores', icon: Users,            label: 'Coordinadores' },
-  { to: '/padron',        icon: ClipboardList,    label: 'Padrón' },
+  { to: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/coordinadores', icon: Users,           label: 'Coordinador' },
+  { to: '/personeros',    icon: CheckCircle2,    label: 'Personeros' },
 ]
 
-export default function Layout() {
+function Reloj() {
+  const [t, setT] = useState(() => new Date().toLocaleTimeString('es-PE'))
+  useEffect(() => {
+    const i = setInterval(() => setT(new Date().toLocaleTimeString('es-PE')), 1000)
+    return () => clearInterval(i)
+  }, [])
+  return <span className="text-emerald-400 font-medium">● En vivo · {t}</span>
+}
+
+const selCls =
+  'text-xs rounded-md border border-slate-300 bg-white px-2 py-1.5 outline-none focus:border-sky-500 ' +
+  'disabled:bg-slate-100 disabled:text-slate-400 min-w-[9rem] max-w-[12rem]'
+
+function BarraFiltros() {
+  const { f, set, reset, departamentos, provincias, distritos, colegios, mesas, partidos, bloqueado } = useFiltros()
+
+  const Campo = ({ k, label, opts, all }: { k: keyof Filtros; label: string; opts: string[]; all: string }) => (
+    <label className="flex flex-col gap-0.5">
+      <span className="text-[11px] font-semibold text-slate-500">{label}</span>
+      <select className={selCls} value={f[k]} disabled={bloqueado(k)} onChange={e => set(k, e.target.value)}>
+        <option value="">{all}</option>
+        {opts.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </label>
+  )
+
+  return (
+    <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex flex-wrap items-end gap-3">
+      <Campo k="departamento" label="Departamento" opts={departamentos} all="Lima" />
+      <Campo k="provincia"    label="Provincia"    opts={provincias}    all="Todas las provincias" />
+      <Campo k="distrito"     label="Distrito"     opts={distritos}     all="Todos los distritos" />
+      <Campo k="colegio"      label="Colegio"      opts={colegios}      all="Todos los colegios" />
+      <Campo k="mesa"         label="Mesa"         opts={mesas}         all="Todas las mesas" />
+      <Campo k="partido"      label="Partido"      opts={partidos}      all="Todos los partidos" />
+      <label className="flex flex-col gap-0.5 ml-auto">
+        <span className="text-[11px] font-semibold text-slate-500">Acciones</span>
+        <button onClick={reset}
+          className="text-xs font-bold rounded-md bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 flex items-center gap-1.5">
+          <RotateCcw size={13} /> Reiniciar
+        </button>
+      </label>
+    </div>
+  )
+}
+
+function Shell() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
   const logout = async () => { await supabase.auth.signOut(); navigate('/login') }
 
   return (
-    <div className="flex min-h-screen bg-[#0a0a14] text-white">
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#111122]/95 backdrop-blur-xl border-r border-white/10 flex flex-col transition-transform duration-200 shadow-2xl
+    <div className="flex min-h-screen bg-slate-50 text-slate-800">
+      <aside className={`fixed inset-y-0 left-0 z-40 w-56 bg-[#0b1329] text-slate-400 flex flex-col transition-transform duration-200
         ${open ? 'translate-x-0' : '-translate-x-full'} xl:translate-x-0`}>
-        
-        {/* Header Sidebar */}
-        <div className="flex items-center gap-3.5 px-5 py-5 border-b border-white/5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E8534A] to-[#b92c24] flex items-center justify-center shadow-lg shadow-[#E8534A]/30 border border-white/20">
-            <ShieldCheck size={22} className="text-white" strokeWidth={2} />
-          </div>
-          <div>
-            <p className="font-extrabold text-white text-sm tracking-tight flex items-center gap-1.5">
-              SOMOS PERÚ <span className="text-[#E8534A]">2026</span>
-            </p>
-            <p className="text-white/40 text-[11px] font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Cómputo en Vivo
-            </p>
+        <div className="flex items-center gap-2.5 px-5 py-4 border-b border-white/10">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-sky-700 flex items-center justify-center text-white font-black">✓</div>
+          <div className="leading-tight">
+            <p className="text-white font-extrabold text-base">Voto Real</p>
+            <p className="text-sky-400 text-[10px] font-bold tracking-widest">LIMA</p>
           </div>
         </div>
-
-        {/* Badge de estado en tiempo real */}
-        <div className="mx-4 mt-4 p-3 rounded-2xl bg-gradient-to-r from-[#E8534A]/10 to-transparent border border-[#E8534A]/20 flex items-center gap-2.5">
-          <Radio size={16} className="text-[#E8534A] animate-pulse" />
-          <div className="text-xs">
-            <span className="text-white/90 font-medium block">Transmisión Segura</span>
-            <span className="text-white/40 text-[10px]">Mesas de Lima Metropolitana</span>
-          </div>
-        </div>
-
-        {/* Navegación */}
-        <nav className="flex-1 px-3 py-4 space-y-1.5">
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-widest text-slate-600">Principal</p>
           {NAV.map(({ to, icon: Icon, label }) => (
             <NavLink key={to} to={to} onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all
-                ${isActive 
-                  ? 'bg-[#E8534A] text-white font-semibold shadow-lg shadow-[#E8534A]/30 translate-x-1' 
-                  : 'text-white/60 hover:text-white hover:bg-white/5'}`}>
-              <Icon size={18} strokeWidth={2} />
-              {label}
+                `flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all
+                 ${isActive ? 'bg-white/10 text-sky-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+              <Icon size={17} /> {label}
             </NavLink>
           ))}
         </nav>
-
-        {/* Botón Logout */}
-        <div className="p-3 border-t border-white/5">
-          <button onClick={logout}
-            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all">
-            <LogOut size={18} strokeWidth={1.8} />
-            Cerrar Sesión
-          </button>
+        <div className="px-5 py-3 border-t border-white/10 text-[11px]">
+          <Reloj />
         </div>
       </aside>
 
-      {open && <div className="fixed inset-0 z-30 bg-black/70 backdrop-blur-sm xl:hidden" onClick={() => setOpen(false)} />}
+      {open && <div className="fixed inset-0 z-30 bg-black/50 xl:hidden" onClick={() => setOpen(false)} />}
 
-      {/* Contenido Principal */}
-      <div className="flex-1 xl:ml-64 flex flex-col min-h-screen">
-        <header className="xl:hidden flex items-center justify-between px-4 py-3 bg-[#111122]/95 border-b border-white/10 sticky top-0 z-20 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setOpen(true)} className="p-2 rounded-lg bg-white/5 text-white/80 hover:text-white">
-              <Menu size={20} />
-            </button>
-            <span className="font-bold text-white text-sm">Somos Perú 2026</span>
+      <div className="flex-1 xl:ml-56 flex flex-col min-w-0">
+        <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <button onClick={() => setOpen(true)} className="xl:hidden p-1.5 rounded-md bg-slate-100"><Menu size={18} /></button>
+            <span className="text-sky-600">lima</span>
+            <span className="text-slate-300">/</span>
+            <span className="text-sky-600">LIMA</span>
           </div>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            EN LÍNEA
-          </span>
+          <div className="flex items-center gap-2">
+            <button className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-slate-600 border border-slate-300 rounded-md px-2.5 py-1.5">
+              <Download size={13} /> Exportar
+            </button>
+            <span className="flex items-center gap-1.5 bg-sky-100 text-sky-700 text-xs font-bold rounded-full px-2.5 py-1">
+              <span className="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[10px]">A</span>
+              Administrador
+            </span>
+            <button onClick={logout}
+              className="text-xs font-semibold text-slate-600 border border-slate-300 rounded-md px-3 py-1.5">
+              Salir
+            </button>
+          </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 xl:p-8 max-w-7xl w-full mx-auto">
+        <BarraFiltros />
+
+        <main className="flex-1 p-4 sm:p-6 max-w-[1400px] w-full">
           <Outlet />
         </main>
       </div>
     </div>
+  )
+}
+
+export default function Layout() {
+  return (
+    <FiltrosProvider>
+      <Shell />
+    </FiltrosProvider>
   )
 }

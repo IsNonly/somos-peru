@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, DISTRITOS_META } from '../lib/supabase'
+import { useScope, enAmbito } from '../lib/scope'
 import { Download, RefreshCw, Search, Users, UserCheck, ShieldCheck, GraduationCap } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -30,8 +31,8 @@ interface Perfil {
 
 const ROLES = [
   'Personero de Mesa',
-  'Coordinador de Local',
-  'Coordinador Zonal',
+  'Personero de Local de Votación',
+  'Coordinador Provincial',
   'Coordinador de Distritos',
   'Administrador General',
 ]
@@ -47,7 +48,7 @@ const matchBool = (filtro: SiNo, valor: boolean | null | undefined) =>
 const rolColor = (rol: string) => {
   if (rol.includes('Administrador')) return 'bg-purple-500/20 text-purple-300'
   if (rol.includes('Distritos'))     return 'bg-blue-500/20 text-blue-300'
-  if (rol.includes('Zonal'))         return 'bg-cyan-500/20 text-cyan-300'
+  if (rol.includes('Provincial'))    return 'bg-cyan-500/20 text-cyan-300'
   if (rol.includes('Local'))         return 'bg-green-500/20 text-green-300'
   return 'bg-white/10 text-white/60'
 }
@@ -56,8 +57,15 @@ const rolCorto = (rol: string) =>
   rol.replace('Coordinador de ', 'Coord. ').replace('Coordinador ', 'Coord. ').replace('Personero de ', 'Pers. ')
 
 export default function PadronPage() {
-  const [perfiles, setPerfiles] = useState<Perfil[]>([])
+  const scope = useScope()
+  const [perfilesRaw, setPerfiles] = useState<Perfil[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Acotar el padrón al ámbito del usuario
+  const perfiles = useMemo(
+    () => perfilesRaw.filter(p => enAmbito(scope.distritos, p.distrito_asignado, p.distrito_vota)),
+    [perfilesRaw, scope.distritos],
+  )
 
   const [search, setSearch] = useState('')
   const [distFilter, setDistFilter] = useState('')
@@ -171,6 +179,7 @@ export default function PadronPage() {
         <div>
           <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Control de Personal</p>
           <h1 className="text-white text-2xl font-bold">Padrón de Personeros</h1>
+          {scope.ambitoLabel && <p className="text-sky-400 text-xs font-semibold mt-1">{scope.ambitoLabel}</p>}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} disabled={loading}
@@ -202,8 +211,8 @@ export default function PadronPage() {
         </div>
         <select value={distFilter} onChange={e => setDistFilter(e.target.value)}
           className="bg-[#16162a] border border-white/8 rounded-xl px-3 py-2 text-sm text-white/70 outline-none">
-          <option value="">Todos los distritos</option>
-          {DISTRITOS.map(d => <option key={d} value={d}>{d}</option>)}
+          <option value="">{scope.distritos ? 'Todo mi ámbito' : 'Todos los distritos'}</option>
+          {(scope.esAdmin || !scope.distritos ? DISTRITOS : scope.distritos).map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         <select value={rolFilter} onChange={e => setRolFilter(e.target.value)}
           className="bg-[#16162a] border border-white/8 rounded-xl px-3 py-2 text-sm text-white/70 outline-none">

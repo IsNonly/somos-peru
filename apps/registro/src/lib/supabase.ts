@@ -8,8 +8,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey)
 export type Rol =
   | 'Administrador General'
   | 'Coordinador de Distritos'
-  | 'Coordinador Zonal'
-  | 'Coordinador de Local'
+  | 'Coordinador Provincial'
   | 'Personero de Mesa'
   | 'Personero de Local de Votación'
 
@@ -57,8 +56,7 @@ export const DISTRITOS = [
 export const ROLES: Rol[] = [
   'Administrador General',
   'Coordinador de Distritos',
-  'Coordinador Zonal',
-  'Coordinador de Local',
+  'Coordinador Provincial',
   'Personero de Mesa',
   'Personero de Local de Votación',
 ]

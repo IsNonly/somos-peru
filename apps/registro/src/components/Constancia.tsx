@@ -13,7 +13,7 @@ const RATIO = '963 / 692'
 
 // Posición vertical (%) de cada bloque sobre el lienzo. Ajustable a ojo.
 const POS = {
-  nombreTop: 37,   // el nombre se apoya sobre la línea azul (~42%)
+  nombreTop: 41.5, // el nombre se apoya sobre la línea azul, bajo "Se otorga la presente constancia a:"
   infoTop: 86,      // fila FECHA · CARGO · DISTRITO, bajo el sello inferior
 }
 

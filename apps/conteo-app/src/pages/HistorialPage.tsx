@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, getMiPerfil } from '../lib/supabase'
 import { CheckCircle, Clock, AlertCircle } from 'lucide-react'
 
 interface Acta {
@@ -19,12 +19,12 @@ export default function HistorialPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const p = await getMiPerfil<{ id: string }>('id')
+      if (!p?.id) { setLoading(false); return }
       const { data } = await supabase
         .from('actas')
         .select('id, mesa_numero, distrito, estado, metodo, transmitida_at')
-        .eq('personero_id', user.id)
+        .eq('personero_id', p.id)
         .order('transmitida_at', { ascending: false })
       setActas((data ?? []) as Acta[])
       setLoading(false)

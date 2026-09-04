@@ -1,19 +1,30 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  supabase, CANDIDATOS_METROPOLITANA, VOTOS_ESPECIALES,
+  supabase, getMiPerfil, CANDIDATOS_METROPOLITANA, VOTOS_ESPECIALES,
   getCandidatosDistrital, haversineM,
 } from '../lib/supabase'
 import type { Candidato } from '../lib/supabase'
 import { procesarActa } from '../lib/ocr'
 import { subirImagenActa } from '../lib/storage'
 import {
-  Camera, RefreshCw, Send, CheckCircle, AlertTriangle,
+  Camera, Send, CheckCircle, AlertTriangle,
   Loader, MapPin, Key, ChevronDown, ChevronUp, Minus, Plus,
+  Info, PencilLine, Filter, LogOut, UserCheck, Map as MapIcon,
 } from 'lucide-react'
 
 type Modo = 'MANUAL' | 'IMAGEN'
-type Fase = 'setup' | 'captura' | 'revision' | 'enviado'
+type Fase = 'setup' | 'enviado'
 type Nivel = 'metro' | 'distrital'
+
+// Ruta del logo del partido en /public/partidos/<slug>.png
+// Si el archivo no existe, la fila cae automáticamente al badge de iniciales.
+function slugPartido(partido: string): string {
+  return partido
+    .normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
 
 // Busca el candidato cuyo nombre o partido más se parece al texto reconocido por OCR
 function matchCandidato(lista: Candidato[], texto: string): Candidato | undefined {
@@ -24,28 +35,85 @@ function matchCandidato(lista: Candidato[], texto: string): Candidato | undefine
   )
 }
 
-// Carga la clave Gemini guardada en Supabase (tabla config)
-async function getGeminiKey(userId: string): Promise<string> {
+// Carga la clave Gemini guardada en Supabase (tabla app_config, por auth user id)
+async function getGeminiKey(authId: string): Promise<string> {
   const { data } = await supabase
     .from('app_config')
     .select('value')
-    .eq('user_id', userId)
+    .eq('user_id', authId)
     .eq('key', 'gemini_api_key')
-    .single()
+    .maybeSingle()
   return data?.value ?? ''
 }
 
-async function saveGeminiKey(userId: string, key: string) {
+async function saveGeminiKey(authId: string, key: string) {
   await supabase.from('app_config').upsert(
-    { user_id: userId, key: 'gemini_api_key', value: key },
+    { user_id: authId, key: 'gemini_api_key', value: key },
     { onConflict: 'user_id,key' }
   )
 }
 
 export default function ConteoPage() {
+  return (
+    <>
+      <IntroModal />
+      <ConteoPageInner />
+    </>
+  )
+}
+
+// ── Modal de bienvenida: se muestra una vez por sesión al entrar el personero ──
+function IntroModal() {
+  const [visible, setVisible] = useState(() => {
+    try { return sessionStorage.getItem('conteo_intro_ok') !== '1' } catch { return true }
+  })
+  if (!visible) return null
+
+  const cerrar = () => {
+    try { sessionStorage.setItem('conteo_intro_ok', '1') } catch { /* modo privado */ }
+    setVisible(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-5 fade-in">
+      <div className="w-full max-w-sm bg-[#121829] border border-white/10 rounded-3xl p-7 text-center space-y-5 shadow-2xl shadow-black/50">
+        <div className="w-16 h-16 mx-auto rounded-full bg-sky-500/15 border border-sky-500/40 flex items-center justify-center">
+          <Info size={28} className="text-sky-400" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-white font-extrabold text-lg">
+            Control de <span className="text-sky-400">Votación</span>
+          </h2>
+          <p className="text-white/50 text-xs leading-relaxed">
+            Bienvenido al sistema. Tienes <span className="text-white font-semibold">2 opciones</span> independientes
+            para registrar tus actas de mesa:
+          </p>
+        </div>
+        <div className="bg-[#0e1322] border border-white/8 rounded-2xl p-4 space-y-2.5 text-left">
+          <p className="text-white/70 text-xs flex gap-2">
+            <PencilLine size={15} className="text-sky-400 flex-shrink-0 mt-0.5" />
+            <span><span className="text-white font-semibold">Formulario Manual:</span> Conteo digitado.</span>
+          </p>
+          <p className="text-white/70 text-xs flex gap-2">
+            <Camera size={15} className="text-violet-400 flex-shrink-0 mt-0.5" />
+            <span><span className="text-white font-semibold">Formulario Imagen:</span> Foto y OCR.</span>
+          </p>
+        </div>
+        <button onClick={cerrar}
+          className="w-full py-3.5 bg-gradient-to-r from-[#3b82f6] to-[#0ea5e9] hover:opacity-95 text-white font-bold rounded-2xl text-sm active:scale-[0.98] transition-all">
+          Entendido, comenzar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ConteoPageInner() {
   const [perfil, setPerfil]           = useState<any>(null)
-  const [userId, setUserId]           = useState('')
+  const [userId, setUserId]           = useState('')   // id real del perfil (para escrituras)
+  const [authId, setAuthId]           = useState('')   // id de auth (para app_config)
   const [mesa, setMesa]               = useState('')
+  const [mesaConfirmada, setMesaConfirmada] = useState(false)
   const [modo, setModo]               = useState<Modo>('MANUAL')
   const [fase, setFase]               = useState<Fase>('setup')
   const [votosMetro, setVotosMetro]         = useState<Record<string, number>>({})
@@ -69,11 +137,12 @@ export default function ConteoPage() {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      setUserId(user.id)
-      const [{ data: p }, key] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
+      const [p, key] = await Promise.all([
+        getMiPerfil('*'),
         getGeminiKey(user.id),
       ])
+      setUserId(p?.id ?? user.id)   // el id real del perfil, para escrituras
+      setAuthId(user.id)
       setPerfil(p)
       setGeminiKey(key)
       if (p?.mesa_asignada) setMesa(p.mesa_asignada)
@@ -137,7 +206,6 @@ export default function ConteoPage() {
 
       if (modo === 'IMAGEN') {
         setOcrLoading(true)
-        setFase('revision')
         try {
           const base64 = dataUrl.split(',')[1]
           const resultado = await procesarActa(base64, mime, geminiKey)
@@ -160,8 +228,6 @@ export default function ConteoPage() {
           setError('No se pudo procesar el acta automáticamente. Ingresa los votos manualmente.')
         }
         setOcrLoading(false)
-      } else {
-        setFase('revision')
       }
     }
     reader.readAsDataURL(file)
@@ -183,11 +249,9 @@ export default function ConteoPage() {
     setEnviando(true); setError('')
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-
       // Verificar bloqueo
       const { data: existente } = await supabase
-        .from('actas').select('id, bloqueada').eq('mesa_numero', mesa).single()
+        .from('actas').select('id, bloqueada').eq('mesa_numero', mesa).maybeSingle()
       if (existente?.bloqueada) {
         setError('El conteo ya fue transmitido y se encuentra bloqueado (solo 1 envío permitido).')
         setEnviando(false); return
@@ -205,7 +269,7 @@ export default function ConteoPage() {
         mesa_numero:     mesa.trim(),
         colegio_nombre:  perfil?.local_asignado ?? perfil?.local_votacion ?? null,
         distrito:        perfil?.distrito_asignado ?? perfil?.distrito_vota ?? null,
-        personero_id:    user!.id,
+        personero_id:    userId || null,
         personero_dni:   perfil?.dni ?? null,
         imagen_url:      imagenUrl,
         metodo:          modo,
@@ -238,7 +302,7 @@ export default function ConteoPage() {
 
       if (filas.length) await supabase.from('votos').insert(filas)
 
-      await supabase.from('profiles').update({ acta_transmitida: true }).eq('id', user!.id)
+      if (userId) await supabase.from('profiles').update({ acta_transmitida: true }).eq('id', userId)
       setFase('enviado')
     } catch (e: any) {
       setError(e.message ?? 'Error al transmitir. Inténtalo de nuevo.')
@@ -247,7 +311,7 @@ export default function ConteoPage() {
   }
 
   const guardarGeminiKey = async () => {
-    if (userId) await saveGeminiKey(userId, geminiKey)
+    if (authId) await saveGeminiKey(authId, geminiKey)
     setShowKeyInput(false)
   }
 
@@ -265,180 +329,156 @@ export default function ConteoPage() {
     </div>
   )
 
-  // ── SETUP ────────────────────────────────────────────────────────────────
-  if (fase === 'setup') return (
-    <div className="p-5 space-y-5 fade-in">
-      <div className="pt-4">
-        <h1 className="text-white font-bold text-xl">Conteo de Acta</h1>
-        <p className="text-white/40 text-sm">Elecciones Regionales y Municipales 2026</p>
+  // ── PANTALLA ÚNICA DE CONTEO (personero) ────────────────────────────────
+  const gpsBtn =
+    gpsStatus === 'ok'   ? 'text-green-400 border-green-500/40' :
+    gpsStatus === 'warn' ? 'text-yellow-400 border-yellow-500/40' :
+    gpsStatus === 'fail' ? 'text-red-400 border-red-500/40' :
+                           'text-green-400 border-green-500/40'
+
+  return (
+    <div className="max-w-3xl mx-auto p-4 sm:p-5 space-y-4 fade-in">
+
+      {/* Tarjeta del personero */}
+      <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center flex-shrink-0">
+          <UserCheck size={18} className="text-sky-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] uppercase tracking-widest text-white/35 font-bold">Personero</p>
+          <p className="text-white font-bold text-sm truncate">{perfil?.nombre_completo ?? '—'}</p>
+          <p className="text-white/40 text-xs truncate">
+            DNI: <span className="text-sky-400 font-medium">{perfil?.dni ?? '—'}</span>
+            {perfil?.distrito_asignado && <> {'·'} Distrito: {perfil.distrito_asignado}</>}
+          </p>
+        </div>
+        <button onClick={detectarGPS}
+          className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border bg-white/[0.02] flex-shrink-0 ${gpsBtn}`}>
+          {gpsStatus === 'loading'
+            ? <Loader size={13} className="animate-spin" />
+            : <MapPin size={13} />}
+          <span className="hidden sm:inline">Confirmar Llegada</span>
+        </button>
+        <button onClick={() => supabase.auth.signOut()}
+          className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center justify-center flex-shrink-0">
+          <LogOut size={15} />
+        </button>
       </div>
 
-      {/* Datos del personero */}
-      {perfil && (
-        <div className="bg-[#14141f] border border-white/8 rounded-2xl p-4">
-          <p className="text-white font-semibold text-sm">{perfil.nombre_completo}</p>
-          <p className="text-white/40 text-xs mt-0.5">DNI: {perfil.dni} · {perfil.rol}</p>
-          {perfil.distrito_asignado && <p className="text-white/40 text-xs">{perfil.distrito_asignado}</p>}
-        </div>
+      {gpsMsg && (
+        <p className={`text-xs px-2 -mt-1 ${
+          gpsStatus === 'warn' ? 'text-yellow-400' :
+          gpsStatus === 'fail' ? 'text-red-400' : 'text-green-400'}`}>
+          {gpsMsg}
+        </p>
       )}
 
-      {/* Mesa */}
-      <div>
-        <label className="block text-white/50 text-xs uppercase tracking-widest mb-2">Número de Mesa / Acta</label>
-        <input value={mesa} onChange={e => setMesa(e.target.value)}
-          placeholder="Ej. 064321"
-          className="w-full bg-[#14141f] border border-white/10 rounded-2xl px-4 py-3.5 text-white text-sm placeholder-white/25 outline-none focus:border-brand-red/50" />
-      </div>
-
-      {/* Modo */}
-      <div>
-        <label className="block text-white/50 text-xs uppercase tracking-widest mb-2">Modo de registro</label>
-        <div className="grid grid-cols-2 gap-3">
+      {/* Vista: Manual / Imagen */}
+      <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-2 flex items-center gap-2">
+        <span className="flex items-center gap-1 text-white/40 text-xs font-semibold px-2 flex-shrink-0">
+          <Filter size={12} /> Vista:
+        </span>
+        <div className="flex-1 grid grid-cols-2 gap-2">
           {(['MANUAL', 'IMAGEN'] as Modo[]).map(m => (
             <button key={m} onClick={() => setModo(m)}
-              className={`py-3 rounded-2xl text-sm font-semibold border transition-all
-                ${modo === m ? 'bg-brand-red border-brand-red text-white' : 'bg-[#14141f] border-white/10 text-white/50'}`}>
-              {m === 'MANUAL' ? 'Manual' : 'Escáner y Reconocimiento (IA)'}
+              className={`py-2.5 rounded-xl text-sm font-bold border transition-all ${
+                modo === m
+                  ? 'bg-sky-500/15 border-sky-500/50 text-sky-300'
+                  : 'bg-transparent border-white/8 text-white/45'}`}>
+              {m === 'MANUAL' ? 'Conteo Manual' : 'Conteo por Imagen'}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Clave Gemini (modo imagen) */}
+      {/* Número de Mesa / Acta */}
+      <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-white font-bold text-sm">Número de Mesa / Acta:</span>
+          <span className="font-mono text-white/30 text-sm border border-white/10 rounded-lg px-3 py-1 tabular-nums">
+            {mesa.trim() || '000000'}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sky-400 text-sm font-semibold flex-shrink-0">Colegio:</span>
+          <input value={mesa} onChange={e => { setMesa(e.target.value); setMesaConfirmada(false) }}
+            placeholder="Ingresa tu mesa…"
+            className="flex-1 min-w-0 bg-[#0b0f1d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 outline-none focus:border-sky-500/50" />
+          <label className={`flex items-center gap-1.5 text-sm font-semibold flex-shrink-0 cursor-pointer ${mesaConfirmada ? 'text-sky-400' : 'text-white/40'}`}>
+            <input type="checkbox" checked={mesaConfirmada}
+              onChange={e => setMesaConfirmada(e.target.checked && !!mesa.trim())}
+              className="accent-sky-500 w-4 h-4" />
+            Confirmar
+          </label>
+        </div>
+      </div>
+
+      {/* Modo IMAGEN: foto del acta + OCR */}
       {modo === 'IMAGEN' && (
-        <div className="bg-[#14141f] border border-white/8 rounded-2xl p-4 space-y-3">
+        <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
+          <div onClick={() => inputRef.current?.click()}
+            className="border-2 border-dashed border-white/15 rounded-2xl p-8 text-center cursor-pointer hover:border-sky-500/50 transition-all">
+            <Camera size={32} className="mx-auto text-white/25 mb-2" />
+            <p className="text-white/50 text-sm">Toca para abrir la cámara / subir foto del acta</p>
+            <p className="text-white/25 text-xs mt-1">Se procesa con IA automáticamente</p>
+          </div>
+          {imgSrc && (
+            <div className="rounded-xl overflow-hidden border border-white/10">
+              <img src={imgSrc} alt="Acta" className="w-full object-contain max-h-48" />
+            </div>
+          )}
+          {ocrLoading && (
+            <p className="flex items-center gap-2 text-sky-300 text-xs">
+              <Loader size={14} className="animate-spin" /> Procesando acta con IA…
+            </p>
+          )}
+          {ocrMetodo && !ocrLoading && (
+            <p className={`flex items-center gap-1.5 text-xs font-medium ${ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
+              <CheckCircle size={13} /> Votos reconocidos ({ocrMetodo}) — revísalos abajo.
+            </p>
+          )}
           <button onClick={() => setShowKeyInput(!showKeyInput)}
-            className="w-full flex items-center justify-between text-white/60 text-sm">
-            <span className="flex items-center gap-2">
-              <Key size={14} className={geminiKey ? 'text-green-400' : 'text-white/30'} />
-              Clave de Servicio OCR Gemini {geminiKey ? '(configurada)' : '(Opcional)'}
+            className="w-full flex items-center justify-between text-white/50 text-xs pt-1">
+            <span className="flex items-center gap-1.5">
+              <Key size={12} className={geminiKey ? 'text-green-400' : 'text-white/30'} />
+              Clave OCR Gemini {geminiKey ? '(configurada)' : '(opcional)'}
             </span>
-            {showKeyInput ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {showKeyInput ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
           {showKeyInput && (
             <div className="space-y-2">
-              <input value={geminiKey} onChange={e => setGeminiKey(e.target.value)}
-                placeholder="AIzaSy..."
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-brand-red/50 font-mono" />
+              <input value={geminiKey} onChange={e => setGeminiKey(e.target.value)} placeholder="AIzaSy…"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-mono outline-none focus:border-sky-500/50" />
               <button onClick={guardarGeminiKey}
-                className="w-full py-2 bg-brand-red/20 border border-brand-red/30 text-brand-red rounded-xl text-xs font-medium">
+                className="w-full py-2 bg-sky-500/15 border border-sky-500/30 text-sky-300 rounded-lg text-xs font-medium">
                 Guardar clave
               </button>
               <p className="text-white/25 text-xs">Sin clave usa Tesseract como fallback.</p>
             </div>
           )}
+          <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFoto} />
         </div>
       )}
 
-      {/* GPS */}
-      <div className="bg-[#14141f] border border-white/8 rounded-2xl p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-1">
-            <MapPin size={16} className={
-              gpsStatus === 'ok'   ? 'text-green-400' :
-              gpsStatus === 'warn' ? 'text-yellow-400' :
-              gpsStatus === 'fail' ? 'text-red-400' : 'text-white/30'} />
-            <span className="text-white/70 text-sm leading-tight">{gpsMsg || 'Verificar ubicación GPS (radio 50m)'}</span>
-          </div>
-          {gpsStatus !== 'ok' && (
-            <button onClick={detectarGPS}
-              className="ml-3 text-xs text-brand-red font-medium flex-shrink-0">
-              {gpsStatus === 'loading' ? <Loader size={14} className="animate-spin" /> : 'Activar'}
-            </button>
-          )}
-        </div>
+      {/* Banner de conteo */}
+      <div className="bg-gradient-to-r from-sky-950/80 to-[#131a2e] border border-sky-500/20 rounded-2xl px-4 py-3 flex items-center gap-2">
+        <UserCheck size={15} className="text-sky-400 flex-shrink-0" />
+        <span className="text-sky-300 font-bold text-xs uppercase tracking-wider">
+          {modo === 'MANUAL' ? 'Conteo Manual Oficial' : 'Conteo por Imagen Oficial'}
+        </span>
       </div>
 
-      <button onClick={() => setFase('captura')} disabled={!mesa.trim()}
-        className="w-full py-4 bg-brand-red hover:bg-red-600 text-white font-bold rounded-2xl text-sm transition-all disabled:opacity-40 active:scale-[0.98]">
-        Iniciar conteo
-      </button>
-    </div>
-  )
-
-  // ── CAPTURA ─────────────────────────────────────────────────────────────
-  if (fase === 'captura') return (
-    <div className="p-5 space-y-5 fade-in">
-      <h2 className="text-white font-bold text-lg pt-4">
-        {modo === 'IMAGEN' ? 'Escanear Acta (Tomar Foto)' : 'Registro Manual'}
-      </h2>
-      <p className="text-white/40 text-sm">Mesa: <span className="text-white font-mono font-bold">{mesa}</span></p>
-
-      {modo === 'IMAGEN' ? (
-        <div>
-          <div onClick={() => inputRef.current?.click()}
-            className="border-2 border-dashed border-white/15 rounded-2xl p-12 text-center cursor-pointer hover:border-brand-red/50 transition-all">
-            <Camera size={40} className="mx-auto text-white/25 mb-3" />
-            <p className="text-white/50 text-sm">Toca para abrir la cámara</p>
-            <p className="text-white/25 text-xs mt-1">Se procesará con IA automáticamente</p>
-          </div>
-          <input ref={inputRef} type="file" accept="image/*" capture="environment"
-            className="hidden" onChange={handleFoto} />
-        </div>
-      ) : (
-        <button onClick={() => setFase('revision')}
-          className="w-full py-4 bg-brand-red hover:bg-red-600 text-white font-bold rounded-2xl text-sm">
-          Ingresar votos manualmente
-        </button>
-      )}
-
-      <button onClick={() => setFase('setup')}
-        className="w-full py-3 border border-white/10 text-white/50 rounded-2xl text-sm">
-        Volver
-      </button>
-    </div>
-  )
-
-  // ── REVISIÓN ─────────────────────────────────────────────────────────────
-  return (
-    <div className="p-5 space-y-5 fade-in">
-      <div className="pt-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-white font-bold text-lg">
-            {modo === 'IMAGEN' ? 'Conteo por Imagen' : 'Conteo Manual'}
-          </h2>
-          <p className="text-white/40 text-sm">Mesa: <span className="text-white font-mono">{mesa}</span></p>
-        </div>
-        {modo === 'IMAGEN' && (
-          <button onClick={() => inputRef.current?.click()}
-            className="text-xs text-brand-red font-medium flex items-center gap-1">
-            <RefreshCw size={12} /> Cambiar foto
-          </button>
-        )}
+      {/* Cabeceras de columna */}
+      <div className="flex items-center justify-between px-3 text-white/30 text-[10px] font-bold uppercase tracking-widest">
+        <span>Partido {'·'} Alcalde</span>
+        <span>Conteo votos</span>
       </div>
-
-      {/* Estado OCR */}
-      {ocrLoading && (
-        <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
-          <Loader size={16} className="text-blue-400 animate-spin flex-shrink-0" />
-          <div>
-            <p className="text-blue-300 text-sm">Iniciando escáner de acta…</p>
-            <p className="text-blue-400/60 text-xs">Comprimiendo y procesando imagen con IA</p>
-          </div>
-        </div>
-      )}
-
-      {ocrMetodo && !ocrLoading && (
-        <div className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 border text-xs font-medium
-          ${ocrMetodo === 'GEMINI'
-            ? 'bg-green-500/10 border-green-500/20 text-green-300'
-            : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-300'}`}>
-          <CheckCircle size={13} />
-          Acta procesada: Votos reconocidos ({ocrMetodo}) listos para revisar y aplicar.
-        </div>
-      )}
-
-      {/* Preview imagen */}
-      {imgSrc && modo === 'IMAGEN' && (
-        <div className="rounded-2xl overflow-hidden border border-white/10">
-          <p className="text-white/30 text-xs px-3 py-2">Foto Cargada:</p>
-          <img src={imgSrc} alt="Acta" className="w-full object-contain max-h-52" />
-        </div>
-      )}
 
       {/* Alcaldía Metropolitana */}
       <SeccionVotos
-        titulo={`Alcaldía Metropolitana (Lima — ${CANDIDATOS_METROPOLITANA.length} candidatos)`}
+        titulo={`Alcaldía Metropolitana (Lima - ${CANDIDATOS_METROPOLITANA.length} candidatos)`}
+        subtitulo="Alcalde actual: Rafael López Aliaga (Renovación Popular)"
+        accent="metro"
         total={totalProv}
         candidatos={CANDIDATOS_METROPOLITANA}
         votos={votosMetro}
@@ -447,7 +487,8 @@ export default function ConteoPage() {
 
       {/* Alcaldía Distrital */}
       <SeccionVotos
-        titulo={`Alcaldía Distrital (${perfil?.distrito_asignado ?? 'Distrito'} — ${candidatosDistrital.length} candidatos)`}
+        titulo={`Alcaldía Distrital (${perfil?.distrito_asignado ?? 'Distrito'} - ${candidatosDistrital.length} candidatos)`}
+        accent="distrital"
         total={totalDist}
         candidatos={candidatosDistrital}
         votos={votosDistrital}
@@ -455,7 +496,7 @@ export default function ConteoPage() {
       />
 
       {/* Resumen */}
-      <div className="bg-[#14141f] border border-white/8 rounded-2xl p-4 grid grid-cols-3 gap-2 text-center">
+      <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 grid grid-cols-3 gap-2 text-center">
         <div>
           <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Total Metro</p>
           <p className="text-white text-lg font-extrabold tabular-nums">{totalProv}</p>
@@ -466,16 +507,9 @@ export default function ConteoPage() {
         </div>
         <div>
           <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Gran Total</p>
-          <p className="text-brand-red text-lg font-extrabold tabular-nums">{totalProv + totalDist}</p>
+          <p className="text-sky-400 text-lg font-extrabold tabular-nums">{totalProv + totalDist}</p>
         </div>
       </div>
-
-      {/* Porcentaje sobre votos válidos */}
-      {(totalProv > 0 || totalDist > 0) && (
-        <p className="text-white/25 text-xs text-center">
-          Porcentaje sobre votos válidos, nulos e impugnados
-        </p>
-      )}
 
       {error && (
         <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
@@ -484,38 +518,60 @@ export default function ConteoPage() {
         </div>
       )}
 
-      <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFoto} />
-
-      <button onClick={enviar} disabled={enviando || ocrLoading}
-        className="w-full py-4 bg-brand-red hover:bg-red-600 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 active:scale-[0.98]">
+      {/* Transmitir */}
+      <button onClick={enviar} disabled={enviando || ocrLoading || !mesa.trim() || !mesaConfirmada}
+        className="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-500 hover:opacity-95 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 active:scale-[0.98]">
         {enviando
-          ? <><Loader size={16} className="animate-spin" /> Sincronizando foto con el servidor…</>
-          : <><Send size={16} /> Transmitir Acta</>}
+          ? <><Loader size={16} className="animate-spin" /> Transmitiendo…</>
+          : <><Send size={16} /> Transmitir {modo === 'MANUAL' ? 'Resultados Manuales' : 'Acta'}</>}
       </button>
+      {!mesaConfirmada && (
+        <p className="text-white/30 text-xs text-center">
+          Ingresa el N° de mesa y marca “Confirmar” para habilitar el envío.
+        </p>
+      )}
     </div>
   )
 }
 
 // ── Sección de candidatos (Metropolitana o Distrital) ───────────────────────
-function SeccionVotos({ titulo, total, candidatos, votos, onDelta }: {
-  titulo: string; total: number; candidatos: Candidato[]
+function SeccionVotos({ titulo, subtitulo, total, accent, candidatos, votos, onDelta }: {
+  titulo: string; subtitulo?: string; total: number
+  accent: 'metro' | 'distrital'
+  candidatos: Candidato[]
   votos: Record<string, number>; onDelta: (id: string, delta: number) => void
 }) {
+  const esMetro = accent === 'metro'
+  const barra   = esMetro ? 'border-sky-500 bg-sky-500/5'   : 'border-emerald-500 bg-emerald-500/5'
+  const tinta   = esMetro ? 'text-sky-300'                  : 'text-emerald-300'
+  const icono   = esMetro ? 'text-sky-400'                  : 'text-emerald-400'
+  const pill    = esMetro
+    ? 'text-sky-300/80 border-sky-500/30 bg-sky-500/10'
+    : 'text-emerald-300/80 border-emerald-500/30 bg-emerald-500/10'
   return (
-    <div className="bg-[#14141f] border border-white/8 rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between px-3.5 py-2.5 bg-black/30">
-        <p className="text-white/50 text-[10px] font-bold uppercase tracking-wide leading-tight pr-2">{titulo}</p>
+    <div className="bg-[#131a2e] border border-white/8 rounded-2xl overflow-hidden">
+      {/* Cabecera de sección */}
+      <div className={`flex items-start justify-between gap-2 pl-4 pr-3 py-3 border-l-4 ${barra}`}>
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <MapIcon size={13} className={`${icono} flex-shrink-0`} />
+            <p className={`text-[11px] font-extrabold uppercase tracking-wide leading-tight ${tinta}`}>{titulo}</p>
+          </div>
+          {subtitulo && (
+            <span className={`inline-block text-[9px] font-semibold uppercase tracking-wide px-2 py-1 rounded-md border ${pill}`}>
+              {subtitulo}
+            </span>
+          )}
+        </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-white/30 text-[9px] uppercase tracking-widest">Votos</p>
-          <p className="text-white text-base font-extrabold tabular-nums">{total}</p>
+          <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold">Votos</p>
+          <p className="text-white text-xl font-black tabular-nums leading-none mt-0.5">{total}</p>
         </div>
       </div>
-      <div className="divide-y divide-white/5 max-h-[42vh] overflow-y-auto p-2 space-y-1.5">
-        {candidatos.map(c => (
-          <FilaCandidato key={c.id} candidato={c} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
-        ))}
-        {VOTOS_ESPECIALES.map(c => (
-          <FilaCandidato key={c.id} candidato={c} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
+      {/* Filas */}
+      <div className="divide-y divide-white/[0.06] max-h-[60vh] overflow-y-auto">
+        {[...candidatos, ...VOTOS_ESPECIALES].map(c => (
+          <FilaCandidato key={c.id} candidato={c} accent={accent} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
         ))}
       </div>
     </div>
@@ -523,18 +579,29 @@ function SeccionVotos({ titulo, total, candidatos, votos, onDelta }: {
 }
 
 // ── Fila individual con controles +/- ────────────────────────────────────────
-function FilaCandidato({ candidato, value, onDelta }: {
-  candidato: Candidato; value: number; onDelta: (delta: number) => void
+function FilaCandidato({ candidato, accent, value, onDelta }: {
+  candidato: Candidato; accent: 'metro' | 'distrital'
+  value: number; onDelta: (delta: number) => void
 }) {
+  const activa = accent === 'metro'
+    ? 'bg-sky-500/[0.07] border-l-2 border-sky-500'
+    : 'bg-emerald-500/[0.07] border-l-2 border-emerald-500'
+  const mas = accent === 'metro' ? 'bg-sky-500 hover:bg-sky-400' : 'bg-emerald-500 hover:bg-emerald-400'
   return (
-    <div className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl border transition-all ${
-      value > 0 ? 'border-brand-red/40 bg-brand-red/10' : 'border-white/8 bg-white/[0.02]'
-    }`}>
-      <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center text-[0.55rem] font-black flex-shrink-0"
-        style={{ background: candidato.color + '22', border: `2px solid ${candidato.color}66`, color: candidato.color }}
-      >
-        {candidato.letra}
+    <div className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${value > 0 ? activa : 'border-l-2 border-transparent'}`}>
+      <div className="relative w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden">
+        <span className="text-[0.55rem] font-black leading-none text-center px-0.5" style={{ color: candidato.color }}>
+          {candidato.letra}
+        </span>
+        {candidato.id.startsWith('c') || candidato.id.startsWith('d') ? (
+          <img
+            src={`/partidos/${slugPartido(candidato.partido)}.png`}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-contain p-0.5 bg-white"
+            onError={e => { e.currentTarget.style.display = 'none' }}
+          />
+        ) : null}
       </div>
       <div className="flex-1 min-w-0">
         {candidato.nombre ? (
@@ -551,9 +618,9 @@ function FilaCandidato({ candidato, value, onDelta }: {
           className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-white/60 disabled:opacity-30 flex items-center justify-center transition-all">
           <Minus size={13} />
         </button>
-        <span className="w-7 text-center text-sm font-extrabold tabular-nums text-white">{value}</span>
+        <span className="w-10 text-center text-sm font-extrabold tabular-nums text-white border border-white/10 rounded-lg py-1">{value}</span>
         <button type="button" onClick={() => onDelta(1)}
-          className="w-7 h-7 rounded-lg bg-brand-red hover:bg-red-600 text-white flex items-center justify-center transition-all">
+          className={`w-7 h-7 rounded-lg text-white flex items-center justify-center transition-all ${mas}`}>
           <Plus size={13} />
         </button>
       </div>

@@ -16,10 +16,24 @@ export default function LoginPage() {
 
     const cleanDni = dni.trim()
     const email = cleanDni.includes('@') ? cleanDni : `${cleanDni}@somosperu.com`
-    const { error: err } = await supabase.auth.signInWithPassword({
+    const dniDigits = cleanDni.replace(/\D/g, '')
+
+    // 1) Probar con lo ingresado como contraseña (normalmente el DNI)
+    let { error: err } = await supabase.auth.signInWithPassword({
       email,
       password: cleanDni,
     })
+
+    // 2) Si falla y lo ingresado parece el DNI, probar con la clave_acceso
+    //    autogenerada. Se pide por RPC (no lectura directa de profiles, que
+    //    con RLS solo es visible para usuarios ya autenticados).
+    if (err && dniDigits.length >= 6) {
+      const { data: clave } = await supabase.rpc('clave_acceso_por_dni', { p_dni: dniDigits })
+      if (clave && clave !== cleanDni) {
+        const { error: errFallback } = await supabase.auth.signInWithPassword({ email, password: clave })
+        err = errFallback
+      }
+    }
 
     if (err) {
       setError('Acceso Denegado: Tus credenciales no se encuentran confirmadas o están bloqueadas.')

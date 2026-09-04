@@ -12,6 +12,9 @@ const fechaLarga = (d: Date) =>
 const PDF_URL = '/manuals/Cartilla_Personero_ERM_2026.pdf'
 const PDF_TIEMPO_MIN = 60 // segundos requeridos de lectura
 
+const VIDEO_URL = '/videos/Capacitacion_Personero_ERM_2026.mp4'
+const VIDEO_VECES = 2 // veces que hay que ver el video completo
+
 const QUIZ: { pregunta: string; opciones: string[]; correcta: number }[] = [
   {
     pregunta: '¿Cuál es la función principal del personero de mesa?',
@@ -79,7 +82,8 @@ interface Profile {
 
 export default function CapacitarPage() {
   const [profile, setProfile]         = useState<Profile | null>(null)
-  const [userId, setUserId]           = useState('')
+  const [userId, setUserId]           = useState('')   // id real del perfil (para updates de profiles)
+  const [authId, setAuthId]           = useState('')   // id de auth (para quiz_intentos)
   const [videosVistos, setVideosVistos] = useState(0)
   const [pdfsVistos, setPdfsVistos]   = useState(0)
   const [quizEstado, setQuizEstado]   = useState<string | null>(null)
@@ -98,16 +102,26 @@ export default function CapacitarPage() {
   const [lecturaCompleta, setLecturaCompleta] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Video state
+  const [videoOpen, setVideoOpen]     = useState(false)
+  const videoRef  = useRef<HTMLVideoElement | null>(null)
+  const maxPosRef = useRef(0)   // punto más avanzado alcanzado en la reproducción actual (anti-adelanto)
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { window.location.href = '/login'; return }
-      setUserId(user.id)
+      setAuthId(user.id)
 
-      const { data: p } = await supabase.from('profiles')
-        .select('nombre_completo, dni, rol, distrito_asignado, distrito_vota, mesa_asignada, quiz_estado, videos_vistos, pdfs_vistos')
-        .eq('id', user.id)
-        .single()
+      // Resolver el perfil por DNI: profiles.id no siempre = auth.users.id
+      const dni = (user.email ?? '').split('@')[0]
+      const cols = 'id, nombre_completo, dni, rol, distrito_asignado, distrito_vota, mesa_asignada, quiz_estado, videos_vistos, pdfs_vistos'
+      let { data: p } = await supabase.from('profiles').select(cols).eq('dni', dni).maybeSingle()
+      if (!p) {
+        const r = await supabase.from('profiles').select(cols).eq('id', user.id).maybeSingle()
+        p = r.data
+      }
+      setUserId(p?.id ?? user.id)
 
       if (p) {
         setProfile(p as Profile)
@@ -166,10 +180,22 @@ export default function CapacitarPage() {
     await supabase.from('profiles').update({ pdfs_vistos: nuevo }).eq('id', userId)
   }
 
-  const marcarVideo = async () => {
-    if (videosVistos >= 2) return
+  // Registra el punto más avanzado visto (para no dejar adelantar el video)
+  const onVideoTime = () => {
+    const v = videoRef.current
+    if (v && v.currentTime > maxPosRef.current) maxPosRef.current = v.currentTime
+  }
+  const onVideoSeeking = () => {
+    const v = videoRef.current
+    if (v && v.currentTime > maxPosRef.current + 2) v.currentTime = maxPosRef.current
+  }
+  const onVideoEnded = async () => {
+    if (videosVistos >= VIDEO_VECES) return
     const nuevo = videosVistos + 1
     setVideosVistos(nuevo)
+    maxPosRef.current = 0
+    const v = videoRef.current
+    if (v && nuevo < VIDEO_VECES) { v.currentTime = 0; v.pause() }
     await supabase.from('profiles').update({ videos_vistos: nuevo }).eq('id', userId)
   }
 
@@ -185,8 +211,12 @@ export default function CapacitarPage() {
       const aprobado = puntaje >= 4
       setQuizDone({ puntaje, aprobado })
       if (aprobado) setFechaAprobacion(new Date())
-      supabase.from('quiz_intentos').insert({ user_id: userId, puntaje, aprobado, respuestas: nuevas })
-      supabase.from('profiles').update({ quiz_estado: aprobado ? 'Aprobado' : 'Reprobado' }).eq('id', userId)
+      supabase.from('quiz_intentos').insert({ user_id: authId, puntaje, aprobado, respuestas: nuevas })
+      // Al aprobar el quiz la capacitación queda completa -> cuenta habilitada
+      supabase.from('profiles').update({
+        quiz_estado: aprobado ? 'Aprobado' : 'Reprobado',
+        ...(aprobado ? { credencial_estado: 'Confirmado' } : {}),
+      }).eq('id', userId)
       setQuizEstado(aprobado ? 'Aprobado' : 'Reprobado')
     }
   }
@@ -387,16 +417,53 @@ export default function CapacitarPage() {
           {/* Acciones */}
           <div className="space-y-2">
 
-            {/* Ver Video Tutorial */}
-            <ActionItem
-              icon={<Play size={17} className="text-[#00a3e8]" />}
-              title="Ver Video Tutorial"
-              subtitle="Ver el vídeo instructivo (Conteo)"
-              unlocked
-              done={videosVistos >= 2}
-              onAction={marcarVideo}
-              actionLabel={videosVistos >= 2 ? 'Visto ✓' : `Marcar visto (${videosVistos}/2)`}
-            />
+            {/* Paso 1: Video de capacitación — verlo completo 2 veces */}
+            <div className={`rounded-2xl border transition-all ${
+              videosVistos >= VIDEO_VECES ? 'border-green-200 bg-green-50/50' : 'border-slate-200 bg-white hover:border-sky-200'
+            }`}>
+              <div className="flex items-center gap-3 p-3.5">
+                <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center flex-shrink-0">
+                  <Play size={17} className={videosVistos >= VIDEO_VECES ? 'text-green-500' : 'text-[#00a3e8]'} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-800">Video de Capacitación</p>
+                  <p className="text-[11px] text-slate-400 leading-tight mt-0.5">
+                    {videosVistos >= VIDEO_VECES
+                      ? 'Video visto 2 de 2 ✓'
+                      : `Debes verlo completo 2 veces — llevas ${videosVistos} de 2`}
+                  </p>
+                </div>
+                {videosVistos >= VIDEO_VECES ? (
+                  <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
+                ) : (
+                  <button
+                    onClick={() => setVideoOpen(o => !o)}
+                    className="text-xs px-3 py-1.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-lg flex-shrink-0"
+                  >
+                    {videoOpen ? 'Ocultar' : 'Ver video'}
+                  </button>
+                )}
+              </div>
+
+              {videoOpen && videosVistos < VIDEO_VECES && (
+                <div className="px-3.5 pb-3.5">
+                  <video
+                    ref={videoRef}
+                    src={VIDEO_URL}
+                    controls
+                    controlsList="nodownload noplaybackrate"
+                    disablePictureInPicture
+                    onTimeUpdate={onVideoTime}
+                    onSeeking={onVideoSeeking}
+                    onEnded={onVideoEnded}
+                    className="w-full rounded-xl bg-black aspect-video"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-2">
+                    Reproducción {videosVistos + 1} de 2. No se puede adelantar el video; al terminar sigue el paso de la cartilla.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Cartilla PDF con temporizador */}
             <div className={`rounded-2xl border transition-all ${

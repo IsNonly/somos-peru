@@ -17,8 +17,7 @@ function whatsappUrl(celular: string, p: Profile) {
 const BADGE_ROL: Record<string, string> = {
   'Administrador General':    'bg-purple-500/20 text-purple-300',
   'Coordinador de Distritos': 'bg-blue-500/20 text-blue-300',
-  'Coordinador Zonal':        'bg-cyan-500/20 text-cyan-300',
-  'Coordinador de Local':     'bg-green-500/20 text-green-300',
+  'Coordinador Provincial':   'bg-cyan-500/20 text-cyan-300',
   'Personero de Mesa':        'bg-orange-500/20 text-orange-300',
   'Personero de Local de Votación': 'bg-pink-500/20 text-pink-300',
 }

@@ -30,19 +30,12 @@ export default function LoginPage() {
       password: cleanPassword,
     })
 
-    // 2. Si falla y la contraseña ingresada es el DNI, intentar recuperar la clave_acceso generada
+    // 2. Si falla y la contraseña ingresada es el DNI, recuperar la clave_acceso
+    //    generada por RPC (profiles no es legible sin sesión con RLS activo).
     if (err && cleanPassword === cleanDni) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('clave_acceso')
-        .eq('dni', cleanDni)
-        .single()
-
-      if (profile?.clave_acceso) {
-        const { error: errFallback } = await supabase.auth.signInWithPassword({
-          email,
-          password: profile.clave_acceso,
-        })
+      const { data: clave } = await supabase.rpc('clave_acceso_por_dni', { p_dni: cleanDni })
+      if (clave) {
+        const { error: errFallback } = await supabase.auth.signInWithPassword({ email, password: clave })
         err = errFallback
       }
     }

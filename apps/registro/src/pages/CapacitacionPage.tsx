@@ -68,7 +68,8 @@ const QUIZ: { pregunta: string; opciones: string[]; correcta: number }[] = [
 export default function CapacitacionPage() {
   const [items, setItems] = useState<TrainingItem[]>([])
   const [progress, setProgress] = useState<Progress[]>([])
-  const [userId, setUserId] = useState<string>('')
+  const [userId, setUserId] = useState<string>('')   // id real del perfil
+  const [authId, setAuthId] = useState<string>('')   // id de auth (training_progress)
   const [quizMode, setQuizMode] = useState(false)
   const [currentQ, setCurrentQ] = useState(0)
   const [respuestas, setRespuestas] = useState<number[]>([])
@@ -79,13 +80,17 @@ export default function CapacitacionPage() {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      setUserId(user.id)
+      setAuthId(user.id)
+      const dni = (user.email ?? '').split('@')[0]
 
-      const [{ data: dbItems }, { data: dbProg }, { data: profile }] = await Promise.all([
+      const [{ data: dbItems }, { data: dbProg }, byDni] = await Promise.all([
         supabase.from('training_items').select('*').eq('activo', true).order('orden'),
         supabase.from('training_progress').select('item_id, completado').eq('user_id', user.id),
-        supabase.from('profiles').select('quiz_estado').eq('id', user.id).single(),
+        supabase.from('profiles').select('id, quiz_estado').eq('dni', dni).maybeSingle(),
       ])
+      const profile = byDni.data
+        ?? (await supabase.from('profiles').select('id, quiz_estado').eq('id', user.id).maybeSingle()).data
+      setUserId((profile as any)?.id ?? user.id)
 
       if (!dbItems?.length) {
         const defaultItems = [
@@ -111,7 +116,7 @@ export default function CapacitacionPage() {
 
   const marcarCompletado = async (itemId: number) => {
     await supabase.from('training_progress').upsert(
-      { user_id: userId, item_id: itemId, completado: true, completado_at: new Date().toISOString() },
+      { user_id: authId, item_id: itemId, completado: true, completado_at: new Date().toISOString() },
       { onConflict: 'user_id,item_id' }
     )
     setProgress(prev => {
@@ -140,7 +145,7 @@ export default function CapacitacionPage() {
       const puntaje = nuevas.reduce((acc, r, i) => acc + (r === QUIZ[i].correcta ? 1 : 0), 0)
       const aprobado = puntaje >= 4
       setQuizDone({ puntaje, aprobado })
-      supabase.from('quiz_intentos').insert({ user_id: userId, puntaje, aprobado, respuestas: nuevas })
+      supabase.from('quiz_intentos').insert({ user_id: authId, puntaje, aprobado, respuestas: nuevas })
       supabase.from('profiles').update({ quiz_estado: aprobado ? 'Aprobado' : 'Reprobado' }).eq('id', userId)
     }
   }

@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { supabase, DISTRITOS_META, colorPartido } from '../lib/supabase'
+import { useScope, enAmbito } from '../lib/scope'
 import { Search, RefreshCw, Download } from 'lucide-react'
 
 // Fix Leaflet marker icons
@@ -67,6 +68,7 @@ function GeoJSONLayer({ geojson, stats }: { geojson: any; stats: DistritoStats[]
 }
 
 export default function MapaPage() {
+  const scope = useScope()
   const [stats, setStats]           = useState<DistritoStats[]>([])
   const [selected, setSelected]     = useState<string | null>(null)
   const [search, setSearch]         = useState('')
@@ -86,8 +88,9 @@ export default function MapaPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('vista_resultados').select('*')
-    if (!data) { setLoading(false); return }
+    const { data: dataRaw } = await supabase.from('vista_resultados').select('*')
+    if (!dataRaw) { setLoading(false); return }
+    const data = dataRaw.filter((r: any) => enAmbito(scope.distritos, r.distrito))
 
     const byDistrito: Record<string, DistritoStats> = {}
     data.forEach((r: any) => {
@@ -118,9 +121,9 @@ export default function MapaPage() {
 
     setStats(Object.values(byDistrito))
     setLoading(false)
-  }, [])
+  }, [scope.distritos])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { if (!scope.loading) load() }, [load, scope.loading])
 
   // Exportar PNG del mapa usando canvas nativo de Leaflet
   const exportarPNG = async () => {
@@ -193,6 +196,7 @@ export default function MapaPage() {
         <div>
           <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Geografía Electoral</p>
           <h1 className="text-white text-2xl font-bold">Mapa de Lima</h1>
+          {scope.ambitoLabel && <p className="text-sky-400 text-xs font-semibold mt-1">{scope.ambitoLabel}</p>}
         </div>
         <div className="flex gap-2">
           <button onClick={exportarPNG} disabled={exporting}

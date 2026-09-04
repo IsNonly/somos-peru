@@ -1,166 +1,216 @@
-import { useEffect, useState, useCallback } from 'react'
-import { supabase, DISTRITOS_META, colorPartido } from '../lib/supabase'
-import { Bar, Doughnut } from 'react-chartjs-2'
+import { useEffect, useState, useMemo } from 'react'
+import { supabase } from '../lib/supabase'
+import { useFiltros } from '../lib/filtros'
+import { CANDIDATOS_METROPOLITANA, VOTOS_ESPECIALES, slugPartido } from '../lib/candidatos'
+import { Bar } from 'react-chartjs-2'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
-  ArcElement, Title, Tooltip, Legend,
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend,
 } from 'chart.js'
-import { Activity, CheckSquare, Clock, Award, RefreshCw, ShieldCheck, TrendingUp, Landmark } from 'lucide-react'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
-interface Resultado { distrito: string; nivel: string; partido: string; total_votos: number; mesas_con_reporte: number }
+interface Voto { nivel: string; partido: string; cantidad: number; metodo: string }
 
-const KPI = ({ icon: Icon, label, value, sub, color, trend }: any) => (
-  <div className="bg-[#121224]/90 border border-white/10 rounded-2xl p-5 relative overflow-hidden backdrop-blur-md hover:border-white/20 transition-all shadow-xl group">
-    <div className="absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl opacity-10 pointer-events-none group-hover:opacity-20 transition-opacity" style={{ background: color }} />
-    <div className="flex items-center justify-between mb-3">
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-white/10" style={{ background: `${color}15` }}>
-        <Icon size={20} style={{ color }} strokeWidth={2} />
-      </div>
-      {trend && (
-        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-          <TrendingUp size={12} /> {trend}
-        </span>
-      )}
-    </div>
-    <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">{label}</p>
-    <p className="text-white text-3xl font-extrabold tabular-nums mt-1">{value}</p>
-    {sub && <p className="text-white/40 text-xs mt-1 font-medium">{sub}</p>}
-  </div>
-)
+const ORDEN = [
+  ...CANDIDATOS_METROPOLITANA.map(c => ({ partido: c.partido, letra: c.letra, color: c.color })),
+  ...VOTOS_ESPECIALES.map(v => ({ partido: v.partido, letra: v.partido.slice(0, 4), color: v.color })),
+]
+
+const chartOpts: any = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 9, weight: 'bold' } } },
+    y: { grid: { color: '#f1f5f9' }, ticks: { color: '#64748b', font: { size: 10 } } },
+  },
+}
+
+function agrupar(votos: Voto[], nivel: string, metodo?: string) {
+  const acc: Record<string, number> = {}
+  for (const v of votos) {
+    if (v.nivel !== nivel) continue
+    if (metodo && v.metodo !== metodo) continue
+    acc[v.partido] = (acc[v.partido] ?? 0) + (v.cantidad || 0)
+  }
+  return acc
+}
+const dataset = (acc: Record<string, number>) => ({
+  labels: ORDEN.map(o => o.letra),
+  datasets: [{ data: ORDEN.map(o => acc[o.partido] ?? 0), backgroundColor: ORDEN.map(o => o.color), borderRadius: 4 }],
+})
+const total = (acc: Record<string, number>) => Object.values(acc).reduce((a, b) => a + b, 0)
 
 export default function DashboardPage() {
-  const [resultados, setResultados] = useState<Resultado[]>([])
-  const [totalMetas] = useState(29121)
+  const { distritosEfectivos, f, ambitoLabel, loading: scopeLoading } = useFiltros()
+  const [votos, setVotos] = useState<Voto[]>([])
+  const [mesas, setMesas] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [lastUpdate, setLastUpdate] = useState(new Date())
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    const { data } = await supabase.from('vista_resultados').select('*')
-    setResultados((data ?? []) as Resultado[])
-    setLastUpdate(new Date())
-    setLoading(false)
-  }, [])
 
   useEffect(() => {
-    load()
-    // Realtime: suscripción a nuevos votos
-    const channel = supabase.channel('votos-rt')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'votos' }, load)
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [load])
+    if (scopeLoading) return
+    let vivo = true
+    ;(async () => {
+      setLoading(true)
+      let aq = supabase.from('actas').select('id, metodo, distrito, colegio_nombre, mesa_numero').eq('estado', 'TRANSMITIDA')
+      if (distritosEfectivos) aq = aq.in('distrito', distritosEfectivos)
+      if (f.colegio) aq = aq.eq('colegio_nombre', f.colegio)
+      if (f.mesa)    aq = aq.eq('mesa_numero', f.mesa)
+      const { data: actas } = await aq
+      const ids = (actas ?? []).map((a: any) => a.id)
+      const metodoPorActa = new Map((actas ?? []).map((a: any) => [a.id, a.metodo]))
+      setMesas(ids.length)
 
-  const mesasConReporte = Object.values(
-    resultados.reduce((acc, r) => { acc[r.distrito] = r.mesas_con_reporte; return acc }, {} as Record<string, number>)
-  ).reduce((a, b) => a + b, 0)
-  const distritosConReporte = [...new Set(resultados.map(r => r.distrito))].length
-  const pctAvance = ((mesasConReporte / totalMetas) * 100).toFixed(2)
+      let rows: Voto[] = []
+      if (ids.length) {
+        const { data: vs } = await supabase.from('votos').select('acta_id, nivel, partido, cantidad').in('acta_id', ids)
+        rows = (vs ?? []).map((v: any) => ({
+          nivel: v.nivel, partido: v.partido, cantidad: v.cantidad,
+          metodo: metodoPorActa.get(v.acta_id) ?? 'MANUAL',
+        }))
+      }
+      if (!vivo) return
+      setVotos(rows)
+      setLoading(false)
+    })()
+    return () => { vivo = false }
+  }, [scopeLoading, distritosEfectivos, f.colegio, f.mesa])
 
-  // Top 5 partidos provinciales
-  const topPartidos = Object.entries(
-    resultados.filter(r => r.nivel === 'PROVINCIAL').reduce((acc, r) => {
-      acc[r.partido] = (acc[r.partido] || 0) + r.total_votos
-      return acc
-    }, {} as Record<string, number>)
-  ).sort((a, b) => b[1] - a[1]).slice(0, 8)
+  const g = useMemo(() => ({
+    provManual: agrupar(votos, 'PROVINCIAL', 'MANUAL'),
+    distManual: agrupar(votos, 'DISTRITAL', 'MANUAL'),
+    provOcr:    agrupar(votos, 'PROVINCIAL', 'IMAGEN'),
+    distOcr:    agrupar(votos, 'DISTRITAL', 'IMAGEN'),
+    prov:       agrupar(votos, 'PROVINCIAL'),
+    dist:       agrupar(votos, 'DISTRITAL'),
+  }), [votos])
 
-  const lider = topPartidos[0]
+  const consolidado = useMemo(() => {
+    const acc: Record<string, number> = {}
+    for (const o of ORDEN) acc[o.partido] = (g.prov[o.partido] ?? 0) + (g.dist[o.partido] ?? 0)
+    return acc
+  }, [g])
+  const granTotal = total(consolidado)
 
-  const barData = {
-    labels: topPartidos.map(([p]) => p.replace('Alianza para el Progreso', 'APP').replace('Partido Aprista Peruano', 'APRA').replace('Somos Perú', 'SP').replace('Acción Popular', 'AP')),
-    datasets: [{
-      data: topPartidos.map(([, v]) => v),
-      backgroundColor: topPartidos.map(([p]) => colorPartido(p) + '99'),
-      borderColor:     topPartidos.map(([p]) => colorPartido(p)),
-      borderWidth: 1,
-      borderRadius: 6,
-    }],
-  }
-
-  const doughnutData = topPartidos.length ? {
-    labels: topPartidos.map(([p]) => p),
-    datasets: [{
-      data: topPartidos.map(([, v]) => v),
-      backgroundColor: topPartidos.map(([p]) => colorPartido(p) + 'CC'),
-      borderColor: '#16162a',
-      borderWidth: 2,
-    }],
-  } : null
-
-  const chartOpts: any = {
-    responsive: true,
-    plugins: { legend: { display: false } },
-    scales: {
-      x: { grid: { color: '#ffffff08' }, ticks: { color: '#ffffff50', font: { size: 10 } } },
-      y: { grid: { color: '#ffffff08' }, ticks: { color: '#ffffff50' } },
-    },
-  }
+  const chips = useMemo(() => {
+    return CANDIDATOS_METROPOLITANA
+      .map(c => ({ letra: c.letra, color: c.color, pct: granTotal > 0 ? ((g.prov[c.partido] ?? 0) / granTotal) * 100 : 0 }))
+      .sort((a, b) => b.pct - a.pct).slice(0, 6)
+  }, [g, granTotal])
 
   return (
-    <div className="space-y-5 fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Tiempo Real</p>
-          <h1 className="text-white text-2xl font-bold">Dashboard Electoral</h1>
-          <p className="text-white/30 text-xs mt-1">
-            Última actualización: {lastUpdate.toLocaleTimeString('es-PE')}
-          </p>
+          <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">📊 Dashboard de Resultados Electorales</h1>
+          <p className="text-sm text-slate-500">Ámbito: <strong className="text-sky-600">{ambitoLabel || 'Lima Metropolitana'}</strong></p>
         </div>
-        <button onClick={load} disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-[#16162a] border border-white/8 hover:bg-white/5 text-white/60 rounded-xl text-sm transition-all">
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Actualizar
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPI icon={CheckSquare} label="Mesas aperturadas" value={mesasConReporte.toLocaleString()} sub={`de ${totalMetas.toLocaleString()}`} color="#E8534A" />
-        <KPI icon={Activity}   label="Avance"             value={`${pctAvance}%`}                   sub="del total Lima"                         color="#10B981" />
-        <KPI icon={Award}      label="Distritos"           value={distritosConReporte}                sub="con reporte"                            color="#F59E0B" />
-        <KPI icon={Clock}      label="Partido líder"       value={lider?.[0] ?? '—'}                 sub={lider ? `${lider[1].toLocaleString()} votos` : ''} color={lider ? colorPartido(lider[0]) : '#6B7280'} />
-      </div>
-
-      {/* Barra de avance */}
-      <div className="bg-[#16162a] border border-white/8 rounded-2xl p-5">
-        <div className="flex justify-between mb-3">
-          <p className="text-white font-semibold">Proporción de mesas aperturadas</p>
-          <span className="text-brand-red font-bold">{pctAvance}%</span>
-        </div>
-        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-          <div className="h-full bg-brand-red rounded-full transition-all duration-700"
-            style={{ width: `${Math.min(parseFloat(pctAvance), 100)}%` }} />
-        </div>
-        <div className="flex justify-between mt-2 text-xs text-white/30">
-          <span>{mesasConReporte.toLocaleString()} aperturadas</span>
-          <span>{(totalMetas - mesasConReporte).toLocaleString()} pendientes</span>
+        <div className="flex flex-wrap gap-1.5">
+          {chips.map(c => (
+            <span key={c.letra} className="text-xs font-bold rounded-full px-2.5 py-1"
+              style={{ background: c.color + '22', color: c.color }}>
+              {c.letra} {c.pct.toFixed(1)}%
+            </span>
+          ))}
         </div>
       </div>
 
-      {/* Gráficos */}
-      {topPartidos.length > 0 && (
-        <div className="grid lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 bg-[#16162a] border border-white/8 rounded-2xl p-5">
-            <h2 className="text-white font-semibold mb-4">Votos Provinciales por Partido</h2>
-            <Bar data={barData} options={chartOpts} />
+      <div className="grid lg:grid-cols-2 gap-5">
+        <Panel titulo="Alcaldía Metropolitana (Manual)" sub="Votos provinciales digitados" total={total(g.provManual)} data={dataset(g.provManual)} />
+        <Panel titulo="Alcaldía Distrital (Manual)" sub="Votos distritales digitados" total={total(g.distManual)} data={dataset(g.distManual)} />
+        <Panel titulo="Alcaldía Metropolitana (OCR / Foto)" sub="Votos procesados por imagen" total={total(g.provOcr)} data={dataset(g.provOcr)} />
+        <Panel titulo="Alcaldía Distrital (OCR / Foto)" sub="Votos procesados por imagen" total={total(g.distOcr)} data={dataset(g.distOcr)} />
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-extrabold text-slate-900">Consolidado {ambitoLabel || 'Lima Metropolitana'}</h3>
+            <span className="text-xs text-slate-500">Total consolidado (Manual + OCR)</span>
           </div>
-          <div className="bg-[#16162a] border border-white/8 rounded-2xl p-5 flex flex-col">
-            <h2 className="text-white font-semibold mb-4">Distribución</h2>
-            {doughnutData && (
-              <div className="flex-1 flex items-center justify-center">
-                <Doughnut data={doughnutData} options={{ responsive: true, plugins: { legend: { display: false } } }} />
-              </div>
-            )}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="bg-emerald-50 text-emerald-600 font-bold rounded-full px-2.5 py-1">Total: {granTotal.toLocaleString('es-PE')}</span>
+            <span className="bg-slate-100 text-slate-500 font-semibold rounded px-2 py-1">Mesas: {mesas}</span>
           </div>
         </div>
-      )}
+        <div className="h-60"><Bar data={dataset(consolidado)} options={chartOpts} /></div>
+      </div>
 
-      {topPartidos.length === 0 && !loading && (
-        <div className="text-center py-16 text-white/30 text-sm">
-          Esperando actas transmitidas…
+      {/* Tabla de candidatos */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-100">
+          <h3 className="font-extrabold text-slate-900 text-sm">Detalle de Partidos y Candidatos</h3>
+          <p className="text-xs text-slate-500">Candidatos para {ambitoLabel || 'Lima Metropolitana'} con sus símbolos oficiales</p>
         </div>
-      )}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                {['Símbolo', 'Partido / Tipo', 'Candidato Provincial', 'Candidato Distrital', 'Votos Prov.', 'Votos Dist.', 'Total Votos', '% Participación'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {[...CANDIDATOS_METROPOLITANA]
+                .filter(c => !f.partido || c.partido === f.partido)
+                .map(c => {
+                  const vp = g.prov[c.partido] ?? 0
+                  const vd = g.dist[c.partido] ?? 0
+                  return { c, vp, vd, tot: vp + vd }
+                })
+                .sort((a, b) => b.tot - a.tot)
+                .map(({ c, vp, vd, tot }) => {
+                  const pct = granTotal > 0 ? (tot / granTotal) * 100 : 0
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5">
+                        <div className="relative w-8 h-8 rounded-md bg-white border border-slate-200 flex items-center justify-center overflow-hidden">
+                          <span className="text-[0.5rem] font-black" style={{ color: c.color }}>{c.letra}</span>
+                          <img src={`/partidos/${slugPartido(c.partido)}.png`} alt="" loading="lazy"
+                            className="absolute inset-0 w-full h-full object-contain p-0.5 bg-white"
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 font-semibold text-slate-800 whitespace-nowrap">{c.partido}</td>
+                      <td className="px-4 py-2.5 text-sky-700 whitespace-nowrap">{c.nombre}</td>
+                      <td className="px-4 py-2.5 text-sky-700 whitespace-nowrap">{c.nombre}</td>
+                      <td className="px-4 py-2.5 text-sky-700 font-semibold tabular-nums">{vp.toLocaleString('es-PE')}</td>
+                      <td className="px-4 py-2.5 text-purple-700 font-semibold tabular-nums">{vd.toLocaleString('es-PE')}</td>
+                      <td className="px-4 py-2.5 font-bold text-slate-900 tabular-nums">{tot.toLocaleString('es-PE')}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${Math.min(pct, 100)}%`, background: c.color }} />
+                          </div>
+                          <span className="text-xs text-slate-500 tabular-nums w-12">{pct.toFixed(1)}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+            </tbody>
+          </table>
+        </div>
+        {loading && <p className="px-5 py-3 text-xs text-slate-400">Cargando resultados…</p>}
+        {!loading && granTotal === 0 && (
+          <p className="px-5 py-6 text-center text-sm text-slate-400">Esperando actas transmitidas — aún no hay votos en este ámbito.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Panel({ titulo, sub, total, data }: { titulo: string; sub: string; total: number; data: any }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <h3 className="font-extrabold text-slate-900 text-sm">{titulo}</h3>
+          <span className="text-xs text-slate-500">{sub}</span>
+        </div>
+        <span className="bg-slate-100 text-sky-600 text-xs font-bold rounded-full px-2 py-0.5">Total: {total.toLocaleString('es-PE')}</span>
+      </div>
+      <div className="h-52"><Bar data={data} options={chartOpts} /></div>
     </div>
   )
 }

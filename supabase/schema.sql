@@ -36,13 +36,17 @@ ON CONFLICT (nombre) DO NOTHING;
 CREATE TABLE IF NOT EXISTS colegios (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   nombre          TEXT NOT NULL,
-  distrito        TEXT NOT NULL REFERENCES distritos(nombre),
+  departamento    TEXT,          -- ubigeo nacional (CALI.xlsx)
+  provincia       TEXT,
+  distrito        TEXT NOT NULL, -- sin FK: hay distritos de todo el país y el nombre se repite entre provincias
   direccion       TEXT,
   latitude        DOUBLE PRECISION,
   longitude       DOUBLE PRECISION,
   total_mesas     INTEGER DEFAULT 0,
+  electores       INTEGER DEFAULT 0,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_colegios_ubigeo ON colegios (departamento, provincia, distrito);
 
 -- ─── MESAS DE SUFRAGIO ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS mesas (
@@ -124,16 +128,21 @@ CREATE TABLE IF NOT EXISTS profiles (
   whatsapp_alterno  TEXT,
 
   -- Dónde vota
-  distrito_vota     TEXT REFERENCES distritos(nombre),
+  departamento_vota TEXT,
+  provincia_vota    TEXT,
+  distrito_vota     TEXT,   -- sin FK: ubigeo nacional
   mesa_sufragio     TEXT,
   local_votacion    TEXT,
 
   -- Rol en la organización
   rol               TEXT NOT NULL DEFAULT 'Personero de Mesa',
   -- 'Administrador General' | 'Coordinador de Distritos' |
-  -- 'Coordinador Zonal' | 'Coordinador de Local' | 'Personero de Mesa'
+  -- 'Coordinador Provincial' | 'Coordinador de Local' |
+  -- 'Personero de Mesa' | 'Personero de Local de Votación'
 
   -- Asignación
+  departamento_asignado TEXT,
+  provincia_asignado    TEXT,
   distrito_asignado TEXT,
   mesa_asignada     TEXT,
   local_asignado    TEXT,
@@ -268,6 +277,15 @@ CREATE TABLE IF NOT EXISTS asistencias (
 
 -- ─── VISTAS PARA EL PANEL ──────────────────────────────────
 
+-- Ubigeo para los selectores del formulario de registro
+CREATE OR REPLACE VIEW vista_departamentos AS
+  SELECT DISTINCT departamento FROM colegios WHERE departamento IS NOT NULL ORDER BY departamento;
+CREATE OR REPLACE VIEW vista_provincias AS
+  SELECT DISTINCT departamento, provincia FROM colegios WHERE departamento IS NOT NULL ORDER BY departamento, provincia;
+CREATE OR REPLACE VIEW vista_ubigeo AS
+  SELECT DISTINCT departamento, provincia, distrito FROM colegios WHERE departamento IS NOT NULL ORDER BY departamento, provincia, distrito;
+
+
 -- Resumen de votos por partido y distrito
 CREATE OR REPLACE VIEW vista_resultados AS
 SELECT
@@ -326,7 +344,7 @@ CREATE POLICY "actas_own" ON actas
 CREATE POLICY "actas_admin" ON actas
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid()
-            AND p.rol IN ('Administrador General','Coordinador de Distritos','Coordinador Zonal'))
+            AND p.rol IN ('Administrador General','Coordinador de Distritos','Coordinador Provincial'))
   );
 
 -- Votos: lectura pública para resultados (panel)
@@ -346,7 +364,7 @@ CREATE POLICY "asistencias_own" ON asistencias
 CREATE POLICY "asistencias_admin" ON asistencias
   FOR SELECT USING (
     EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid()
-            AND p.rol IN ('Administrador General','Coordinador de Distritos','Coordinador Zonal','Coordinador de Local'))
+            AND p.rol IN ('Administrador General','Coordinador de Distritos','Coordinador Provincial','Coordinador de Local'))
   );
 
 -- ─── FUNCIONES AUXILIARES ──────────────────────────────────

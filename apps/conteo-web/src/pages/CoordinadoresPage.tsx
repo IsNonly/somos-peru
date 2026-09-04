@@ -1,238 +1,162 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { UserCheck, MapPin, Clock, AlertTriangle, Search, RefreshCw } from 'lucide-react'
+import { useFiltros } from '../lib/filtros'
+import { Users, CheckCircle2, UserX, TrendingUp, School, AlertTriangle } from 'lucide-react'
 
-interface Asistencia {
-  id: string
-  user_id: string
-  distrito: string
-  colegio_nombre: string
-  latitude: number
-  longitude: number
-  tipo: string
-  confirmada: boolean
-  created_at: string
-  profiles?: { nombre_completo: string; dni: string; rol: string }
-}
-
-interface Coordinador {
+interface Perfil {
   id: string
   nombre_completo: string
-  dni: string
   rol: string
-  distrito_asignado: string
-  credencial_estado: string
-  acta_transmitida: boolean
-  fecha_registro: string
+  distrito_asignado: string | null
+  local_asignado: string | null
+  asistencia_local_at: string | null
+  credencial_estado: string | null
 }
+interface Colegio { nombre: string; distrito: string; total_mesas: number }
+
+const esCoordinador = (rol: string) =>
+  /coordinador/i.test(rol) || rol === 'Personero de Local de Votación'
 
 export default function CoordinadoresPage() {
-  const [coordinadores, setCoordinadores] = useState<Coordinador[]>([])
-  const [asistencias, setAsistencias] = useState<Asistencia[]>([])
+  const { distritosEfectivos, f, ambitoLabel, loading: scopeLoading } = useFiltros()
+  const [perfiles, setPerfiles] = useState<Perfil[]>([])
+  const [colegios, setColegios] = useState<Colegio[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [distFilter, setDistFilter] = useState('')
-  const [tab, setTab] = useState<'coordinadores' | 'asistencias'>('coordinadores')
+  const [q, setQ] = useState('')
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [{ data: coords }, { data: asist }] = await Promise.all([
-      supabase.from('profiles')
-        .select('id, nombre_completo, dni, rol, distrito_asignado, credencial_estado, acta_transmitida, fecha_registro')
-        .in('rol', ['Coordinador de Distritos', 'Coordinador Zonal', 'Coordinador de Local'])
-        .order('distrito_asignado'),
-      supabase.from('asistencias')
-        .select('*, profiles(nombre_completo, dni, rol)')
-        .order('created_at', { ascending: false })
-        .limit(100),
-    ])
-    setCoordinadores((coords ?? []) as Coordinador[])
-    setAsistencias((asist ?? []) as Asistencia[])
-    setLoading(false)
-  }, [])
+  useEffect(() => {
+    if (scopeLoading) return
+    let vivo = true
+    ;(async () => {
+      setLoading(true)
+      let pq = supabase.from('profiles')
+        .select('id, nombre_completo, rol, distrito_asignado, local_asignado, asistencia_local_at, credencial_estado')
+        .order('nombre_completo')
+      let cq = supabase.from('colegios').select('nombre, distrito, total_mesas')
+      if (distritosEfectivos) {
+        pq = pq.in('distrito_asignado', distritosEfectivos)
+        cq = cq.in('distrito', distritosEfectivos)
+      }
+      const [{ data: p }, { data: c }] = await Promise.all([pq, cq])
+      if (!vivo) return
+      setPerfiles((p ?? []) as Perfil[])
+      setColegios((c ?? []) as Colegio[])
+      setLoading(false)
+    })()
+    return () => { vivo = false }
+  }, [scopeLoading, distritosEfectivos])
 
-  useEffect(() => { load() }, [load])
+  const { coords, kpi, resumen } = useMemo(() => {
+    const persMesa = perfiles.filter(p => p.rol === 'Personero de Mesa')
+    const asisPorLocal = new Map<string, number>()
+    for (const p of persMesa) {
+      if (p.asistencia_local_at && p.local_asignado)
+        asisPorLocal.set(p.local_asignado, (asisPorLocal.get(p.local_asignado) ?? 0) + 1)
+    }
+    const mesasPorLocal = new Map<string, number>()
+    let totalMesas = 0
+    for (const c of colegios) { mesasPorLocal.set(c.nombre, c.total_mesas || 0); totalMesas += c.total_mesas || 0 }
 
-  const distritos = [...new Set(coordinadores.map(c => c.distrito_asignado).filter(Boolean))].sort()
+    let filtC = perfiles.filter(p => esCoordinador(p.rol))
+    if (f.colegio) filtC = filtC.filter(p => p.local_asignado === f.colegio)
+    const coords = filtC.map(p => {
+      const local = p.local_asignado ?? 'Sin local'
+      const mesas = mesasPorLocal.get(local) ?? 0
+      const asist = asisPorLocal.get(local) ?? 0
+      return {
+        id: p.id, nombre: p.nombre_completo, distrito: p.distrito_asignado ?? 'LIMA',
+        colegio: local, mesas, asist, falt: Math.max(0, mesas - asist),
+      }
+    })
 
-  const filteredCoords = coordinadores.filter(c =>
-    (!search || c.nombre_completo?.toLowerCase().includes(search.toLowerCase()) || c.dni?.includes(search)) &&
-    (!distFilter || c.distrito_asignado === distFilter)
+    const confirmadas = coords.reduce((a, c) => a + c.asist, 0)
+    const kpi = {
+      totalMesas,
+      asistieron: confirmadas,
+      faltantes: coords.filter(c => c.asist === 0).length,
+      pctAsist: totalMesas > 0 ? ((confirmadas / totalMesas) * 100).toFixed(1) : '0.0',
+    }
+    const resumen = {
+      total: totalMesas,
+      conf: confirmadas,
+      pctConf: totalMesas > 0 ? ((confirmadas / totalMesas) * 100).toFixed(1) : '0.0',
+      porConf: Math.max(0, totalMesas - confirmadas),
+      pctPor: totalMesas > 0 ? (((totalMesas - confirmadas) / totalMesas) * 100).toFixed(1) : '0.0',
+    }
+    return { coords, kpi, resumen }
+  }, [perfiles, colegios, f.colegio])
+
+  const coordsFiltrados = coords.filter(c =>
+    !q || c.nombre.toLowerCase().includes(q.toLowerCase()) || c.colegio.toLowerCase().includes(q.toLowerCase()),
   )
-
-  const filteredAsist = asistencias.filter(a =>
-    (!search || a.profiles?.nombre_completo?.toLowerCase().includes(search.toLowerCase())) &&
-    (!distFilter || a.distrito === distFilter)
-  )
-
-  const confirmarAsistencia = async (id: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('asistencias').update({ confirmada: true, confirmada_por: user!.id }).eq('id', id)
-    setAsistencias(prev => prev.map(a => a.id === id ? { ...a, confirmada: true } : a))
-  }
-
-  const rolColor = (rol: string) => {
-    if (rol.includes('Distritos')) return 'bg-blue-500/20 text-blue-300'
-    if (rol.includes('Zonal'))    return 'bg-cyan-500/20 text-cyan-300'
-    return 'bg-green-500/20 text-green-300'
-  }
 
   return (
-    <div className="space-y-5 fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Control de Personal</p>
-          <h1 className="text-white text-2xl font-bold">Coordinadores</h1>
-        </div>
-        <button onClick={load} disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-[#16162a] border border-white/8 hover:bg-white/5 text-white/60 rounded-xl text-sm transition-all">
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Actualizar
-        </button>
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">👤 Monitoreo de Coordinadores</h1>
+        <p className="text-sm text-slate-500">Resumen de asistencia y control de apertura de mesas · <span className="text-sky-600 font-semibold">{ambitoLabel || 'Lima Metropolitana'}</span></p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border border-white/8 rounded-xl overflow-hidden w-fit">
-        {(['coordinadores', 'asistencias'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize transition-all
-              ${tab === t ? 'bg-brand-red text-white' : 'bg-[#16162a] text-white/50 hover:text-white'}`}>
-            {t === 'coordinadores' ? `Coordinadores (${filteredCoords.length})` : `Llegadas GPS (${filteredAsist.length})`}
-          </button>
-        ))}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Kpi icon={Users} border="#3b82f6" bg="#eff6ff" value={kpi.totalMesas.toLocaleString('es-PE')} label="Total de mesas por coordinador" />
+        <Kpi icon={CheckCircle2} border="#10b981" bg="#ecfdf5" value={kpi.asistieron.toLocaleString('es-PE')} label="Personas que asistieron" />
+        <Kpi icon={UserX} border="#f59e0b" bg="#fffbeb" value={kpi.faltantes.toLocaleString('es-PE')} label="Coordinadores faltantes" />
+        <Kpi icon={TrendingUp} border="#8b5cf6" bg="#f5f3ff" value={`${kpi.pctAsist}%`} label="% Asistencia" />
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-3">
-        <div className="flex items-center gap-2 bg-[#16162a] border border-white/8 rounded-xl px-3 py-2 flex-1 min-w-[200px]">
-          <Search size={14} className="text-white/30" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o DNI…"
-            className="flex-1 bg-transparent text-white text-sm placeholder-white/25 outline-none" />
+      <div className="bg-white rounded-2xl border border-rose-200 p-5">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+          <p className="font-extrabold text-slate-900 flex items-center gap-2"><AlertTriangle size={17} className="text-rose-500" /> Control de Apertura de Mesas</p>
+          <span className="text-[11px] font-bold text-rose-500 bg-rose-50 rounded-md px-2.5 py-1">ALERTA: Pasadas las 07:00 AM</span>
         </div>
-        <select value={distFilter} onChange={e => setDistFilter(e.target.value)}
-          className="bg-[#16162a] border border-white/8 rounded-xl px-3 py-2 text-sm text-white/70 outline-none">
-          <option value="">Todos los distritos</option>
-          {distritos.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm mb-5">
+          <span className="text-slate-600 font-bold">Resumen General de Mesas:</span>
+          <span>Total Mesas: <strong>{resumen.total.toLocaleString('es-PE')}</strong></span>
+          <span className="text-emerald-600">Confirmadas: <strong>{resumen.conf.toLocaleString('es-PE')} ({resumen.pctConf}%)</strong></span>
+          <span className="text-rose-500">Por confirmar: <strong>{resumen.porConf.toLocaleString('es-PE')} ({resumen.pctPor}%)</strong></span>
+        </div>
+
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar coordinador o colegio…"
+          className="w-full sm:w-80 mb-4 text-sm rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-500" />
+
+        {loading ? (
+          <p className="py-10 text-center text-slate-400 text-sm">Cargando…</p>
+        ) : coordsFiltrados.length === 0 ? (
+          <p className="py-10 text-center text-slate-400 text-sm">Sin coordinadores en este ámbito.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {coordsFiltrados.map(c => (
+              <div key={c.id} className="border border-slate-200 rounded-xl p-3.5 flex flex-col gap-2 bg-white">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-extrabold text-[13px] text-slate-900 uppercase leading-tight">{c.nombre}</p>
+                  <span className="text-[10px] font-bold bg-slate-100 text-slate-600 rounded px-1.5 py-0.5 flex-shrink-0">{c.distrito}</span>
+                </div>
+                <p className="text-[11px] text-slate-500 flex items-center gap-1"><School size={12} /> {c.colegio}</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <span className="bg-emerald-50 text-emerald-600 text-center rounded py-1 text-[11px] font-bold">{c.asist} ASIST.</span>
+                  <span className="bg-rose-50 text-rose-500 text-center rounded py-1 text-[11px] font-bold">{c.falt} FALT.</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+    </div>
+  )
+}
 
-      {/* Resumen llegadas */}
-      {tab === 'asistencias' && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-[#16162a] border border-white/8 rounded-2xl p-4 text-center">
-            <p className="text-white text-2xl font-bold">{asistencias.length}</p>
-            <p className="text-white/40 text-xs uppercase tracking-widest mt-1">Llegadas totales</p>
-          </div>
-          <div className="bg-[#16162a] border border-white/8 rounded-2xl p-4 text-center">
-            <p className="text-green-400 text-2xl font-bold">{asistencias.filter(a => a.confirmada).length}</p>
-            <p className="text-white/40 text-xs uppercase tracking-widest mt-1">Confirmadas</p>
-          </div>
-          <div className="bg-[#16162a] border border-white/8 rounded-2xl p-4 text-center">
-            <p className="text-yellow-400 text-2xl font-bold">{asistencias.filter(a => !a.confirmada).length}</p>
-            <p className="text-white/40 text-xs uppercase tracking-widest mt-1">Pendientes</p>
-          </div>
-        </div>
-      )}
-
-      {/* Tabla coordinadores */}
-      {tab === 'coordinadores' && (
-        <div className="bg-[#16162a] border border-white/8 rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-black/30 text-white/40 text-xs uppercase tracking-wide">
-                  {['Nombre','DNI','Rol','Distrito','Credencial','Acta'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {loading ? Array.from({length:8}).map((_,i) => (
-                  <tr key={i} className="animate-pulse">
-                    {Array.from({length:6}).map((_,j) => <td key={j} className="px-4 py-4"><div className="h-3 bg-white/5 rounded w-3/4"/></td>)}
-                  </tr>
-                )) : filteredCoords.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-12 text-center text-white/30">Sin coordinadores</td></tr>
-                ) : filteredCoords.map(c => (
-                  <tr key={c.id} className="hover:bg-white/3 transition-colors">
-                    <td className="px-4 py-3 text-white font-medium">{c.nombre_completo}</td>
-                    <td className="px-4 py-3 text-white/60 font-mono">{c.dni}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${rolColor(c.rol)}`}>
-                        {c.rol.replace('Coordinador de ','').replace('Coordinador ','').trim()}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-white/60">{c.distrito_asignado ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-semibold ${c.credencial_estado === 'Confirmado' ? 'text-green-400' : 'text-yellow-400'}`}>
-                        {c.credencial_estado}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {c.acta_transmitida
-                        ? <UserCheck size={15} className="text-green-400" />
-                        : <Clock size={15} className="text-white/20" />}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Lista de asistencias GPS */}
-      {tab === 'asistencias' && (
-        <div className="bg-[#16162a] border border-white/8 rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-black/30 text-white/40 text-xs uppercase tracking-wide">
-                  {['Coordinador','Distrito','Colegio','Tipo','Hora','Estado','Acción'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {loading ? Array.from({length:5}).map((_,i) => (
-                  <tr key={i} className="animate-pulse">
-                    {Array.from({length:7}).map((_,j) => <td key={j} className="px-4 py-4"><div className="h-3 bg-white/5 rounded w-3/4"/></td>)}
-                  </tr>
-                )) : filteredAsist.length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-12 text-center text-white/30">Sin llegadas registradas</td></tr>
-                ) : filteredAsist.map(a => (
-                  <tr key={a.id} className="hover:bg-white/3 transition-colors">
-                    <td className="px-4 py-3 text-white font-medium">{a.profiles?.nombre_completo ?? '—'}</td>
-                    <td className="px-4 py-3 text-white/60">{a.distrito}</td>
-                    <td className="px-4 py-3 text-white/60 max-w-[180px] truncate">{a.colegio_nombre ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
-                        ${a.tipo === 'LLEGADA' ? 'bg-green-500/20 text-green-300' : 'bg-orange-500/20 text-orange-300'}`}>
-                        {a.tipo}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-white/40 tabular-nums text-xs whitespace-nowrap">
-                      {new Date(a.created_at).toLocaleString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="px-4 py-3">
-                      {a.confirmada
-                        ? <span className="text-green-400 text-xs font-semibold">Confirmada</span>
-                        : <span className="text-yellow-400 text-xs">Pendiente</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      {!a.confirmada && (
-                        <button onClick={() => confirmarAsistencia(a.id)}
-                          className="px-2 py-1 bg-green-500/20 text-green-400 hover:bg-green-500/30 rounded-lg text-xs font-medium transition-all">
-                          Confirmar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+function Kpi({ icon: Icon, border, bg, value, label }: {
+  icon: any; border: string; bg: string; value: string; label: string
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3" style={{ borderLeft: `4px solid ${border}` }}>
+      <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
+        <Icon size={18} style={{ color: border }} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xl font-black text-slate-900 leading-none">{value}</p>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-1 leading-tight">{label}</p>
+      </div>
     </div>
   )
 }

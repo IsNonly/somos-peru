@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase, colorPartido } from '../lib/supabase'
+import { useScope, enAmbito } from '../lib/scope'
 import { Download, RefreshCw, Filter } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -23,6 +24,7 @@ const DISTRITOS = [
 ]
 
 export default function ResultadosPage() {
+  const scope = useScope()
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [nivel, setNivel] = useState('PROVINCIAL')
@@ -38,8 +40,12 @@ export default function ResultadosPage() {
 
   useEffect(() => { load() }, [load])
 
+  // Distritos que el usuario puede elegir en el selector
+  const distritosOpts = scope.esAdmin || !scope.distritos ? DISTRITOS : scope.distritos
+
   const filtered = rows.filter(r =>
     r.nivel === nivel &&
+    enAmbito(scope.distritos, r.distrito) &&
     (!distrito || r.distrito === distrito) &&
     (!filtroPartido || r.partido === filtroPartido)
   )
@@ -74,6 +80,7 @@ export default function ResultadosPage() {
         <div>
           <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Cómputo Electoral</p>
           <h1 className="text-white text-2xl font-bold">Resultados por Partido</h1>
+          {scope.ambitoLabel && <p className="text-sky-400 text-xs font-semibold mt-1">{scope.ambitoLabel}</p>}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} disabled={loading}
@@ -100,8 +107,8 @@ export default function ResultadosPage() {
         </div>
         <select value={distrito} onChange={e => setDistrito(e.target.value)}
           className="bg-[#16162a] border border-white/8 rounded-xl px-3 py-2 text-sm text-white/70 outline-none">
-          <option value="">Todos los distritos</option>
-          {DISTRITOS.map(d => <option key={d} value={d}>{d}</option>)}
+          <option value="">{scope.distritos ? `Ámbito: ${scope.ambitoLabel}` : 'Todos los distritos'}</option>
+          {distritosOpts.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         {filtroPartido && (
           <button onClick={() => setFiltroPartido('')}
