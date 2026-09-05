@@ -166,12 +166,12 @@ export default function PanelGeneral() {
 
       {/* 2. FILTROS */}
       <section className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre, DNI, local…"
-              className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-sky-500" />
-          </div>
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre, DNI, local…"
+            className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-sky-500" />
+        </div>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-3 px-3 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0">
           <Sel v={fDepto} set={setDepto} all="🗺️ Lima (Metrop.)" opts={departamentos} />
           <Sel v={fProv} set={setProv} all={fDepto ? 'Todas las provincias' : 'Prov. de Lima'} opts={provincias} />
           <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={distritos} />
@@ -391,7 +391,7 @@ function Sel({ v, set, all, opts }: {
 }) {
   return (
     <select value={v} onChange={e => set(e.target.value)}
-      className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[12rem]">
+      className="flex-shrink-0 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[12rem]">
       <option value="">{all}</option>
       {opts.map(o => {
         const [val, lbl] = Array.isArray(o) ? o : [o, o]
@@ -437,7 +437,7 @@ function ChipBtn({ active, onClick, label, n }: { active: boolean; onClick: () =
 
 function Grid({ centros, borde, onPick }: { centros: CentroFila[]; borde?: string; onPick: (c: CentroFila) => void }) {
   return (
-    <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
       {centros.slice(0, 400).map(c => <Card key={c.id} c={c} borde={borde} onClick={() => onPick(c)} />)}
     </div>
   )
