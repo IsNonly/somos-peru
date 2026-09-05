@@ -11,6 +11,9 @@ const claveLocal = (d: string | null | undefined, l: string | null | undefined) 
 
 const ROL_LOCAL = 'Personero de Local de Votación'
 const ROL_MESA = 'Personero de Mesa'
+// "Coordinador Distrital" tiene 2 nombres viejos guardados en la base (ver lib/panel.ts rolNorm).
+const ROLES_COORD_DIST = ['Coordinador Distrital', 'Coordinador de Distritos', 'Coordinador Zonal']
+const esCoordDist = (rol: string) => ROLES_COORD_DIST.includes(rol)
 
 interface Colegio {
   id: string; nombre: string; distrito: string | null
@@ -67,7 +70,7 @@ export default function CentrosPage() {
         traerTodo<Perfil>((from, to) =>
           supabase.from('profiles')
             .select('nombre_completo, celular, rol, local_asignado, local_votacion, distrito_asignado, distrito_vota')
-            .in('rol', ['Coordinador de Distritos', 'Coordinador Provincial']).range(from, to)),
+            .in('rol', [...ROLES_COORD_DIST, 'Coordinador Provincial']).range(from, to)),
       ])
       if (!vivo) return
       setCols(colsData); setPers(persData); setCoords(coordData); setLoading(false)
@@ -84,13 +87,13 @@ export default function CentrosPage() {
       if (p.rol === ROL_LOCAL) { if (!enc.has(key)) enc.set(key, { nombre: p.nombre_completo, celular: p.celular }) }
       else mesas.set(key, (mesas.get(key) ?? 0) + 1)
     }
-    // "Zonal" del colegio = Coordinador de Distritos de ese distrito (fallback: Provincial)
+    // "Zonal" del colegio = Coordinador Distrital de ese distrito (fallback: Provincial)
     const zonal = new Map<string, { nombre: string; celular: string | null }>()
     for (const c of coords) {
       const d = norm(c.distrito_asignado || c.distrito_vota)
       if (!d) continue
       const cur = zonal.get(d)
-      if (!cur || c.rol === 'Coordinador de Distritos') zonal.set(d, { nombre: c.nombre_completo, celular: c.celular })
+      if (!cur || esCoordDist(c.rol)) zonal.set(d, { nombre: c.nombre_completo, celular: c.celular })
     }
     return { encPorLocal: enc, mesasPorLocal: mesas, zonalPorDistrito: zonal }
   }, [pers, coords])
@@ -140,7 +143,7 @@ export default function CentrosPage() {
       persMesa,
       centros: centrosAsignados.size,
       conPCV: conPCV.size,
-      coordDist: coords.filter(c => c.rol === 'Coordinador de Distritos').length,
+      coordDist: coords.filter(c => esCoordDist(c.rol)).length,
       zonales: coords.filter(c => c.rol === 'Coordinador Provincial').length,
     }
   }, [pers, cols, coords, encPorLocal, mesasPorLocal])

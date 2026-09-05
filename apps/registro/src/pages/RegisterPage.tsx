@@ -32,8 +32,9 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
   form: FormState; onClose: () => void; onConfirm: () => void; loading: boolean
 }) {
   const esCoordProvincial = form.rol === 'Coordinador Provincial'
-  const esCoordDistrital = form.rol === 'Coordinador de Distritos'
-  const localMostrado = esCoordProvincial ? form.localesAsignados.join(', ') : form.localAsignado
+  const esCoordDistrital = form.rol === 'Coordinador Distrital'
+  const esColegioMultiple = esCoordProvincial || esCoordDistrital
+  const localMostrado = esColegioMultiple ? form.localesAsignados.join(', ') : form.localAsignado
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -90,12 +91,12 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
                   <p className="font-semibold text-slate-800">{form.distritoAsignado || '—'}</p>
                 </div>
               </div>
-              {!esCoordDistrital && (
-                <div>
-                  <p className="text-xs text-slate-400">{esCoordProvincial ? 'Colegios / Locales de la Provincia' : 'Local Asignado'}</p>
-                  <p className="font-semibold text-slate-800">{localMostrado || '—'}</p>
-                </div>
-              )}
+              <div>
+                <p className="text-xs text-slate-400">
+                  {esCoordProvincial ? 'Colegios / Locales de la Provincia' : esCoordDistrital ? 'Colegios a Cargo' : 'Local Asignado'}
+                </p>
+                <p className="font-semibold text-slate-800">{localMostrado || '—'}</p>
+              </div>
             </div>
           </div>
 
@@ -293,6 +294,7 @@ export default function RegisterPage() {
   const [colegiosAsignado, setColegiosAsignado] = useState<{ nombre: string; checked: boolean }[]>([])
   const [cargandoVota, setCargandoVota] = useState(false)
   const [cargandoAsignado, setCargandoAsignado] = useState(false)
+  const [colegiosReservados, setColegiosReservados] = useState<Set<string>>(new Set())
 
   // Ubigeo nacional (CALI.xlsx) para la cascada Departamento → Provincia → Distrito
   const [departamentos, setDepartamentos] = useState<string[]>([])
@@ -323,7 +325,8 @@ export default function RegisterPage() {
 
   const esPersonero = form.rol === 'Personero de Mesa' || form.rol === 'Personero de Local de Votación'
   const esCoordProvincial = form.rol === 'Coordinador Provincial'
-  const esCoordDistrital = form.rol === 'Coordinador de Distritos'
+  const esCoordDistrital = form.rol === 'Coordinador Distrital'
+  const esColegioMultiple = esCoordProvincial || esCoordDistrital
 
   // Cascada "lugar de votación": al cambiar un nivel se limpian los inferiores
   const setDepVota = (v: string) => setForm(p => ({ ...p, departamentoVota: v, provinciaVota: '', distritoDondeVota: '', localVotacion: '' }))
@@ -393,6 +396,23 @@ export default function RegisterPage() {
       .then(({ data }) => { setColegiosAsignado((data || []).map(c => ({ nombre: c.nombre, checked: false }))); setCargandoAsignado(false) })
   }, [form.distritoAsignado])
 
+  // Un colegio ya asignado a un Coordinador Distrital no debe aparecer para el siguiente registro
+  // de ese mismo rol (solo aplica a "Coordinador Distrital", no a Personero ni Coordinador Provincial).
+  // Se busca por los 3 nombres que puede tener guardado el rol en la base (ver lib/panel.ts rolNorm).
+  useEffect(() => {
+    if (!esCoordDistrital || !form.distritoAsignado) { setColegiosReservados(new Set()); return }
+    supabase.from('profiles').select('local_asignado')
+      .in('rol', ['Coordinador Distrital', 'Coordinador de Distritos', 'Coordinador Zonal'])
+      .eq('distrito_asignado', form.distritoAsignado)
+      .then(({ data }) => {
+        const set = new Set<string>()
+        for (const row of data ?? []) {
+          String((row as any).local_asignado ?? '').split(/[,|]/).map(s => s.trim()).filter(Boolean).forEach(n => set.add(n))
+        }
+        setColegiosReservados(set)
+      })
+  }, [esCoordDistrital, form.distritoAsignado])
+
   const toggleColegio = (nombre: string) => {
     setColegiosAsignado(prev => prev.map(c => c.nombre === nombre ? { ...c, checked: !c.checked } : c))
     const sel = form.localesAsignados
@@ -426,7 +446,7 @@ export default function RegisterPage() {
       const userId = authData.user?.id
       if (!userId) throw new Error('No se pudo generar el identificador de usuario.')
 
-      const localGuardado = esCoordProvincial ? form.localesAsignados.join(' | ') : form.localAsignado
+      const localGuardado = esColegioMultiple ? form.localesAsignados.join(' | ') : form.localAsignado
 
       const { error: profileErr } = await supabase.from('profiles').upsert({
         id: userId,
@@ -555,7 +575,7 @@ export default function RegisterPage() {
                 { id: 'Personero de Mesa', icon: Shield, title: 'Personero de Mesa' },
                 { id: 'Personero de Local de Votación', icon: Building2, title: 'Personero de Local de Votación' },
                 { id: 'Coordinador Provincial', icon: Layers, title: 'Coordinador Provincial' },
-                { id: 'Coordinador de Distritos', icon: MapPin, title: 'Coordinador Distrital' },
+                { id: 'Coordinador Distrital', icon: MapPin, title: 'Coordinador Distrital' },
               ] as const).map(item => {
                 const Icon = item.icon
                 const sel = form.rol === item.id
@@ -632,10 +652,50 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Coordinador Distrital: hasta distrito */}
+            {/* Coordinador Distrital: distrito + colegios a cargo (excluye los ya tomados por otro Coord. Distrital) */}
             {esCoordDistrital && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                {cascadaAsignado('Distrito del que es Coordinador')}
+              <div className="space-y-4 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {cascadaAsignado('Distrito del que es Coordinador')}
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <FieldLabel>Colegios a Cargo <Req /></FieldLabel>
+                    <span className="text-xs text-slate-400">(Escoger de 1 a más colegios)</span>
+                  </div>
+                  {cargandoAsignado && <p className="text-xs text-slate-400 py-2">Cargando colegios...</p>}
+                  {!cargandoAsignado && !form.distritoAsignado && <p className="text-xs text-slate-400 py-2">Primero seleccione un distrito</p>}
+                  {!cargandoAsignado && form.distritoAsignado && colegiosAsignado.length === 0 && (
+                    <p className="text-xs text-slate-400 py-2">No hay colegios registrados en este distrito.</p>
+                  )}
+                  {!cargandoAsignado && colegiosAsignado.length > 0 && (
+                    <>
+                      <SelectWrap icon={<Building2 size={18} />}>
+                        <select className={selectCls} value="" onChange={e => { if (e.target.value) toggleColegio(e.target.value) }}>
+                          <option value="">Agregar colegio al listado...</option>
+                          {colegiosAsignado.filter(c => !c.checked && !colegiosReservados.has(c.nombre)).map(c => (
+                            <option key={c.nombre} value={c.nombre}>{c.nombre}</option>
+                          ))}
+                        </select>
+                      </SelectWrap>
+                      {colegiosReservados.size > 0 && (
+                        <p className="text-[11px] text-amber-600 mt-1.5">
+                          {colegiosReservados.size} colegio{colegiosReservados.size === 1 ? '' : 's'} de este distrito ya tiene{colegiosReservados.size === 1 ? '' : 'n'} un Coordinador Distrital asignado y no aparece{colegiosReservados.size === 1 ? '' : 'n'} en la lista.
+                        </p>
+                      )}
+                      {form.localesAsignados.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {form.localesAsignados.map(n => (
+                            <span key={n} className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-100 text-sky-700 text-xs font-semibold rounded-full">
+                              {n}
+                              <button type="button" onClick={() => toggleColegio(n)} className="hover:text-red-500"><X size={12} /></button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             )}
           </div>

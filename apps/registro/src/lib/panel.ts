@@ -9,17 +9,23 @@ export const claveLocal = (d: string | null | undefined, l: string | null | unde
 
 export const ROL_LOCAL = 'Personero de Local de Votación'
 export const ROL_MESA = 'Personero de Mesa'
-export const ROL_COORD_DIST = 'Coordinador de Distritos'
+export const ROL_COORD_DIST = 'Coordinador Distrital'
 export const ROL_ZONAL = 'Coordinador Provincial'
 
 // El padrón (PADRON_SOMOSPERU.xlsx) trae varios nombres para el mismo rol.
 // Normalizamos a los 4 canónicos + Administrador.
+//
+// "Coordinador Zonal" = "Coordinador Distrital" = "Coordinador de Distritos": supervisa
+// los colegios que le fueron asignados (uno o varios) dentro de UN distrito. En el padrón
+// real, quienes traen "Coordinador Zonal" son justamente los que tienen listas largas de
+// colegios en `local_asignado` — es el mismo rol, solo con otro nombre.
+// "Coordinador Provincial" es un rol aparte y más amplio (ve TODA la provincia); no se toca.
 export function rolNorm(rol: string | null | undefined): string {
   const r = norm(rol)
   if (r === 'PERSONERO DE MESA') return ROL_MESA
   if (r === 'COORDINADOR DE LOCAL' || r === 'PERSONERO DE LOCAL DE VOTACION') return ROL_LOCAL
-  if (r === 'COORDINADOR ZONAL' || r === 'COORDINADOR PROVINCIAL') return ROL_ZONAL
-  if (r === 'COORDINADOR DISTRITAL' || r === 'COORDINADOR DE DISTRITOS') return ROL_COORD_DIST
+  if (r === 'COORDINADOR PROVINCIAL') return ROL_ZONAL
+  if (r === 'COORDINADOR DISTRITAL' || r === 'COORDINADOR DE DISTRITOS' || r === 'COORDINADOR ZONAL') return ROL_COORD_DIST
   if (r.includes('ADMINISTRADOR')) return 'Administrador General'
   return rol ?? ''
 }
@@ -127,11 +133,13 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
         }
       }
 
-      // Zonal: Coordinador Provincial. local_asignado = lista de colegios separada por coma.
-      // key = claveLocal(distrito_asignado del zonal, nombre de colegio de su lista)
+      // Zona multi-colegio: Coordinador Provincial (todo) y Coordinador Distrital/de Distritos/Zonal
+      // (colegios asignados dentro de su distrito) pueden traer varios colegios en local_asignado,
+      // separados por coma (padrón importado) o por " | " (registro web, ver RegisterPage.tsx).
+      // key = claveLocal(distrito_asignado del coordinador, nombre de colegio de su lista)
       const zonalMap = new Map<string, Persona & { distrito: string | null; nColegios: number; lista: string[] }>()
-      for (const z of zonales) {
-        const lista = String(z.local_asignado ?? '').split(',').map(s => s.trim()).filter(Boolean)
+      for (const z of [...zonales, ...coordsDistritales]) {
+        const lista = String(z.local_asignado ?? '').split(/[,|]/).map(s => s.trim()).filter(Boolean)
         if (!lista.length) continue
         for (const nom of lista) {
           const k = claveLocal(z.distrito_asignado || z.distrito_vota, nom)

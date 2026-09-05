@@ -33,9 +33,16 @@ const ROLES = [
   'Personero de Mesa',
   'Personero de Local de Votación',
   'Coordinador Provincial',
-  'Coordinador de Distritos',
+  'Coordinador Distrital',
   'Administrador General',
 ]
+
+// "Coordinador Distrital" tiene 2 nombres viejos guardados en la base
+// (ver apps/registro/src/lib/panel.ts rolNorm): "Coordinador de Distritos" y "Coordinador Zonal".
+const ROL_ALIASES: Record<string, string[]> = {
+  'Coordinador Distrital': ['Coordinador Distrital', 'Coordinador de Distritos', 'Coordinador Zonal'],
+}
+const rolMatches = (rol: string, filtro: string) => (ROL_ALIASES[filtro] ?? [filtro]).includes(rol)
 
 const DISTRITOS = Object.keys(DISTRITOS_META).sort((a, b) => a.localeCompare(b, 'es'))
 
@@ -47,7 +54,7 @@ const matchBool = (filtro: SiNo, valor: boolean | null | undefined) =>
 
 const rolColor = (rol: string) => {
   if (rol.includes('Administrador')) return 'bg-purple-500/20 text-purple-300'
-  if (rol.includes('Distritos'))     return 'bg-blue-500/20 text-blue-300'
+  if (rol.includes('Distrit') || rol.includes('Zonal')) return 'bg-blue-500/20 text-blue-300'
   if (rol.includes('Provincial'))    return 'bg-cyan-500/20 text-cyan-300'
   if (rol.includes('Local'))         return 'bg-green-500/20 text-green-300'
   return 'bg-white/10 text-white/60'
@@ -110,7 +117,7 @@ export default function PadronPage() {
         p.distrito_vota?.toLowerCase().includes(q)
       const dist =
         !distFilter || p.distrito_asignado === distFilter || p.distrito_vota === distFilter
-      const rol = !rolFilter || p.rol === rolFilter
+      const rol = !rolFilter || rolMatches(p.rol, rolFilter)
       return (
         texto && dist && rol &&
         matchBool(expFilter, p.tiene_experiencia) &&

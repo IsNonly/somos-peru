@@ -73,12 +73,15 @@ function parseFecha(v) {
   return isNaN(dt) ? null : dt.toISOString()
 }
 
+// "Coordinador Distrital" = "Coordinador de Distritos" = "Coordinador Zonal": supervisa los
+// colegios asignados dentro de UN distrito. "Coordinador Provincial" es un rol aparte (ve
+// TODA la provincia) — NO es sinónimo de "zonal", pese al nombre parecido.
 const ROLES_VALIDOS = new Set([
-  'Administrador General', 'Coordinador de Distritos', 'Coordinador Provincial',
+  'Administrador General', 'Coordinador Distrital', 'Coordinador de Distritos', 'Coordinador Provincial',
   'Personero de Mesa', 'Personero de Local de Votación',
 ])
 const ROL_ALIAS = {
-  'coordinador zonal': 'Coordinador Provincial',
+  'coordinador zonal': 'Coordinador Distrital',
   'coordinador de local': 'Personero de Local de Votación',
 }
 // Alias de distritos mal escritos en el Excel -> nombre canónico (por clave sin acentos/minúsculas)

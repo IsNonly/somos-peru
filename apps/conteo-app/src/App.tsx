@@ -14,7 +14,12 @@ import type { User } from '@supabase/supabase-js'
 // migración de BD aún no corrió.
 const ROLES_LOCAL = ['Personero de Local de Votación', 'Coordinador de Local']
 // Roles que ven el panel de supervisión (no cuentan votos).
-const ROLES_COORD = ['Coordinador Provincial', 'Coordinador de Distritos', 'Administrador General']
+// "Coordinador Distrital" tiene 2 nombres viejos guardados en la base
+// (ver apps/registro/src/lib/panel.ts rolNorm): "Coordinador de Distritos" y "Coordinador Zonal".
+const ROLES_COORD = [
+  'Coordinador Provincial', 'Coordinador Distrital', 'Coordinador de Distritos', 'Coordinador Zonal',
+  'Administrador General',
+]
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase, DISTRITOS, ROLES, generarToken, generarClave } from '../lib/supabase'
 import type { Profile, Rol } from '../lib/supabase'
+import { rolNorm } from '../lib/panel'
 import { Search, Download, X, CheckCircle, XCircle, Clock, MessageCircle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -16,7 +17,7 @@ function whatsappUrl(celular: string, p: Profile) {
 
 const BADGE_ROL: Record<string, string> = {
   'Administrador General':    'bg-purple-500/20 text-purple-300',
-  'Coordinador de Distritos': 'bg-blue-500/20 text-blue-300',
+  'Coordinador Distrital':    'bg-blue-500/20 text-blue-300',
   'Coordinador Provincial':   'bg-cyan-500/20 text-cyan-300',
   'Personero de Mesa':        'bg-orange-500/20 text-orange-300',
   'Personero de Local de Votación': 'bg-pink-500/20 text-pink-300',
@@ -51,7 +52,7 @@ export default function PersonerosPage() {
     const matchSearch = !q || p.nombre_completo?.toLowerCase().includes(q) || p.dni?.includes(q) ||
       p.local_votacion?.toLowerCase().includes(q) || p.mesa_asignada?.includes(q)
     return matchSearch
-      && (!rolFilter  || p.rol === rolFilter)
+      && (!rolFilter  || rolNorm(p.rol) === rolFilter)
       && (!distFilter || p.distrito_asignado === distFilter)
       && (!credFilter || p.credencial_estado === credFilter)
   })
@@ -165,8 +166,8 @@ export default function PersonerosPage() {
                     <td className="px-4 py-3 text-white font-medium">{p.nombre_completo}</td>
                     <td className="px-4 py-3 text-white/60 font-mono">{p.dni}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${BADGE_ROL[p.rol] ?? 'bg-white/10 text-white/50'}`}>
-                        {p.rol?.replace('Coordinador de ', 'Coord. ')}
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${BADGE_ROL[rolNorm(p.rol)] ?? 'bg-white/10 text-white/50'}`}>
+                        {rolNorm(p.rol).replace('Coordinador de ', 'Coord. ').replace('Coordinador ', 'Coord. ')}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-white/60">{p.distrito_asignado ?? '—'}</td>
