@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   rol               TEXT NOT NULL DEFAULT 'Personero de Mesa',
   -- 'Administrador General' | 'Coordinador de Distritos' |
   -- 'Coordinador Provincial' | 'Coordinador de Local' |
-  -- 'Personero de Mesa' | 'Personero de Local de Votación'
+  -- 'Personero de Mesa' | 'Personero de Centro de Votación'
 
   -- Asignación
   departamento_asignado TEXT,

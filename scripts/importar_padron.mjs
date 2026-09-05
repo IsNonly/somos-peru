@@ -78,11 +78,12 @@ function parseFecha(v) {
 // TODA la provincia) — NO es sinónimo de "zonal", pese al nombre parecido.
 const ROLES_VALIDOS = new Set([
   'Administrador General', 'Coordinador Distrital', 'Coordinador de Distritos', 'Coordinador Provincial',
-  'Personero de Mesa', 'Personero de Local de Votación',
+  'Personero de Mesa', 'Personero de Centro de Votación',
 ])
 const ROL_ALIAS = {
   'coordinador zonal': 'Coordinador Distrital',
-  'coordinador de local': 'Personero de Local de Votación',
+  'coordinador de local': 'Personero de Centro de Votación',
+  'personero de local de votacion': 'Personero de Centro de Votación',
 }
 // Alias de distritos mal escritos en el Excel -> nombre canónico (por clave sin acentos/minúsculas)
 const DISTRITO_ALIAS = {

@@ -133,7 +133,7 @@ export default function PersoneroLocalPage() {
           </div>
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-widest text-sky-400">
-              Personero de Local de Votación
+              Personero de Centro de Votación
               <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/30">APROBADO</span>
             </p>
             <p className="font-extrabold text-sm mt-0.5 truncate">{perfil?.nombre_completo ?? '—'}</p>

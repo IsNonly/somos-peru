@@ -15,7 +15,7 @@ interface Perfil {
 interface Colegio { nombre: string; distrito: string; total_mesas: number }
 
 const esCoordinador = (rol: string) =>
-  /coordinador/i.test(rol) || rol === 'Personero de Local de Votación'
+  /coordinador/i.test(rol) || rol === 'Personero de Centro de Votación' || rol === 'Personero de Local de Votación'
 
 export default function CoordinadoresPage() {
   const { distritosEfectivos, f, ambitoLabel, loading: scopeLoading } = useFiltros()

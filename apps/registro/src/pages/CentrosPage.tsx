@@ -9,7 +9,9 @@ const norm = (t: string | null | undefined) =>
     .toUpperCase().replace(/[^A-Z0-9]/g, ' ').replace(/\s+/g, ' ').trim()
 const claveLocal = (d: string | null | undefined, l: string | null | undefined) => `${norm(d)}||${norm(l)}`
 
-const ROL_LOCAL = 'Personero de Local de Votación'
+const ROL_LOCAL = 'Personero de Centro de Votación'
+// Nombre viejo del rol; los perfiles ya importados pueden seguir teniéndolo.
+const ROLES_LOCAL = [ROL_LOCAL, 'Personero de Local de Votación']
 const ROL_MESA = 'Personero de Mesa'
 // "Coordinador Distrital" tiene 2 nombres viejos guardados en la base (ver lib/panel.ts rolNorm).
 const ROLES_COORD_DIST = ['Coordinador Distrital', 'Coordinador de Distritos', 'Coordinador Zonal']
@@ -66,7 +68,7 @@ export default function CentrosPage() {
         traerTodo<Perfil>((from, to) =>
           supabase.from('profiles')
             .select('nombre_completo, celular, rol, local_asignado, local_votacion, distrito_asignado, distrito_vota')
-            .in('rol', [ROL_LOCAL, ROL_MESA]).order('nombre_completo').range(from, to)),
+            .in('rol', [...ROLES_LOCAL, ROL_MESA]).order('nombre_completo').range(from, to)),
         traerTodo<Perfil>((from, to) =>
           supabase.from('profiles')
             .select('nombre_completo, celular, rol, local_asignado, local_votacion, distrito_asignado, distrito_vota')
@@ -84,7 +86,7 @@ export default function CentrosPage() {
     for (const p of pers) {
       const key = claveLocal(p.distrito_asignado || p.distrito_vota, p.local_asignado || p.local_votacion)
       if (key.endsWith('||')) continue
-      if (p.rol === ROL_LOCAL) { if (!enc.has(key)) enc.set(key, { nombre: p.nombre_completo, celular: p.celular }) }
+      if (ROLES_LOCAL.includes(p.rol)) { if (!enc.has(key)) enc.set(key, { nombre: p.nombre_completo, celular: p.celular }) }
       else mesas.set(key, (mesas.get(key) ?? 0) + 1)
     }
     // "Zonal" del colegio = Coordinador Distrital de ese distrito (fallback: Provincial)
@@ -130,7 +132,7 @@ export default function CentrosPage() {
   const kpis = useMemo(() => {
     const persMesa = pers.filter(p => p.rol === ROL_MESA).length
     const conPCV = new Set<string>()
-    for (const p of pers) if (p.rol === ROL_LOCAL) {
+    for (const p of pers) if (ROLES_LOCAL.includes(p.rol)) {
       const k = claveLocal(p.distrito_asignado || p.distrito_vota, p.local_asignado || p.local_votacion)
       if (!k.endsWith('||')) conPCV.add(k)
     }

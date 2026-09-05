@@ -10,9 +10,10 @@ import PersoneroLocalPage from './pages/PersoneroLocalPage'
 import IrAlPanel from './components/IrAlPanel'
 import type { User } from '@supabase/supabase-js'
 
-// "Coordinador de Local" es el nombre viejo del rol; se mantiene por si la
-// migración de BD aún no corrió.
-const ROLES_LOCAL = ['Personero de Local de Votación', 'Coordinador de Local']
+// "Personero de Centro de Votación" es el nombre oficial actual del rol.
+// "Personero de Local de Votación" y "Coordinador de Local" son nombres
+// viejos; se mantienen por si la migración de BD aún no corrió.
+const ROLES_LOCAL = ['Personero de Centro de Votación', 'Personero de Local de Votación', 'Coordinador de Local']
 // Roles que ven el panel de supervisión (no cuentan votos).
 // "Coordinador Distrital" tiene 2 nombres viejos guardados en la base
 // (ver apps/registro/src/lib/panel.ts rolNorm): "Coordinador de Distritos" y "Coordinador Zonal".
@@ -84,7 +85,7 @@ export default function App() {
       return <GateCapacitacion perfil={perfil} pasos={pasos} />
     }
 
-    // Personero de Local de Votación -> panel de asistencia de su local
+    // Personero de Centro de Votación -> panel de asistencia de su local
     if (ROLES_LOCAL.includes(rol)) {
       return <PersoneroLocalPage />
     }

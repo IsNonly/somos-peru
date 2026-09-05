@@ -36,7 +36,9 @@ interface Fila extends Colegio {
   nPersoneros: number
 }
 
-const ROL_LOCAL = 'Personero de Local de Votación'
+const ROL_LOCAL = 'Personero de Centro de Votación'
+// Nombre viejo del rol; los perfiles ya importados pueden seguir teniéndolo.
+const ROLES_LOCAL = [ROL_LOCAL, 'Personero de Local de Votación']
 const ROL_MESA = 'Personero de Mesa'
 
 async function traerTodo<T>(build: (from: number, to: number) => any): Promise<T[]> {
@@ -77,7 +79,7 @@ export default function CentrosPage() {
       const persData = await traerTodo<Perfil>((from, to) =>
         supabase.from('profiles')
           .select('nombre_completo, celular, rol, local_asignado, local_votacion, distrito_asignado, distrito_vota')
-          .in('rol', [ROL_LOCAL, ROL_MESA])
+          .in('rol', [...ROLES_LOCAL, ROL_MESA])
           .order('nombre_completo').range(from, to))
       if (!vivo) return
       setCols(colsData)
@@ -95,7 +97,7 @@ export default function CentrosPage() {
       const dist = p.distrito_asignado || p.distrito_vota
       const key = claveLocal(dist, p.local_asignado || p.local_votacion)
       if (key.endsWith('||')) continue // sin local
-      if (p.rol === ROL_LOCAL) {
+      if (ROLES_LOCAL.includes(p.rol)) {
         if (!enc.has(key)) enc.set(key, { nombre: p.nombre_completo, celular: p.celular })
       } else {
         mesas.set(key, (mesas.get(key) ?? 0) + 1)

@@ -7,7 +7,7 @@ export const norm = (t: string | null | undefined) =>
     .toUpperCase().replace(/[^A-Z0-9]/g, ' ').replace(/\s+/g, ' ').trim()
 export const claveLocal = (d: string | null | undefined, l: string | null | undefined) => `${norm(d)}||${norm(l)}`
 
-export const ROL_LOCAL = 'Personero de Local de Votación'
+export const ROL_LOCAL = 'Personero de Centro de Votación'
 export const ROL_MESA = 'Personero de Mesa'
 export const ROL_COORD_DIST = 'Coordinador Distrital'
 export const ROL_ZONAL = 'Coordinador Provincial'
@@ -20,10 +20,13 @@ export const ROL_ZONAL = 'Coordinador Provincial'
 // real, quienes traen "Coordinador Zonal" son justamente los que tienen listas largas de
 // colegios en `local_asignado` — es el mismo rol, solo con otro nombre.
 // "Coordinador Provincial" es un rol aparte y más amplio (ve TODA la provincia); no se toca.
+// "Personero de Centro de Votación" (antes "Coordinador de Local", y luego "Personero de
+// Local de Votación") es el nombre oficial actual; los perfiles ya importados pueden seguir
+// teniendo cualquiera de los 2 nombres viejos hasta que corra la migración de BD.
 export function rolNorm(rol: string | null | undefined): string {
   const r = norm(rol)
   if (r === 'PERSONERO DE MESA') return ROL_MESA
-  if (r === 'COORDINADOR DE LOCAL' || r === 'PERSONERO DE LOCAL DE VOTACION') return ROL_LOCAL
+  if (r === 'COORDINADOR DE LOCAL' || r === 'PERSONERO DE LOCAL DE VOTACION' || r === 'PERSONERO DE CENTRO DE VOTACION') return ROL_LOCAL
   if (r === 'COORDINADOR PROVINCIAL') return ROL_ZONAL
   if (r === 'COORDINADOR DISTRITAL' || r === 'COORDINADOR DE DISTRITOS' || r === 'COORDINADOR ZONAL') return ROL_COORD_DIST
   if (r.includes('ADMINISTRADOR')) return 'Administrador General'

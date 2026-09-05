@@ -31,7 +31,7 @@ interface Perfil {
 
 const ROLES = [
   'Personero de Mesa',
-  'Personero de Local de Votación',
+  'Personero de Centro de Votación',
   'Coordinador Provincial',
   'Coordinador Distrital',
   'Administrador General',
@@ -39,8 +39,10 @@ const ROLES = [
 
 // "Coordinador Distrital" tiene 2 nombres viejos guardados en la base
 // (ver apps/registro/src/lib/panel.ts rolNorm): "Coordinador de Distritos" y "Coordinador Zonal".
+// "Personero de Centro de Votación" tiene 1 nombre viejo: "Personero de Local de Votación".
 const ROL_ALIASES: Record<string, string[]> = {
   'Coordinador Distrital': ['Coordinador Distrital', 'Coordinador de Distritos', 'Coordinador Zonal'],
+  'Personero de Centro de Votación': ['Personero de Centro de Votación', 'Personero de Local de Votación'],
 }
 const rolMatches = (rol: string, filtro: string) => (ROL_ALIASES[filtro] ?? [filtro]).includes(rol)
 

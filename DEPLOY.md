@@ -78,7 +78,8 @@ En **Supabase → SQL Editor**, correr en este orden (todos son idempotentes):
 1. `supabase/migracion_ubigeo_nacional.sql` — columnas depto/provincia en `colegios` *(si aún no se corrió)*
 2. `supabase/fix_auth_identities.sql` — arregla el login de las cuentas importadas *(si aún no se corrió)*
 3. `supabase/migracion_personero_local.sql` — renombra rol "Coordinador de Local" → "Personero de Local de Votación" + columnas de asistencia
-4. **`supabase/rls_seguridad.sql`** — ⚠️ **CORRER RECIÉN DESPUÉS de desplegar el paso 2** (Vercel con el código nuevo). Cierra la lectura anónima del padrón: con solo la anon key ya **no** se puede hacer `GET /rest/v1/profiles`.
+4. `supabase/renombrar_personero_centro_votacion.sql` — renombra rol "Personero de Local de Votación" → "Personero de Centro de Votación" *(pendiente de correr — el código ya reconoce ambos nombres mientras tanto)*
+5. **`supabase/rls_seguridad.sql`** — ⚠️ **CORRER RECIÉN DESPUÉS de desplegar el paso 2** (Vercel con el código nuevo). Cierra la lectura anónima del padrón: con solo la anon key ya **no** se puede hacer `GET /rest/v1/profiles`.
 
 ### Auth settings (Supabase → Authentication)
 - **Site URL:** la URL de `registro` en Vercel.

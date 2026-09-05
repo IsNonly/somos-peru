@@ -323,7 +323,7 @@ export default function RegisterPage() {
 
   const set = (k: keyof FormState, v: any) => setForm(p => ({ ...p, [k]: v }))
 
-  const esPersonero = form.rol === 'Personero de Mesa' || form.rol === 'Personero de Local de Votación'
+  const esPersonero = form.rol === 'Personero de Mesa' || form.rol === 'Personero de Centro de Votación'
   const esCoordProvincial = form.rol === 'Coordinador Provincial'
   const esCoordDistrital = form.rol === 'Coordinador Distrital'
   const esColegioMultiple = esCoordProvincial || esCoordDistrital
@@ -573,7 +573,7 @@ export default function RegisterPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {([
                 { id: 'Personero de Mesa', icon: Shield, title: 'Personero de Mesa' },
-                { id: 'Personero de Local de Votación', icon: Building2, title: 'Personero de Local de Votación' },
+                { id: 'Personero de Centro de Votación', icon: Building2, title: 'Personero de Centro de Votación' },
                 { id: 'Coordinador Provincial', icon: Layers, title: 'Coordinador Provincial' },
                 { id: 'Coordinador Distrital', icon: MapPin, title: 'Coordinador Distrital' },
               ] as const).map(item => {
