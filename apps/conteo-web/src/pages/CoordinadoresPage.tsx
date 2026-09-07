@@ -1,11 +1,16 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
-import { Users, CheckCircle2, UserX, TrendingUp, School, AlertTriangle } from 'lucide-react'
+import { restablecerClavePersonero } from '../lib/personeroActions'
+import EditarPersoneroModal from '../components/EditarPersoneroModal'
+import { Users, CheckCircle2, UserX, TrendingUp, School, AlertTriangle, Pencil, KeyRound } from 'lucide-react'
 
 interface Perfil {
   id: string
   nombre_completo: string
+  dni: string | null
+  celular: string | null
+  correo: string | null
   rol: string
   distrito_asignado: string | null
   local_asignado: string | null
@@ -23,6 +28,7 @@ export default function CoordinadoresPage() {
   const [colegios, setColegios] = useState<Colegio[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
+  const [editando, setEditando] = useState<Perfil | null>(null)
 
   useEffect(() => {
     if (scopeLoading) return
@@ -30,7 +36,7 @@ export default function CoordinadoresPage() {
     ;(async () => {
       setLoading(true)
       let pq = supabase.from('profiles')
-        .select('id, nombre_completo, rol, distrito_asignado, local_asignado, asistencia_local_at, credencial_estado')
+        .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, local_asignado, asistencia_local_at, credencial_estado')
         .order('nombre_completo')
       let cq = supabase.from('colegios').select('nombre, distrito, total_mesas')
       if (distritosEfectivos) {
@@ -66,6 +72,7 @@ export default function CoordinadoresPage() {
       return {
         id: p.id, nombre: p.nombre_completo, distrito: p.distrito_asignado ?? 'LIMA',
         colegio: local, mesas, asist, falt: Math.max(0, mesas - asist),
+        perfil: p,
       }
     })
 
@@ -89,6 +96,17 @@ export default function CoordinadoresPage() {
   const coordsFiltrados = coords.filter(c =>
     !q || c.nombre.toLowerCase().includes(q.toLowerCase()) || c.colegio.toLowerCase().includes(q.toLowerCase()),
   )
+
+  const onRestablecer = async (p: Perfil) => {
+    if (!p.dni) return
+    if (!window.confirm(`¿Restablecer la contraseña de ${p.nombre_completo} a su DNI (${p.dni})?`)) return
+    try {
+      await restablecerClavePersonero(p.dni)
+      alert('Contraseña restablecida a su DNI.')
+    } catch (e: any) {
+      alert('No se pudo restablecer: ' + (e.message ?? 'error desconocido'))
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -136,11 +154,34 @@ export default function CoordinadoresPage() {
                   <span className="bg-emerald-50 text-emerald-600 text-center rounded py-1 text-[11px] font-bold">{c.asist} ASIST.</span>
                   <span className="bg-rose-50 text-rose-500 text-center rounded py-1 text-[11px] font-bold">{c.falt} FALT.</span>
                 </div>
+                {c.perfil.rol === 'Personero de Centro de Votación' && (
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100 mt-1">
+                    <button onClick={() => setEditando(c.perfil)} title="Editar datos"
+                      className="flex-1 flex items-center justify-center gap-1 p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-sky-600 hover:border-sky-300 text-[11px] font-semibold">
+                      <Pencil size={13} /> Editar
+                    </button>
+                    <button onClick={() => onRestablecer(c.perfil)} title="Restablecer contraseña a su DNI"
+                      className="flex-1 flex items-center justify-center gap-1 p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-amber-600 hover:border-amber-300 text-[11px] font-semibold">
+                      <KeyRound size={13} /> Clave
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {editando && (
+        <EditarPersoneroModal
+          perfil={editando}
+          onClose={() => setEditando(null)}
+          onSaved={cambios => {
+            setPerfiles(prev => prev.map(p => p.id === editando.id ? { ...p, ...cambios } : p))
+            setEditando(null)
+          }}
+        />
+      )}
     </div>
   )
 }

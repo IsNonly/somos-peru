@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
+import { restablecerClavePersonero } from '../lib/personeroActions'
+import EditarPersoneroModal from '../components/EditarPersoneroModal'
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
 } from 'chart.js'
-import { Users, Camera, MapPin, Landmark } from 'lucide-react'
+import { Users, Camera, MapPin, Landmark, Pencil, KeyRound } from 'lucide-react'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -14,6 +16,7 @@ interface Perfil {
   nombre_completo: string
   dni: string | null
   celular: string | null
+  correo: string | null
   rol: string
   distrito_asignado: string | null
   distrito_vota: string | null
@@ -30,6 +33,7 @@ export default function PersoneroMonitorPage() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [estado, setEstado] = useState<'todos' | 'confirmados' | 'pendientes'>('todos')
+  const [editando, setEditando] = useState<Perfil | null>(null)
 
   useEffect(() => {
     if (scopeLoading) return
@@ -37,7 +41,7 @@ export default function PersoneroMonitorPage() {
     ;(async () => {
       setLoading(true)
       let pq = supabase.from('profiles')
-        .select('id, nombre_completo, dni, celular, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, asistencia_local_at')
+        .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, asistencia_local_at')
         .eq('rol', 'Personero de Mesa')
         .order('nombre_completo')
       if (distritosEfectivos) pq = pq.in('distrito_asignado', distritosEfectivos)
@@ -91,6 +95,17 @@ export default function PersoneroMonitorPage() {
     scales: { x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } }, y: { grid: { color: '#f1f5f9' }, ticks: { color: '#64748b' } } },
   }
 
+  const onRestablecer = async (p: Perfil) => {
+    if (!p.dni) return
+    if (!window.confirm(`¿Restablecer la contraseña de ${p.nombre_completo} a su DNI (${p.dni})?`)) return
+    try {
+      await restablecerClavePersonero(p.dni)
+      alert('Contraseña restablecida a su DNI.')
+    } catch (e: any) {
+      alert('No se pudo restablecer: ' + (e.message ?? 'error desconocido'))
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -136,16 +151,16 @@ export default function PersoneroMonitorPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-                {['Personero', 'DNI / Celular', 'Distrito', 'Local de Votación', 'Mesa', '1ª Conf. (Foto)', '2ª Conf. (GPS)'].map(h => (
+                {['Personero', 'DNI / Celular', 'Distrito', 'Local de Votación', 'Mesa', '1ª Conf. (Foto)', '2ª Conf. (GPS)', 'Acciones'].map(h => (
                   <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Cargando…</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Cargando…</td></tr>
               ) : filtrados.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Sin personeros con esos filtros.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Sin personeros con esos filtros.</td></tr>
               ) : filtrados.slice(0, 500).map(p => {
                 const foto = !!p.asistencia_local_at
                 const gps = gpsUserIds.has(p.id)
@@ -163,6 +178,18 @@ export default function PersoneroMonitorPage() {
                     <td className="px-4 py-2.5 text-slate-500">{p.mesa_asignada ?? 'No aplica'}</td>
                     <td className="px-4 py-2.5"><Badge ok={foto} /></td>
                     <td className="px-4 py-2.5"><Badge ok={gps} /></td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => setEditando(p)} title="Editar datos"
+                          className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-sky-600 hover:border-sky-300">
+                          <Pencil size={14} />
+                        </button>
+                        <button onClick={() => onRestablecer(p)} title="Restablecer contraseña a su DNI"
+                          className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-amber-600 hover:border-amber-300">
+                          <KeyRound size={14} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 )
               })}
@@ -170,6 +197,17 @@ export default function PersoneroMonitorPage() {
           </table>
         </div>
       </div>
+
+      {editando && (
+        <EditarPersoneroModal
+          perfil={editando}
+          onClose={() => setEditando(null)}
+          onSaved={cambios => {
+            setPers(prev => prev.map(p => p.id === editando.id ? { ...p, ...cambios } : p))
+            setEditando(null)
+          }}
+        />
+      )}
     </div>
   )
 }
