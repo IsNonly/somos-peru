@@ -53,16 +53,26 @@ export default function PanelLayout() {
   const [rol, setRol] = useState('')
   const [nombreCompleto, setNombreCompleto] = useState('')
   const [dni, setDni] = useState('')
+  const [ambito, setAmbito] = useState({ departamento: '', provincia: '', distrito: '' })
+  const [ambitoListo, setAmbitoListo] = useState(false)
 
   useEffect(() => {
     ;(async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { setAmbitoListo(true); return }
       const miDni = (user.email ?? '').split('@')[0]
-      const { data } = await supabase.from('profiles').select('nombre_completo, rol').eq('dni', miDni).maybeSingle()
+      const { data } = await supabase.from('profiles')
+        .select('nombre_completo, rol, departamento_asignado, provincia_asignado, distrito_asignado')
+        .eq('dni', miDni).maybeSingle()
       if (data?.nombre_completo) { setNombre(data.nombre_completo.split(' ').slice(0, 2).join(' ')); setNombreCompleto(data.nombre_completo) }
       if (data?.rol) setRol(data.rol)
+      setAmbito({
+        departamento: (data?.departamento_asignado ?? '').trim(),
+        provincia: (data?.provincia_asignado ?? '').trim(),
+        distrito: (data?.distrito_asignado ?? '').trim(),
+      })
       setDni(miDni)
+      setAmbitoListo(true)
     })()
   }, [])
 
@@ -120,7 +130,7 @@ export default function PanelLayout() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
-          <Outlet context={{ rol, nombreCompleto, dni }} />
+          <Outlet context={{ rol, nombreCompleto, dni, ambito, ambitoListo }} />
         </main>
       </div>
     </div>

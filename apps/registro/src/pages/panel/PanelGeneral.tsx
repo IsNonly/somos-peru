@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import {
@@ -9,6 +10,12 @@ import {
   Search, Download, Building2, LayoutGrid, ShieldCheck, MapPin, Users, Phone,
   AlertTriangle, ChevronRight, MessageCircle, GraduationCap,
 } from 'lucide-react'
+
+interface PanelCtx {
+  rol: string
+  ambito: { departamento: string; provincia: string; distrito: string }
+  ambitoListo: boolean
+}
 
 const LIMA_METRO = [
   'Ancón','Ate','Barranco','Breña','Carabayllo','Cercado de Lima','Chaclacayo','Chorrillos','Cieneguilla',
@@ -23,6 +30,11 @@ const ROLES = [ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST, 'Administrador Ge
 const wa = (tel?: string | null) => tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}` : undefined
 
 export default function PanelGeneral() {
+  const { rol, ambito: miAmbito, ambitoListo } = useOutletContext<PanelCtx>()
+  const esProvincial = rolNorm(rol) === ROL_ZONAL
+  const esDistrital = rolNorm(rol) === ROL_COORD_DIST
+  const esAdmin = rolNorm(rol) === 'Administrador General'
+
   const [tab, setTab] = useState<'centros' | 'padron'>('centros')
   const [q, setQ] = useState('')
   const [fDepto, setFDepto] = useState('')
@@ -37,7 +49,46 @@ export default function PanelGeneral() {
 
   const [sel, setSel] = useState<CentroFila | null>(null)
 
-  const d = usePanelData({ departamento: fDepto || 'Lima', provincia: fProv || (fDepto ? '' : 'Lima') })
+  // Distritos de la provincia asignada (solo para Coordinador Provincial)
+  const [distritosProvincia, setDistritosProvincia] = useState<string[]>([])
+  useEffect(() => {
+    if (!ambitoListo || !esProvincial || !miAmbito.provincia) return
+    const dep = miAmbito.departamento || 'Lima'
+    supabase.from('vista_ubigeo').select('distrito').eq('departamento', dep).eq('provincia', miAmbito.provincia)
+      .then(({ data }) => setDistritosProvincia([...new Set((data ?? []).map((r: any) => r.distrito).filter(Boolean))]))
+  }, [ambitoListo, esProvincial, miAmbito.departamento, miAmbito.provincia])
+
+  // Sembrar los filtros con el ámbito del usuario (no admin) una vez resuelto
+  useEffect(() => {
+    if (!ambitoListo) return
+    if (esDistrital && miAmbito.distrito) { setFDist(miAmbito.distrito); return }
+    if (esProvincial) {
+      setFDepto(miAmbito.departamento || 'Lima')
+      setFProv(miAmbito.provincia || '')
+    }
+  }, [ambitoListo, esDistrital, esProvincial, miAmbito.departamento, miAmbito.provincia, miAmbito.distrito])
+
+  // Lista efectiva de distritos a consultar: respeta el ámbito fijo del rol,
+  // o el filtro manual de distrito (aplica también a Admin, para que el
+  // selector de distrito acote también la Jerarquía Distrital y los KPIs).
+  const distritosEfectivos = useMemo<string[] | null>(() => {
+    if (esDistrital) return miAmbito.distrito ? [miAmbito.distrito] : []
+    if (esProvincial) return distritosProvincia
+    if (fDist) return [fDist]
+    return null
+  }, [esDistrital, esProvincial, miAmbito.distrito, distritosProvincia, fDist])
+
+  const bloqueado = (campo: 'depto' | 'prov' | 'dist') => {
+    if (esDistrital) return true
+    if (esProvincial) return campo !== 'dist'
+    return false
+  }
+
+  const d = usePanelData({
+    departamento: (esProvincial ? miAmbito.departamento : fDepto) || 'Lima',
+    provincia: esProvincial ? miAmbito.provincia : (fProv || (fDepto ? '' : 'Lima')),
+    distritos: distritosEfectivos,
+  })
 
   // Opciones de ubigeo (vistas nacionales)
   const [departamentos, setDepartamentos] = useState<string[]>([])
@@ -45,10 +96,11 @@ export default function PanelGeneral() {
   const [distritos, setDistritos] = useState<string[]>(LIMA_METRO)
 
   useEffect(() => {
+    if (!ambitoListo || !esAdmin) return
     supabase.from('vista_departamentos').select('departamento').then(({ data }) =>
       setDepartamentos([...new Set((data ?? []).map((r: any) => r.departamento).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, 'es'))))
-  }, [])
+  }, [ambitoListo, esAdmin])
   useEffect(() => {
     const dep = fDepto || 'Lima'
     supabase.from('vista_provincias').select('provincia').eq('departamento', dep).then(({ data }) =>
@@ -123,7 +175,7 @@ export default function PanelGeneral() {
     XLSX.writeFile(wb, `ConteoLima_Centros_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
-  if (d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>
+  if (!ambitoListo || d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>
 
   return (
     <div className="space-y-4 w-full">
@@ -172,9 +224,9 @@ export default function PanelGeneral() {
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-sky-500" />
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-3 px-3 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0">
-          <Sel v={fDepto} set={setDepto} all="🗺️ Lima (Metrop.)" opts={departamentos} />
-          <Sel v={fProv} set={setProv} all={fDepto ? 'Todas las provincias' : 'Prov. de Lima'} opts={provincias} />
-          <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={distritos} />
+          <Sel v={fDepto} set={setDepto} all="🗺️ Lima (Metrop.)" opts={departamentos} disabled={bloqueado('depto')} />
+          <Sel v={fProv} set={setProv} all={fDepto ? 'Todas las provincias' : 'Prov. de Lima'} opts={provincias} disabled={bloqueado('prov')} />
+          <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={esProvincial ? distritosProvincia : distritos} disabled={bloqueado('dist')} />
           <Sel v={fRol} set={setFRol} all="🛡️ Todos los roles" opts={ROLES} />
           <Sel v={fExp} set={setFExp} all="⭐ Exp: Todos" opts={[['si', 'Con experiencia'], ['no', 'Sin experiencia']]} />
           <Sel v={fMov} set={setFMov} all="🚗 Mov: Todos" opts={[['si', 'Con movilidad'], ['no', 'Sin movilidad']]} />
@@ -386,12 +438,12 @@ function CentroModal({ c, onClose }: { c: CentroFila; onClose: () => void }) {
 
 /* ---------- sub-componentes ---------- */
 
-function Sel({ v, set, all, opts }: {
-  v: string; set: (s: string) => void; all: string; opts: (string | [string, string])[]
+function Sel({ v, set, all, opts, disabled }: {
+  v: string; set: (s: string) => void; all: string; opts: (string | [string, string])[]; disabled?: boolean
 }) {
   return (
-    <select value={v} onChange={e => set(e.target.value)}
-      className="flex-shrink-0 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[12rem]">
+    <select value={v} onChange={e => set(e.target.value)} disabled={disabled}
+      className="flex-shrink-0 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[12rem] disabled:bg-slate-100 disabled:text-slate-400">
       <option value="">{all}</option>
       {opts.map(o => {
         const [val, lbl] = Array.isArray(o) ? o : [o, o]

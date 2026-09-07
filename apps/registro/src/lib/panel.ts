@@ -86,9 +86,10 @@ export interface PanelData {
   kpis: { personerosMesa: number; centros: number; centrosConPCV: number; coordDistritales: number; zonales: number }
 }
 
-export function usePanelData(scope?: { departamento?: string; provincia?: string }): PanelData & { refetch: () => void } {
+export function usePanelData(scope?: { departamento?: string; provincia?: string; distritos?: string[] | null }): PanelData & { refetch: () => void } {
   const dep = scope?.departamento || 'Lima'
   const prov = scope?.provincia || 'Lima'
+  const distritos = scope?.distritos ?? null
   const [d, setD] = useState<PanelData>({
     loading: true, colegios: [], perfiles: [], coordsDistritales: [], zonales: [],
     centros: [], zonas: [], sinZonal: [],
@@ -107,11 +108,16 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
             .select('id, nombre, distrito, direccion, total_mesas, electores')
             .eq('departamento', dep).order('distrito').order('nombre').range(f, t)
           if (prov) cq = cq.eq('provincia', prov)
+          if (distritos) cq = cq.in('distrito', distritos)
           return cq
         }),
-        traerTodo<Perfil>((f, t) => supabase.from('profiles')
-          .select('id, nombre_completo, dni, celular, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, credencial_estado, quiz_estado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos, modificado_por, modificado_at')
-          .order('nombre_completo').range(f, t)),
+        traerTodo<Perfil>((f, t) => {
+          let pq = supabase.from('profiles')
+            .select('id, nombre_completo, dni, celular, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, credencial_estado, quiz_estado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos, modificado_por, modificado_at')
+            .order('nombre_completo').range(f, t)
+          if (distritos) pq = pq.in('distrito_asignado', distritos)
+          return pq
+        }),
       ])
       if (!vivo) return
 
@@ -196,7 +202,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
       })
     })()
     return () => { vivo = false }
-  }, [dep, prov, reloadKey])
+  }, [dep, prov, distritos, reloadKey])
 
   return { ...d, refetch: () => setReloadKey(k => k + 1) }
 }
