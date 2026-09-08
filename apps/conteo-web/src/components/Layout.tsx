@@ -115,7 +115,7 @@ function Shell() {
 
         <BarraFiltros />
 
-        <main className="flex-1 p-4 sm:p-6 max-w-[1400px] w-full">
+        <main className="flex-1 p-4 sm:p-6 w-full min-w-0">
           <Outlet />
         </main>
       </div>
