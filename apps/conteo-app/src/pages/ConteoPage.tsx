@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  supabase, getMiPerfil, CANDIDATOS_METROPOLITANA, VOTOS_ESPECIALES,
-  getCandidatosDistrital, haversineM,
+  supabase, getMiPerfil, VOTOS_ESPECIALES, haversineM,
 } from '../lib/supabase'
 import type { Candidato } from '../lib/supabase'
+import {
+  getCandidaturas, type Candidaturas, type BloqueCandidaturas, type NivelCandidatura,
+} from '../lib/candidaturas'
 import { procesarActa } from '../lib/ocr'
 import { subirImagenActa } from '../lib/storage'
 import {
@@ -14,7 +16,6 @@ import {
 
 type Modo = 'MANUAL' | 'IMAGEN'
 type Fase = 'setup' | 'enviado'
-type Nivel = 'metro' | 'distrital'
 
 // Ruta del logo del partido en /public/partidos/<slug>.png
 // Si el archivo no existe, la fila cae automáticamente al badge de iniciales.
@@ -108,16 +109,21 @@ function IntroModal() {
   )
 }
 
+type VotosPorNivel = Record<NivelCandidatura, Record<string, number>>
+const VOTOS_VACIOS: VotosPorNivel = { REGIONAL: {}, PROVINCIAL: {}, DISTRITAL: {} }
+
 function ConteoPageInner() {
   const [perfil, setPerfil]           = useState<any>(null)
   const [userId, setUserId]           = useState('')   // id real del perfil (para escrituras)
   const [authId, setAuthId]           = useState('')   // id de auth (para app_config)
   const [mesa, setMesa]               = useState('')
   const [mesaConfirmada, setMesaConfirmada] = useState(false)
+  const [electoresHabiles, setElectoresHabiles] = useState('')
   const [modo, setModo]               = useState<Modo>('MANUAL')
   const [fase, setFase]               = useState<Fase>('setup')
-  const [votosMetro, setVotosMetro]         = useState<Record<string, number>>({})
-  const [votosDistrital, setVotosDistrital] = useState<Record<string, number>>({})
+  const [cand, setCand]               = useState<Candidaturas | null>(null)
+  const [candLoading, setCandLoading] = useState(true)
+  const [votos, setVotos]             = useState<VotosPorNivel>(VOTOS_VACIOS)
   const [imgSrc, setImgSrc]           = useState<string | null>(null)
   const [imgMime, setImgMime]         = useState('image/jpeg')
   const [ocrLoading, setOcrLoading]   = useState(false)
@@ -131,7 +137,7 @@ function ConteoPageInner() {
   const [showKeyInput, setShowKeyInput] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const candidatosDistrital = getCandidatosDistrital(perfil?.distrito_asignado)
+  const bloques = cand?.bloques ?? []
 
   useEffect(() => {
     const init = async () => {
@@ -150,6 +156,17 @@ function ConteoPageInner() {
     }
     init()
   }, [])
+
+  // ── Cargar las candidaturas del ámbito del personero ───────────────────
+  useEffect(() => {
+    if (!perfil) return
+    let vivo = true
+    setCandLoading(true)
+    getCandidaturas(perfil)
+      .then(c => { if (vivo) { setCand(c); setCandLoading(false) } })
+      .catch(() => { if (vivo) { setCand({ ambito: { departamento: null, provincia: null, distrito: null }, bloques: [] }); setCandLoading(false) } })
+    return () => { vivo = false }
+  }, [perfil])
 
   // ── GPS: valida radio 50m del colegio ──────────────────────────────────
   const detectarGPS = useCallback(async () => {
@@ -212,17 +229,20 @@ function ConteoPageInner() {
           setOcrMetodo(resultado.metodo)
 
           if (resultado.votos.length > 0) {
-            // Mapear resultados OCR a los candidatos conocidos (metro y distrital)
-            const nuevosMetro: Record<string, number> = {}
-            const nuevosDistrital: Record<string, number> = {}
-            resultado.votos.forEach(v => {
-              const cMetro = matchCandidato(CANDIDATOS_METROPOLITANA, v.partido)
-              if (cMetro && v.provincial > 0) nuevosMetro[cMetro.id] = v.provincial
-              const cDist = matchCandidato(candidatosDistrital, v.partido)
-              if (cDist && v.distrital > 0) nuevosDistrital[cDist.id] = v.distrital
-            })
-            setVotosMetro(nuevosMetro)
-            setVotosDistrital(nuevosDistrital)
+            // Mapear resultados OCR a los candidatos de cada bloque cargado.
+            // El OCR devuelve {partido, provincial, distrital}: 'provincial' se
+            // usa para el bloque PROVINCIAL y 'distrital' para el DISTRITAL.
+            const nuevos: VotosPorNivel = { REGIONAL: {}, PROVINCIAL: {}, DISTRITAL: {} }
+            for (const b of bloques) {
+              const lista = [...b.candidatos, ...VOTOS_ESPECIALES]
+              resultado.votos.forEach(v => {
+                const c = matchCandidato(lista, v.partido)
+                if (!c) return
+                const n = b.nivel === 'DISTRITAL' ? v.distrital : v.provincial
+                if (n > 0) nuevos[b.nivel][c.id] = n
+              })
+            }
+            setVotos(nuevos)
           }
         } catch {
           setError('No se pudo procesar el acta automáticamente. Ingresa los votos manualmente.')
@@ -234,18 +254,23 @@ function ConteoPageInner() {
     e.target.value = ''
   }
 
-  const cambiarVoto = (nivel: Nivel, id: string, delta: number) => {
-    const setter = nivel === 'metro' ? setVotosMetro : setVotosDistrital
-    setter(prev => ({ ...prev, [id]: Math.max(0, (prev[id] || 0) + delta) }))
+  const cambiarVoto = (nivel: NivelCandidatura, id: string, delta: number) => {
+    setVotos(prev => ({
+      ...prev,
+      [nivel]: { ...prev[nivel], [id]: Math.max(0, (prev[nivel][id] || 0) + delta) },
+    }))
   }
 
-  const totalProv = Object.values(votosMetro).reduce((a, b) => a + b, 0)
-  const totalDist = Object.values(votosDistrital).reduce((a, b) => a + b, 0)
+  const totalNivel = (nivel: NivelCandidatura) =>
+    Object.values(votos[nivel]).reduce((a, b) => a + b, 0)
+  const granTotal = (['REGIONAL', 'PROVINCIAL', 'DISTRITAL'] as NivelCandidatura[])
+    .reduce((s, n) => s + totalNivel(n), 0)
 
   // ── Enviar acta ─────────────────────────────────────────────────────────
   const enviar = async () => {
     if (!mesa.trim()) { setError('Ingresa el número de mesa.'); return }
-    if (totalProv === 0 && totalDist === 0) { setError('Ingresa al menos un voto.'); return }
+    if (!bloques.length) { setError('No hay listas de candidatos cargadas para tu ámbito. Avisa a tu coordinador.'); return }
+    if (granTotal === 0) { setError('Ingresa al menos un voto.'); return }
     setEnviando(true); setError('')
 
     try {
@@ -264,41 +289,54 @@ function ConteoPageInner() {
         imagenUrl = await subirImagenActa(mesa, imgSrc, imgMime)
       }
 
+      const dep  = cand?.ambito.departamento ?? perfil?.departamento_asignado ?? perfil?.departamento_vota ?? null
+      const prov = cand?.ambito.provincia    ?? perfil?.provincia_asignado    ?? perfil?.provincia_vota    ?? null
+      const dist = cand?.ambito.distrito     ?? perfil?.distrito_asignado     ?? perfil?.distrito_vota     ?? null
+      const electores = electoresHabiles.trim() ? parseInt(electoresHabiles.replace(/\D/g, ''), 10) : null
+
       // Crear/actualizar acta
       const { data: acta, error: actaErr } = await supabase.from('actas').upsert({
-        mesa_numero:     mesa.trim(),
-        colegio_nombre:  perfil?.local_asignado ?? perfil?.local_votacion ?? null,
-        distrito:        perfil?.distrito_asignado ?? perfil?.distrito_vota ?? null,
-        personero_id:    userId || null,
-        personero_dni:   perfil?.dni ?? null,
-        imagen_url:      imagenUrl,
-        metodo:          modo,
-        ocr_raw:         ocrMetodo ? { metodo: ocrMetodo } : null,
-        estado:          'TRANSMITIDA',
-        bloqueada:       true,
-        latitude:        gpsCoords?.lat ?? null,
-        longitude:       gpsCoords?.lon ?? null,
-        gps_valido:      gpsStatus === 'ok',
-        transmitida_at:  new Date().toISOString(),
+        mesa_numero:       mesa.trim(),
+        colegio_nombre:    perfil?.local_asignado ?? perfil?.local_votacion ?? null,
+        departamento:      dep,
+        provincia:         prov,
+        distrito:          dist,
+        electores_habiles: Number.isFinite(electores as number) ? electores : null,
+        personero_id:      userId || null,
+        personero_dni:     perfil?.dni ?? null,
+        imagen_url:        imagenUrl,
+        metodo:            modo,
+        ocr_raw:           ocrMetodo ? { metodo: ocrMetodo } : null,
+        estado:            'TRANSMITIDA',
+        bloqueada:         true,
+        latitude:          gpsCoords?.lat ?? null,
+        longitude:         gpsCoords?.lon ?? null,
+        gps_valido:        gpsStatus === 'ok',
+        transmitida_at:    new Date().toISOString(),
       }, { onConflict: 'mesa_numero' }).select().single()
 
       if (actaErr) throw actaErr
 
-      // Insertar votos (filtrar ceros)
-      const distritoActa = perfil?.distrito_asignado ?? perfil?.distrito_vota ?? null
-      const listaMetro     = [...CANDIDATOS_METROPOLITANA, ...VOTOS_ESPECIALES]
-      const listaDistrital = [...candidatosDistrital, ...VOTOS_ESPECIALES]
-
-      const filas = [
-        ...Object.entries(votosMetro).map(([id, cantidad]) => {
-          const c = listaMetro.find(x => x.id === id)
-          return { acta_id: acta.id, mesa_numero: mesa, distrito: distritoActa, nivel: 'PROVINCIAL', partido: c?.partido ?? id, candidato: c?.nombre || null, cantidad }
-        }),
-        ...Object.entries(votosDistrital).map(([id, cantidad]) => {
-          const c = listaDistrital.find(x => x.id === id)
-          return { acta_id: acta.id, mesa_numero: mesa, distrito: distritoActa, nivel: 'DISTRITAL', partido: c?.partido ?? id, candidato: c?.nombre || null, cantidad }
-        }),
-      ].filter(f => f.cantidad > 0)
+      // Insertar votos de todos los niveles (filtrar ceros)
+      const filas = bloques.flatMap(b => {
+        const lista = [...b.candidatos, ...VOTOS_ESPECIALES]
+        return Object.entries(votos[b.nivel])
+          .map(([id, cantidad]) => {
+            const c = lista.find(x => x.id === id)
+            return {
+              acta_id:      acta.id,
+              mesa_numero:  mesa,
+              nivel:        b.nivel,
+              departamento: dep,
+              provincia:    prov,
+              distrito:     dist,
+              partido:      c?.partido ?? id,
+              candidato:    c?.nombre || null,
+              cantidad,
+            }
+          })
+          .filter(f => f.cantidad > 0)
+      })
 
       if (filas.length) await supabase.from('votos').insert(filas)
 
@@ -321,7 +359,7 @@ function ConteoPageInner() {
       <div className="w-20 h-20 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center">
         <CheckCircle size={40} className="text-green-400" />
       </div>
-      <h2 className="text-white font-bold text-xl">Acta de Imagen ya Transmitida</h2>
+      <h2 className="text-white font-bold text-xl">Acta ya Transmitida</h2>
       <p className="text-white/50 text-sm max-w-xs">
         Mesa <span className="text-white font-mono font-bold">{perfil?.mesa_asignada ?? mesa}</span> —
         solo 1 envío permitido.
@@ -336,6 +374,9 @@ function ConteoPageInner() {
     gpsStatus === 'fail' ? 'text-red-400 border-red-500/40' :
                            'text-green-400 border-green-500/40'
 
+  const ambitoTxt = [cand?.ambito.distrito, cand?.ambito.provincia, cand?.ambito.departamento]
+    .filter(Boolean).join(', ')
+
   return (
     <div className="max-w-3xl mx-auto p-4 sm:p-5 space-y-4 fade-in">
 
@@ -349,7 +390,7 @@ function ConteoPageInner() {
           <p className="text-white font-bold text-sm truncate">{perfil?.nombre_completo ?? '—'}</p>
           <p className="text-white/40 text-xs truncate">
             DNI: <span className="text-sky-400 font-medium">{perfil?.dni ?? '—'}</span>
-            {perfil?.distrito_asignado && <> {'·'} Distrito: {perfil.distrito_asignado}</>}
+            {ambitoTxt && <> {'·'} {ambitoTxt}</>}
           </p>
         </div>
         <button onClick={detectarGPS}
@@ -391,7 +432,7 @@ function ConteoPageInner() {
         </div>
       </div>
 
-      {/* Número de Mesa / Acta */}
+      {/* Número de Mesa / Acta + electores hábiles */}
       <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <span className="text-white font-bold text-sm">Número de Mesa / Acta:</span>
@@ -400,7 +441,7 @@ function ConteoPageInner() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sky-400 text-sm font-semibold flex-shrink-0">Colegio:</span>
+          <span className="text-sky-400 text-sm font-semibold flex-shrink-0">Mesa:</span>
           <input value={mesa} onChange={e => { setMesa(e.target.value); setMesaConfirmada(false) }}
             placeholder="Ingresa tu mesa…"
             className="flex-1 min-w-0 bg-[#0b0f1d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 outline-none focus:border-sky-500/50" />
@@ -411,6 +452,16 @@ function ConteoPageInner() {
             Confirmar
           </label>
         </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sky-400 text-sm font-semibold flex-shrink-0">Electores hábiles de la mesa:</span>
+          <input value={electoresHabiles} inputMode="numeric"
+            onChange={e => setElectoresHabiles(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            placeholder="Ej. 300"
+            className="w-28 bg-[#0b0f1d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 outline-none focus:border-sky-500/50 tabular-nums" />
+        </div>
+        <p className="text-white/25 text-[11px]">
+          El número impreso en el acta (padrón de la mesa). Sirve para cuadrar el total de votos.
+        </p>
       </div>
 
       {/* Modo IMAGEN: foto del acta + OCR */}
@@ -470,46 +521,57 @@ function ConteoPageInner() {
 
       {/* Cabeceras de columna */}
       <div className="flex items-center justify-between px-3 text-white/30 text-[10px] font-bold uppercase tracking-widest">
-        <span>Partido {'·'} Alcalde</span>
+        <span>Partido {'·'} Candidato</span>
         <span>Conteo votos</span>
       </div>
 
-      {/* Alcaldía Metropolitana */}
-      <SeccionVotos
-        titulo={`Alcaldía Metropolitana (Lima - ${CANDIDATOS_METROPOLITANA.length} candidatos)`}
-        subtitulo="Alcalde actual: Rafael López Aliaga (Renovación Popular)"
-        accent="metro"
-        total={totalProv}
-        candidatos={CANDIDATOS_METROPOLITANA}
-        votos={votosMetro}
-        onDelta={(id, d) => cambiarVoto('metro', id, d)}
-      />
+      {/* Estado de carga de candidaturas */}
+      {candLoading && (
+        <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-6 flex items-center justify-center gap-2 text-white/40 text-sm">
+          <Loader size={16} className="animate-spin" /> Cargando listas de tu ámbito…
+        </div>
+      )}
 
-      {/* Alcaldía Distrital */}
-      <SeccionVotos
-        titulo={`Alcaldía Distrital (${perfil?.distrito_asignado ?? 'Distrito'} - ${candidatosDistrital.length} candidatos)`}
-        accent="distrital"
-        total={totalDist}
-        candidatos={candidatosDistrital}
-        votos={votosDistrital}
-        onDelta={(id, d) => cambiarVoto('distrital', id, d)}
-      />
+      {!candLoading && bloques.length === 0 && (
+        <div className="bg-red-500/10 border border-red-500/25 rounded-2xl p-5 space-y-1.5">
+          <p className="text-red-300 font-bold text-sm flex items-center gap-2">
+            <AlertTriangle size={15} /> Sin listas de candidatos para tu ámbito
+          </p>
+          <p className="text-red-200/70 text-xs">
+            {ambitoTxt
+              ? <>No hay candidaturas cargadas para <span className="font-semibold">{ambitoTxt}</span>. Avisa a tu coordinador antes de la jornada.</>
+              : <>Tu perfil no tiene distrito/provincia asignado. Avisa a tu coordinador.</>}
+          </p>
+        </div>
+      )}
+
+      {/* Secciones dinámicas por nivel (Regional / Provincial / Distrital) */}
+      {!candLoading && bloques.map(b => (
+        <SeccionVotos
+          key={b.nivel}
+          bloque={b}
+          total={totalNivel(b.nivel)}
+          votos={votos[b.nivel]}
+          onDelta={(id, d) => cambiarVoto(b.nivel, id, d)}
+        />
+      ))}
 
       {/* Resumen */}
-      <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 grid grid-cols-3 gap-2 text-center">
-        <div>
-          <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Total Metro</p>
-          <p className="text-white text-lg font-extrabold tabular-nums">{totalProv}</p>
+      {bloques.length > 0 && (
+        <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 grid gap-2 text-center"
+          style={{ gridTemplateColumns: `repeat(${bloques.length + 1}, minmax(0, 1fr))` }}>
+          {bloques.map(b => (
+            <div key={b.nivel}>
+              <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">{b.nivel}</p>
+              <p className="text-white text-lg font-extrabold tabular-nums">{totalNivel(b.nivel)}</p>
+            </div>
+          ))}
+          <div>
+            <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Gran Total</p>
+            <p className="text-sky-400 text-lg font-extrabold tabular-nums">{granTotal}</p>
+          </div>
         </div>
-        <div>
-          <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Total Distrital</p>
-          <p className="text-white text-lg font-extrabold tabular-nums">{totalDist}</p>
-        </div>
-        <div>
-          <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Gran Total</p>
-          <p className="text-sky-400 text-lg font-extrabold tabular-nums">{totalProv + totalDist}</p>
-        </div>
-      </div>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
@@ -519,7 +581,7 @@ function ConteoPageInner() {
       )}
 
       {/* Transmitir */}
-      <button onClick={enviar} disabled={enviando || ocrLoading || !mesa.trim() || !mesaConfirmada}
+      <button onClick={enviar} disabled={enviando || ocrLoading || !mesa.trim() || !mesaConfirmada || !bloques.length}
         className="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-500 hover:opacity-95 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 active:scale-[0.98]">
         {enviando
           ? <><Loader size={16} className="animate-spin" /> Transmitiendo…</>
@@ -527,27 +589,23 @@ function ConteoPageInner() {
       </button>
       {!mesaConfirmada && (
         <p className="text-white/30 text-xs text-center">
-          Ingresa el N° de mesa y marca “Confirmar” para habilitar el envío.
+          Ingresa el N° de mesa y marca "Confirmar" para habilitar el envío.
         </p>
       )}
     </div>
   )
 }
 
-// ── Sección de candidatos (Metropolitana o Distrital) ───────────────────────
-function SeccionVotos({ titulo, subtitulo, total, accent, candidatos, votos, onDelta }: {
-  titulo: string; subtitulo?: string; total: number
-  accent: 'metro' | 'distrital'
-  candidatos: Candidato[]
+// ── Sección de candidatos de un nivel (Regional / Provincial / Distrital) ────
+function SeccionVotos({ bloque, total, votos, onDelta }: {
+  bloque: BloqueCandidaturas; total: number
   votos: Record<string, number>; onDelta: (id: string, delta: number) => void
 }) {
-  const esMetro = accent === 'metro'
-  const barra   = esMetro ? 'border-sky-500 bg-sky-500/5'   : 'border-emerald-500 bg-emerald-500/5'
-  const tinta   = esMetro ? 'text-sky-300'                  : 'text-emerald-300'
-  const icono   = esMetro ? 'text-sky-400'                  : 'text-emerald-400'
-  const pill    = esMetro
-    ? 'text-sky-300/80 border-sky-500/30 bg-sky-500/10'
-    : 'text-emerald-300/80 border-emerald-500/30 bg-emerald-500/10'
+  const esProv = bloque.nivel === 'PROVINCIAL'
+  const barra   = esProv ? 'border-sky-500 bg-sky-500/5'   : 'border-emerald-500 bg-emerald-500/5'
+  const tinta   = esProv ? 'text-sky-300'                  : 'text-emerald-300'
+  const icono   = esProv ? 'text-sky-400'                  : 'text-emerald-400'
+  const accent: 'metro' | 'distrital' = esProv ? 'metro' : 'distrital'
   return (
     <div className="bg-[#131a2e] border border-white/8 rounded-2xl overflow-hidden">
       {/* Cabecera de sección */}
@@ -555,11 +613,13 @@ function SeccionVotos({ titulo, subtitulo, total, accent, candidatos, votos, onD
         <div className="min-w-0 space-y-1.5">
           <div className="flex items-center gap-1.5">
             <MapIcon size={13} className={`${icono} flex-shrink-0`} />
-            <p className={`text-[11px] font-extrabold uppercase tracking-wide leading-tight ${tinta}`}>{titulo}</p>
+            <p className={`text-[11px] font-extrabold uppercase tracking-wide leading-tight ${tinta}`}>
+              {bloque.titulo} ({bloque.candidatos.length} listas)
+            </p>
           </div>
-          {subtitulo && (
-            <span className={`inline-block text-[9px] font-semibold uppercase tracking-wide px-2 py-1 rounded-md border ${pill}`}>
-              {subtitulo}
+          {bloque.provisional && (
+            <span className="inline-block text-[9px] font-semibold uppercase tracking-wide px-2 py-1 rounded-md border text-amber-300/90 border-amber-500/30 bg-amber-500/10">
+              Lista provisional — verifica contra tu acta física
             </span>
           )}
         </div>
@@ -570,7 +630,7 @@ function SeccionVotos({ titulo, subtitulo, total, accent, candidatos, votos, onD
       </div>
       {/* Filas */}
       <div className="divide-y divide-white/[0.06] max-h-[60vh] overflow-y-auto">
-        {[...candidatos, ...VOTOS_ESPECIALES].map(c => (
+        {[...bloque.candidatos, ...VOTOS_ESPECIALES].map(c => (
           <FilaCandidato key={c.id} candidato={c} accent={accent} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
         ))}
       </div>
@@ -587,13 +647,14 @@ function FilaCandidato({ candidato, accent, value, onDelta }: {
     ? 'bg-sky-500/[0.07] border-l-2 border-sky-500'
     : 'bg-emerald-500/[0.07] border-l-2 border-emerald-500'
   const mas = accent === 'metro' ? 'bg-sky-500 hover:bg-sky-400' : 'bg-emerald-500 hover:bg-emerald-400'
+  const esLista = candidato.id.startsWith('cand_')
   return (
     <div className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${value > 0 ? activa : 'border-l-2 border-transparent'}`}>
       <div className="relative w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden">
         <span className="text-[0.55rem] font-black leading-none text-center px-0.5" style={{ color: candidato.color }}>
           {candidato.letra}
         </span>
-        {candidato.id.startsWith('c') || candidato.id.startsWith('d') ? (
+        {esLista ? (
           <img
             src={`/partidos/${slugPartido(candidato.partido)}.png`}
             alt=""

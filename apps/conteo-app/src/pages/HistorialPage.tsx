@@ -87,7 +87,7 @@ export default function HistorialPage() {
 
           {expanded === a.id && a.votos && (
             <div className="border-t border-white/5 px-4 pb-4">
-              {['PROVINCIAL', 'DISTRITAL'].map(nivel => {
+              {['REGIONAL', 'PROVINCIAL', 'DISTRITAL'].map(nivel => {
                 const rows = (a.votos ?? []).filter(v => v.nivel === nivel)
                 if (!rows.length) return null
                 return (

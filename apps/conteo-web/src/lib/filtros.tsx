@@ -1,14 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase, DISTRITOS_META } from './supabase'
 import { useScope } from './scope'
-import { CANDIDATOS_METROPOLITANA } from './candidatos'
 
 // Los 43 distritos de Lima Metropolitana: ámbito por defecto del Administrador.
 const LIMA_METRO = Object.keys(DISTRITOS_META)
-const PARTIDOS = [
-  ...CANDIDATOS_METROPOLITANA.map(c => c.partido),
-  'NULO', 'BLANCO', 'IMPUGNADO',
-]
+const ESPECIALES = ['NULO', 'BLANCO', 'IMPUGNADO']
 
 export interface Filtros {
   departamento: string
@@ -120,6 +116,19 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
     cq.order('nombre').then(({ data }) => setColegios((data ?? []).map((c: any) => c.nombre)))
   }, [f.distrito, f.departamento, f.provincia, scope.esAdmin])
 
+  // Partidos del ámbito — de la tabla `candidaturas` (misma fuente que la conteo-app)
+  const [partidos, setPartidos] = useState<string[]>(ESPECIALES)
+  useEffect(() => {
+    if (scope.loading) return
+    let q = supabase.from('candidaturas').select('partido').eq('activo', true)
+    if (f.departamento) q = q.eq('departamento', f.departamento)
+    q.then(({ data }) => {
+      const nombres = [...new Set((data ?? []).map((r: any) => r.partido).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'es'))
+      setPartidos([...nombres, ...ESPECIALES])
+    })
+  }, [scope.loading, f.departamento])
+
   const [mesas, setMesas] = useState<string[]>([])
   useEffect(() => {
     if (!f.colegio) { setMesas([]); return }
@@ -173,7 +182,7 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
 
   const value: Ctx = {
     f, set, reset,
-    departamentos, provincias, distritos, colegios, mesas, partidos: PARTIDOS,
+    departamentos, provincias, distritos, colegios, mesas, partidos,
     esAdmin: scope.esAdmin,
     bloqueado,
     ambitoLabel,

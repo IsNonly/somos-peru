@@ -80,6 +80,17 @@ En **Supabase → SQL Editor**, correr en este orden (todos son idempotentes):
 3. `supabase/migracion_personero_local.sql` — renombra rol "Coordinador de Local" → "Personero de Local de Votación" + columnas de asistencia
 4. `supabase/renombrar_personero_centro_votacion.sql` — renombra rol "Personero de Local de Votación" → "Personero de Centro de Votación" *(pendiente de correr — el código ya reconoce ambos nombres mientras tanto)*
 5. **`supabase/rls_seguridad.sql`** — ⚠️ **CORRER RECIÉN DESPUÉS de desplegar el paso 2** (Vercel con el código nuevo). Cierra la lectura anónima del padrón: con solo la anon key ya **no** se puede hacer `GET /rest/v1/profiles`.
+6. `supabase/candidaturas_multinivel.sql` — tabla `candidaturas` (listas por ubigeo + nivel Regional/Provincial/Distrital), `actas.electores_habiles`, ubigeo en `votos`. Requiere PostgreSQL 15+ (Supabase lo es).
+7. `supabase/seed_candidaturas.sql` — siembra Lima Metropolitana + los 5 distritos donde opera SP (data de prensa jun-ago 2026, marcada como provisional). **La conteo-app no deja transmitir si el ámbito del personero no tiene listas cargadas.**
+
+> **Candidaturas de otras provincias/distritos:** cargar la data oficial de ONPE/JNE con
+> `node scripts/importar_candidaturas.mjs <excel>` (formato en el encabezado del script).
+> Con `SUPABASE_SERVICE_ROLE` en el entorno evita cualquier bloqueo de RLS.
+>
+> Mientras no haya Excel oficial, `scripts/preparar_candidaturas_provincias.mjs` genera
+> uno con la cédula completa de todo el país (menos Lima Metropolitana) desde un scrape
+> del registro ONPE — cada fila queda marcada como provisional. Detalle y advertencias
+> en `docs/somosperu_ambitos.md`.
 
 ### Auth settings (Supabase → Authentication)
 - **Site URL:** la URL de `registro` en Vercel.

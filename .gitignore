@@ -1,5 +1,9 @@
 node_modules/
 dist/
+
+# Artefactos generados por scripts/preparar_candidaturas_provincias.mjs
+scripts/out/
+scripts/_alcaldes_tmp.json
 .env
 .env.*
 !.env.example
