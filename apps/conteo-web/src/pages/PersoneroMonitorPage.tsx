@@ -209,7 +209,7 @@ export default function PersoneroMonitorPage() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[1180px] text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
                 {['Personero', 'DNI / Celular', 'Distrito / Local', 'Mesa', '1ª Conf. (Foto)', '2ª Conf. (GPS)', 'Envío Manual 📝', 'Envío Imagen 🖼️', 'Estado Envíos', 'Contacto'].map(h => (
@@ -246,7 +246,7 @@ export default function PersoneroMonitorPage() {
                     <td className="px-4 py-2.5"><Badge ok={e.imagen} okText="RECIBIDO" /></td>
                     <td className="px-4 py-2.5"><EstadoEnvios n={n} /></td>
                     <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
                         <button onClick={() => avisar(p)} disabled={!tel} title={tel ? 'Avisar por WhatsApp' : 'Sin celular'}
                           className="flex items-center gap-1 text-xs font-bold rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white px-2.5 py-1.5">
                           <MessageCircle size={13} /> Avisar
@@ -285,8 +285,8 @@ export default function PersoneroMonitorPage() {
 
 function Badge({ ok, okText = 'CONFIRMADO' }: { ok: boolean; okText?: string }) {
   return ok
-    ? <span className="text-xs font-bold bg-emerald-50 text-emerald-600 rounded-full px-2.5 py-1">{okText}</span>
-    : <span className="text-xs font-bold bg-amber-50 text-amber-600 rounded-full px-2.5 py-1">PENDIENTE</span>
+    ? <span className="inline-block whitespace-nowrap text-xs font-bold bg-emerald-50 text-emerald-600 rounded-full px-2.5 py-1">{okText}</span>
+    : <span className="inline-block whitespace-nowrap text-xs font-bold bg-amber-50 text-amber-600 rounded-full px-2.5 py-1">PENDIENTE</span>
 }
 
 function EstadoEnvios({ n }: { n: number }) {
@@ -295,7 +295,7 @@ function EstadoEnvios({ n }: { n: number }) {
     : n === 1
       ? { cls: 'bg-amber-100 text-amber-700', txt: 'Parcial (1/2)' }
       : { cls: 'bg-rose-500 text-white', txt: 'Sin Envío (0/2)' }
-  return <span className={`text-xs font-bold rounded-full px-2.5 py-1 ${cfg.cls}`}>{cfg.txt}</span>
+  return <span className={`inline-block whitespace-nowrap text-xs font-bold rounded-full px-2.5 py-1 ${cfg.cls}`}>{cfg.txt}</span>
 }
 
 function ChartCard({ icon: Icon, tint, titulo, sub, children }: {
