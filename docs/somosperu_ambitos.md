@@ -4,21 +4,12 @@
 
 ## Cómo cargar las provincias en la conteo-app
 
-De la **misma fuente** se genera un Excel con la cédula **completa** (todas las organizaciones, no solo SP) de todas las provincias y regiones del país **excepto Lima Metropolitana** (esa ya está sembrada desde prensa):
+`supabase/seed_candidaturas_cali.sql` — llena todos los ámbitos del país (depto/
+provincia/distrito que ya están en `colegios`, o sea CALI) con la lista estándar
+de partidos **sin nombre de candidato**. Así cualquier provincia ya deja contar.
 
-```bash
-# 1) genera scripts/out/candidaturas_provincias.xlsx  (~10 400 filas)
-node scripts/preparar_candidaturas_provincias.mjs
-
-# 2) revisa scripts/out/candidaturas_provincias.resumen.txt
-
-# 3) carga a Supabase (upsert idempotente por ámbito+partido)
-SUPABASE_SERVICE_ROLE=eyJ... node scripts/importar_candidaturas.mjs scripts/out/candidaturas_provincias.xlsx
-```
-
-Cada fila entra con `fuente = "scrape ONPE (deylg) - VALIDAR"`, y la conteo-app muestra el badge **"Lista provisional — verifica contra tu acta física"** en esos ámbitos hasta que se reemplacen con la data oficial (mismo importador, columna `FUENTE` distinta).
-
-**Recomendado:** cargar solo las regiones donde se van a desplegar personeros, y cruzarlas antes contra la cédula oficial de ONPE.
+Los nombres reales de candidato se cargan después con el Excel oficial de ONPE/JNE:
+`node scripts/importar_candidaturas.mjs <excel>` (columna `FUENTE` para marcar el origen).
 
 ## Resumen
 
