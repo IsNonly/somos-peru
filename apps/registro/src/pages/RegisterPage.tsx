@@ -499,7 +499,7 @@ export default function RegisterPage() {
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Registro</h1>
-            <p className="text-xs font-semibold text-slate-600 mt-1">Partido Democrático Somos Perú • Elecciones Municipales 2026</p>
+            <p className="text-xs font-semibold text-slate-600 mt-1">Partido Democrático Somos Perú • Elecciones Regionales y Municipales 2026</p>
           </div>
           <a href="/login" className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-rose-200 bg-rose-50/50 text-rose-500 hover:bg-rose-100/60 font-semibold text-xs transition-colors">
             <LogIn size={14} /><span>Ingresar</span>
