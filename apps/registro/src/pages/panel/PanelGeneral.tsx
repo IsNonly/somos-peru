@@ -8,7 +8,7 @@ import {
 } from '../../lib/panel'
 import {
   Search, Download, Building2, LayoutGrid, ShieldCheck, MapPin, Users, Phone,
-  AlertTriangle, ChevronRight, MessageCircle, GraduationCap,
+  AlertTriangle, MessageCircle, GraduationCap,
 } from 'lucide-react'
 
 interface PanelCtx {
@@ -180,43 +180,7 @@ export default function PanelGeneral() {
   return (
     <div className="space-y-4 w-full">
 
-      {/* 1. JERARQUÍA DISTRITAL */}
-      <section className="bg-white border border-slate-200 rounded-2xl p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] font-black bg-slate-800 text-white rounded px-2 py-1 tracking-wide">JERARQUÍA DISTRITAL</span>
-          <h2 className="text-base font-extrabold text-slate-900">Red de Coordinadores Distritales de {ambito} ({d.coordsDistritales.length})</h2>
-        </div>
-        <p className="text-xs text-slate-400 mb-3">Monitoreo general de {ambito} · cada tarjeta es el coordinador de un distrito.</p>
-        <div className="flex gap-3 overflow-x-auto pb-1">
-          {d.coordsDistritales.map(c => (
-            <div key={c.id} className="flex-shrink-0 w-64 border border-slate-200 rounded-xl p-3 bg-slate-50/60">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[11px] font-bold bg-slate-800 text-white rounded px-2 py-0.5 flex items-center gap-1">
-                  <MapPin size={10} /> {c.distrito_asignado ?? '—'}
-                </span>
-                <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${
-                  c.acreditado ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                  {c.acreditado ? '✓ Acreditado' : '⏳ Pendiente'}
-                </span>
-              </div>
-              <p className="font-bold text-slate-800 text-sm leading-tight">{c.nombre_completo}</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">DNI: {c.dni ?? '—'}</p>
-              <div className="flex items-center justify-between mt-2">
-                <a href={wa(c.celular)} target="_blank" rel="noreferrer"
-                  className="text-xs text-emerald-600 font-bold flex items-center gap-1">
-                  <Phone size={11} /> {c.celular ?? 's/n'}
-                </a>
-                <button onClick={() => { setFDist(c.distrito_asignado ?? ''); setTab('centros') }}
-                  className="text-[11px] font-bold text-sky-600 flex items-center gap-0.5 hover:underline">
-                  Ver distrito <ChevronRight size={12} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 2. FILTROS */}
+      {/* FILTROS */}
       <section className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
