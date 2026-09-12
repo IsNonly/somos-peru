@@ -84,6 +84,21 @@ const ROL_ALIAS = {
   'coordinador zonal': 'Coordinador Distrital',
   'coordinador de local': 'Personero de Centro de Votación',
   'personero de local de votacion': 'Personero de Centro de Votación',
+  // "Coordinador Regional" (encargado de todo un departamento) no tiene tier propio
+  // en la app todavía; se mapea al rol más alto que ya existe (ve toda su provincia/
+  // departamento vía departamento_asignado + provincia_asignado vacía).
+  'coordinador regional': 'Coordinador Provincial',
+}
+
+// "Distrito Asignado" a veces no es un distrito sino el ámbito completo de un
+// coordinador provincial/regional, ej. "Provincia de Contralmirante Villar" o
+// "Región Tumbes". Se separa para no guardar eso como si fuera un distrito real.
+function parseAsignado(raw) {
+  const t = s(raw)
+  let m
+  if ((m = t.match(/^provincia\s+de\s+(.+)$/i))) return { distrito: null, provincia: m[1].trim(), departamento: null }
+  if ((m = t.match(/^regi[oó]n\s+(?:de\s+)?(.+)$/i))) return { distrito: null, provincia: null, departamento: m[1].trim() }
+  return { distrito: nn(t), provincia: null, departamento: null }
 }
 // Alias de distritos mal escritos en el Excel -> nombre canónico (por clave sin acentos/minúsculas)
 const DISTRITO_ALIAS = {
@@ -129,23 +144,32 @@ async function main() {
   }
   console.log(`DNIs ya en la base: ${existentes.size}`)
 
-  // ── Mapa distrito -> {dep, prov} (Lima Metro + Callao) ────
+  // ── Mapa distrito -> {dep, prov} (ubigeo nacional, vista_ubigeo = distinct de `colegios`) ─
   const ubigeo = new Map()
+  const porProvincia = new Map() // provincia -> {dep, prov} (para coordinadores con solo "Provincia de X")
   {
-    const { data, error } = await supabase.from('vista_ubigeo')
-      .select('departamento, provincia, distrito')
-      .in('departamento', ['Lima', 'Callao'])
-    if (error) { console.error('❌ leyendo vista_ubigeo:', error.message); process.exit(1) }
-    for (const r of data) {
-      const key = noAccent(r.distrito)
-      const prev = ubigeo.get(key)
-      // Preferir provincia de Lima (Lima Metropolitana) si hay ambigüedad
-      if (!prev || (r.departamento === 'Lima' && r.provincia === 'Lima')) {
-        ubigeo.set(key, { dep: r.departamento, prov: r.provincia })
+    // vista_ubigeo tiene ~1900 filas a nivel nacional: paginar (el límite por
+    // defecto del cliente es 1000, si no se trunca silenciosamente).
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase.from('vista_ubigeo')
+        .select('departamento, provincia, distrito').range(from, from + 999)
+      if (error) { console.error('❌ leyendo vista_ubigeo:', error.message); process.exit(1) }
+      for (const r of data) {
+        const key = noAccent(r.distrito)
+        const prev = ubigeo.get(key)
+        // Preferir provincia de Lima (Lima Metropolitana) si hay ambigüedad entre departamentos
+        if (!prev || (r.departamento === 'Lima' && r.provincia === 'Lima')) {
+          ubigeo.set(key, { dep: r.departamento, prov: r.provincia })
+        }
+        if (!porProvincia.has(noAccent(r.provincia))) {
+          porProvincia.set(noAccent(r.provincia), { dep: r.departamento, prov: r.provincia })
+        }
       }
+      if (data.length < 1000) break
     }
   }
   const geo = (distrito) => ubigeo.get(noAccent(distrito)) || null
+  const geoPorProvincia = (provincia) => porProvincia.get(noAccent(provincia)) || null
 
   // ── Construir filas nuevas ───────────────────────────────
   const nuevos = []
@@ -168,11 +192,27 @@ async function main() {
     if (!ROLES_VALIDOS.has(rol)) rolRaro.add(rol)
 
     const distVota = nn(row['Distrito donde Vota']) ? canonDistrito(nn(row['Distrito donde Vota'])) : null
-    const distAsig = nn(row['Distrito Asignado']) ? canonDistrito(nn(row['Distrito Asignado'])) : null
     const gVota = distVota ? geo(distVota) : null
-    const gAsig = distAsig ? geo(distAsig) : null
     if (distVota && !gVota) distSinMatch.set(distVota, (distSinMatch.get(distVota) || 0) + 1)
-    if (distAsig && !gAsig) distSinMatch.set(distAsig, (distSinMatch.get(distAsig) || 0) + 1)
+
+    // "Distrito Asignado": puede ser un distrito real, o el ámbito completo de un
+    // coordinador provincial/regional ("Provincia de X" / "Región Y").
+    const asig = parseAsignado(row['Distrito Asignado'])
+    let distAsig = null, depAsig = null, provAsig = null
+    if (asig.distrito) {
+      distAsig = canonDistrito(asig.distrito)
+      const gAsig = geo(distAsig)
+      if (!gAsig) distSinMatch.set(distAsig, (distSinMatch.get(distAsig) || 0) + 1)
+      depAsig = gAsig?.dep ?? null
+      provAsig = gAsig?.prov ?? null
+    } else if (asig.provincia) {
+      const gProv = geoPorProvincia(asig.provincia)
+      if (!gProv) distSinMatch.set(`Provincia de ${asig.provincia}`, (distSinMatch.get(`Provincia de ${asig.provincia}`) || 0) + 1)
+      depAsig = gProv?.dep ?? null
+      provAsig = gProv?.prov ?? asig.provincia
+    } else if (asig.departamento) {
+      depAsig = asig.departamento
+    }
 
     const claveExcel = s(row['Clave de Acceso'])
     const clave_acceso = (!claveExcel || /ingreso con dni/i.test(claveExcel)) ? dni : claveExcel
@@ -194,8 +234,8 @@ async function main() {
         mesa_sufragio: nn(row['Mesa de Sufragio']),
         local_votacion: nn(row['Local de Votación']),
         rol,
-        departamento_asignado: gAsig?.dep ?? null,
-        provincia_asignado: gAsig?.prov ?? null,
+        departamento_asignado: depAsig,
+        provincia_asignado: provAsig,
         distrito_asignado: distAsig,
         mesa_asignada: nn(row['Mesa Asignada']),
         local_asignado: nn(row['Local de Votación Asignado']),
@@ -223,9 +263,9 @@ async function main() {
     console.log(`  ⚠️ Distritos sin match en vista_ubigeo (quedan dep/prov en null):`)
     for (const [d, c] of [...distSinMatch].sort((a, b) => b[1] - a[1])) console.log(`       - "${d}"  (${c} fila/s)`)
   }
-  console.log(`\n  Muestra de 5 nuevos:`)
-  for (const n of nuevos.slice(0, 5)) {
-    console.log(`   ${n.dni}  ${n.perfil.nombre_completo}  [${n.perfil.rol}]  vota:${n.perfil.distrito_vota}/${n.perfil.provincia_vota}  asig:${n.perfil.distrito_asignado}`)
+  console.log(`\n  Muestra (hasta 15) de nuevos:`)
+  for (const n of nuevos.slice(0, 15)) {
+    console.log(`   ${n.dni}  ${n.perfil.nombre_completo}  [${n.perfil.rol}]  vota:${n.perfil.distrito_vota}/${n.perfil.provincia_vota}  asig:${n.perfil.distrito_asignado || '(sin distrito)'}/${n.perfil.provincia_asignado}/${n.perfil.departamento_asignado}`)
   }
 
   if (DRY_RUN) { console.log('\n🧪 Dry-run: no se escribió nada.\n'); return }
