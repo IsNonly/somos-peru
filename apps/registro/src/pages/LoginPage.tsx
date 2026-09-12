@@ -54,19 +54,7 @@ export default function LoginPage() {
         {/* Logo Somos Perú */}
         <div className="flex flex-col items-center mb-6">
           <div className="w-20 h-20 mb-3 flex items-center justify-center">
-            <svg viewBox="0 0 100 100" className="w-20 h-20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              {/* Corazón rojo */}
-              <path d="M50 80 C50 80 15 55 15 32 C15 20 24 12 35 12 C42 12 48 16 50 20 C52 16 58 12 65 12 C76 12 85 20 85 32 C85 55 50 80 50 80Z"
-                fill="#e53e3e" stroke="#c53030" strokeWidth="2"/>
-              {/* Texto SOMOS dentro del corazón */}
-              <text x="50" y="36" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="Arial">SOMOS</text>
-              {/* Franja bandera peruana */}
-              <rect x="22" y="42" width="14" height="16" fill="#e53e3e" rx="1"/>
-              <rect x="36" y="42" width="14" height="16" fill="white" rx="1"/>
-              <rect x="50" y="42" width="14" height="16" fill="#e53e3e" rx="1"/>
-              {/* PERÚ */}
-              <text x="50" y="68" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold" fontFamily="Arial">PERÚ</text>
-            </svg>
+            <img src="/logo-somos-peru.png" alt="Somos Perú" className="w-20 h-20 object-contain" />
           </div>
 
           <h1 className="text-base font-extrabold text-slate-800 uppercase tracking-wide leading-tight">
