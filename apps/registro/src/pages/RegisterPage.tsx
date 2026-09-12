@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase, generarToken, generarClave } from '../lib/supabase'
+import { supabase, generarToken, generarClave4 } from '../lib/supabase'
 import type { Rol } from '../lib/supabase'
 import {
   User, Phone, CreditCard, MapPin, Building2, Check,
@@ -135,7 +135,7 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
 const inputCls = 'w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] focus:ring-1 focus:ring-[#00a3e8]'
 const selectCls = 'w-full pl-10 pr-8 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-[#00a3e8] appearance-none'
 
-function PantallaExito({ done }: { done: { token: string; nombres: string; dni: string } }) {
+function PantallaExito({ done }: { done: { token: string; nombres: string; dni: string; clave: string; esMesa: boolean } }) {
   const [secs, setSecs] = useState(8)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -192,8 +192,10 @@ function PantallaExito({ done }: { done: { token: string; nombres: string; dni: 
             <p className="text-2xl font-mono font-bold text-sky-700 tracking-wider">{done.token}</p>
           </div>
           <div>
-            <p className="text-xs uppercase font-semibold text-sky-600">Tu DNI es tu Clave de Acceso</p>
-            <p className="text-lg font-mono font-bold text-slate-700">{done.dni}</p>
+            <p className="text-xs uppercase font-semibold text-sky-600">
+              {done.esMesa ? 'Tu DNI es tu Clave de Acceso' : 'Tu Clave de Acceso (guárdala, la necesitas para ingresar)'}
+            </p>
+            <p className="text-lg font-mono font-bold text-slate-700">{done.clave}</p>
           </div>
         </div>
 
@@ -287,7 +289,7 @@ function GeoSelect({ label, icon, value, onChange, options, disabled, placeholde
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [done, setDone] = useState<{ token: string; nombres: string; dni: string } | null>(null)
+  const [done, setDone] = useState<{ token: string; nombres: string; dni: string; clave: string; esMesa: boolean } | null>(null)
   const [showModal, setShowModal] = useState(false)
 
   const [colegiosVota, setColegiosVota] = useState<string[]>([])
@@ -433,9 +435,13 @@ export default function RegisterPage() {
     try {
       const cleanDni = form.dni.trim()
       const token = generarToken(cleanDni)
-      const clave = generarClave()
       const email = `${cleanDni}@somosperu.com`
-      const password = cleanDni // El password es exactamente el DNI siempre
+      // Personero de Mesa: su contraseña es el DNI. Los otros 3 roles (Personero de
+      // Centro de Votación, Coordinador Provincial, Coordinador Distrital): una clave
+      // numérica aleatoria de 4 dígitos, que también queda como contraseña real de login.
+      const esMesa = form.rol === 'Personero de Mesa'
+      const clave = esMesa ? cleanDni : generarClave4()
+      const password = clave
 
       const { data: authData, error: authErr } = await supabase.auth.signUp({
         email, password,
@@ -473,7 +479,7 @@ export default function RegisterPage() {
       if (profileErr) throw profileErr
 
       setShowModal(false)
-      setDone({ token, nombres: form.nombres, dni: cleanDni })
+      setDone({ token, nombres: form.nombres, dni: cleanDni, clave, esMesa })
     } catch (err: any) {
       setShowModal(false)
       setError(err.message || 'Error al procesar el registro.')
@@ -572,10 +578,10 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {([
-                { id: 'Personero de Mesa', icon: Shield, title: 'Personero de Mesa' },
-                { id: 'Personero de Centro de Votación', icon: Building2, title: 'Personero de Centro de Votación' },
                 { id: 'Coordinador Provincial', icon: Layers, title: 'Coordinador Provincial' },
                 { id: 'Coordinador Distrital', icon: MapPin, title: 'Coordinador Distrital' },
+                { id: 'Personero de Centro de Votación', icon: Building2, title: 'Personero de Centro de Votación' },
+                { id: 'Personero de Mesa', icon: Shield, title: 'Personero de Mesa' },
               ] as const).map(item => {
                 const Icon = item.icon
                 const sel = form.rol === item.id

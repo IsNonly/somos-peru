@@ -103,7 +103,7 @@ export default function LoginPage() {
         <form onSubmit={login} className="space-y-4 text-left">
           <div>
             <label className={`block text-xs font-semibold mb-1.5 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-              Usuario
+              Usuario o Nombres <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
