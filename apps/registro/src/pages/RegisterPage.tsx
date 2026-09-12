@@ -325,11 +325,14 @@ export default function RegisterPage() {
     </>
   )
 
+  // Solo se registra gente de Tumbes por ahora — no hace falta traer el ubigeo nacional.
   useEffect(() => {
-    supabase.from('vista_departamentos').select('departamento')
-      .then(({ data }) => setDepartamentos((data || []).map((d: any) => d.departamento)))
-    supabase.from('vista_provincias').select('departamento, provincia')
-      .then(({ data }) => setProvincias((data || []) as ProvinciaRow[]))
+    setDepartamentos(['Tumbes'])
+    setProvincias([
+      { departamento: 'Tumbes', provincia: 'Tumbes' },
+      { departamento: 'Tumbes', provincia: 'Zarumilla' },
+      { departamento: 'Tumbes', provincia: 'Contralmirante Villar' },
+    ])
   }, [])
 
   useEffect(() => {

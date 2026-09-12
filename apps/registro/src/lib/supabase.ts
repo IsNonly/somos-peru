@@ -58,7 +58,7 @@ export const ROLES: Rol[] = [
 ]
 
 // Genera token SP-LM2026-{DNI}
-export const generarToken = (dni: string) => `SP-LM2026-${dni}`
+export const generarToken = (dni: string) => `SP-TB2026-${dni}`
 
 // Genera clave acceso tipo SP + 4 dígitos aleatorios
 export const generarClave = () => `SP${Math.floor(1000 + Math.random() * 9000)}`
