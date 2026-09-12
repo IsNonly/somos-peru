@@ -208,7 +208,7 @@ export default function PanelGeneral() {
           <LayoutGrid size={15} /> Indicadores Electorales · {ambito}
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <Kpi color="#8b5cf6" icon={MapPin}      value={d.kpis.zonales}        label="Zonales" sub="Coordinadores Provinciales" />
+          <Kpi color="#8b5cf6" icon={MapPin}      value={d.kpis.zonales}        label="Coordinador Provincial" sub="Coordinadores Provinciales" />
           <Kpi color="#22c55e" icon={ShieldCheck} value={d.kpis.coordDistritales} label="Coord. Distritales" sub="Distritales activos" />
           <Kpi color="#f59e0b" icon={ShieldCheck} value={d.kpis.centrosConPCV}  label="Centros con PCV" sub="Personero de Centro asignado" />
           <Kpi color="#3b82f6" icon={Users}      value={d.kpis.personerosMesa} label="Personeros de Mesa" sub={`En ${ambito}`} />
