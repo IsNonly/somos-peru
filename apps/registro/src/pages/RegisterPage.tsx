@@ -66,7 +66,6 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
               <div><p className="text-xs text-slate-400">Departamento</p><p className="font-semibold text-slate-800">{form.departamentoVota || '—'}</p></div>
               <div><p className="text-xs text-slate-400">Provincia</p><p className="font-semibold text-slate-800">{form.provinciaVota || '—'}</p></div>
               <div><p className="text-xs text-slate-400">Distrito</p><p className="font-semibold text-slate-800">{form.distritoDondeVota || '—'}</p></div>
-              <div><p className="text-xs text-slate-400">Local / Colegio</p><p className="font-semibold text-slate-800">{form.localVotacion || '—'}</p></div>
             </div>
           </div>
 
@@ -292,9 +291,7 @@ export default function RegisterPage() {
   const [done, setDone] = useState<{ token: string; nombres: string; dni: string; clave: string; esMesa: boolean } | null>(null)
   const [showModal, setShowModal] = useState(false)
 
-  const [colegiosVota, setColegiosVota] = useState<string[]>([])
   const [colegiosAsignado, setColegiosAsignado] = useState<{ nombre: string; checked: boolean }[]>([])
-  const [cargandoVota, setCargandoVota] = useState(false)
   const [cargandoAsignado, setCargandoAsignado] = useState(false)
   const [colegiosReservados, setColegiosReservados] = useState<Set<string>>(new Set())
 
@@ -380,15 +377,6 @@ export default function RegisterPage() {
       .eq('departamento', form.departamentoAsignado).eq('provincia', form.provinciaAsignado).order('distrito')
       .then(({ data }) => setDistritosAsignado((data || []).map((d: any) => d.distrito)))
   }, [form.departamentoAsignado, form.provinciaAsignado])
-
-  useEffect(() => {
-    if (!form.distritoDondeVota) { setColegiosVota([]); return }
-    setCargandoVota(true)
-    supabase.from('colegios').select('nombre')
-      .eq('departamento', form.departamentoVota).eq('provincia', form.provinciaVota).eq('distrito', form.distritoDondeVota)
-      .order('nombre')
-      .then(({ data }) => { setColegiosVota((data || []).map(c => c.nombre)); setCargandoVota(false) })
-  }, [form.distritoDondeVota])
 
   useEffect(() => {
     if (!form.distritoAsignado) { setColegiosAsignado([]); return }
@@ -554,22 +542,6 @@ export default function RegisterPage() {
                 value={form.distritoDondeVota} onChange={setDistVota}
                 options={distritosVota} disabled={!form.provinciaVota}
                 placeholder={form.provinciaVota ? 'Seleccione Distrito' : 'Primero la provincia'} />
-              <div>
-                <FieldLabel>Local / Colegio de Votación <Req /></FieldLabel>
-                <SelectWrap icon={<Building2 size={18} />}>
-                  {colegiosVota.length > 0 ? (
-                    <select value={form.localVotacion} onChange={e => set('localVotacion', e.target.value)} className={selectCls}>
-                      <option value="">Seleccione un local ({colegiosVota.length})</option>
-                      {colegiosVota.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  ) : (
-                    <input type="text" value={form.localVotacion} disabled={!form.distritoDondeVota}
-                      onChange={e => set('localVotacion', e.target.value)}
-                      placeholder={cargandoVota ? 'Cargando...' : form.distritoDondeVota ? 'Escriba el local...' : 'Primero seleccione un distrito'}
-                      className={`${inputCls} disabled:bg-slate-50`} />
-                  )}
-                </SelectWrap>
-              </div>
             </div>
           </div>
 
