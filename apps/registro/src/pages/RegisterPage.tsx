@@ -21,9 +21,6 @@ type FormState = {
   distritoAsignado: string
   localesAsignados: string[]
   localAsignado: string
-  tieneExperiencia: boolean
-  cuentaMovilidad: boolean
-  seCompromete: boolean
 }
 
 type ProvinciaRow = { departamento: string; provincia: string }
@@ -99,19 +96,6 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-100 overflow-hidden">
-            <div className="bg-sky-50 px-4 py-2"><h3 className="text-xs font-extrabold text-[#00a3e8] uppercase tracking-wider">4. Logística y Compromiso</h3></div>
-            <div className="grid grid-cols-2 gap-3 p-4 text-sm">
-              <div><p className="text-xs text-slate-400">¿Experiencia Previa?</p><p className="font-semibold text-slate-800">{form.tieneExperiencia ? 'Sí' : 'No'}</p></div>
-              <div><p className="text-xs text-slate-400">¿Movilidad Propia?</p><p className="font-semibold text-slate-800">{form.cuentaMovilidad ? 'Sí' : 'No'}</p></div>
-              <div className="col-span-2">
-                <p className="text-xs text-slate-400">Compromiso</p>
-                <p className={`font-semibold ${form.seCompromete ? 'text-green-600' : 'text-red-500'}`}>
-                  {form.seCompromete ? 'Sí, me comprometo a asistir el 4 de Octubre del 2026' : 'No confirmado'}
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
@@ -252,21 +236,6 @@ function SelectWrap({ icon, children }: { icon: React.ReactNode; children: React
   )
 }
 
-function ToggleBtn({ yes, onChange }: { yes: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <div className="flex rounded-xl overflow-hidden border border-slate-200 p-0.5 bg-slate-50">
-      <button type="button" onClick={() => onChange(true)}
-        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${yes ? 'bg-[#00a3e8] text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}>
-        Sí
-      </button>
-      <button type="button" onClick={() => onChange(false)}
-        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${!yes ? 'bg-[#00a3e8] text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}>
-        No
-      </button>
-    </div>
-  )
-}
-
 function GeoSelect({ label, icon, value, onChange, options, disabled, placeholder }: {
   label: string; icon: React.ReactNode; value: string; onChange: (v: string) => void
   options: string[]; disabled?: boolean; placeholder: string
@@ -315,9 +284,6 @@ export default function RegisterPage() {
     distritoAsignado: '',
     localesAsignados: [],
     localAsignado: '',
-    tieneExperiencia: false,
-    cuentaMovilidad: false,
-    seCompromete: false,
   })
 
   const set = (k: keyof FormState, v: any) => setForm(p => ({ ...p, [k]: v }))
@@ -413,7 +379,6 @@ export default function RegisterPage() {
 
   const handleRevisar = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.seCompromete) { setError('Debe marcar la casilla de compromiso para continuar.'); return }
     if (!form.nombres || !form.dni || !form.celular) { setError('Complete los datos personales obligatorios.'); return }
     setError('')
     setShowModal(true)
@@ -458,9 +423,6 @@ export default function RegisterPage() {
         provincia_asignado: form.provinciaAsignado || null,
         distrito_asignado: form.distritoAsignado || null,
         local_asignado: localGuardado || null,
-        tiene_experiencia: form.tieneExperiencia,
-        cuenta_movilidad: form.cuentaMovilidad,
-        se_compromete: form.seCompromete,
         token_verificacion: token,
         clave_acceso: clave,
         credencial_estado: 'Pendiente',
@@ -687,28 +649,6 @@ export default function RegisterPage() {
                 </div>
               </div>
             )}
-          </div>
-
-          {/* SECCIÓN 4 */}
-          <div className="border border-sky-200/80 bg-white rounded-2xl p-5 shadow-sm space-y-4">
-            <SectionHeader num="4" title="Compromiso y Logística" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <FieldLabel>¿Tiene Experiencia como Personero? <Req /></FieldLabel>
-                <ToggleBtn yes={form.tieneExperiencia} onChange={v => set('tieneExperiencia', v)} />
-              </div>
-              <div>
-                <FieldLabel>¿Cuenta con Movilidad Propia? <Req /></FieldLabel>
-                <ToggleBtn yes={form.cuentaMovilidad} onChange={v => set('cuentaMovilidad', v)} />
-              </div>
-            </div>
-            <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/50 cursor-pointer transition-colors">
-              <input type="checkbox" checked={form.seCompromete} onChange={e => set('seCompromete', e.target.checked)}
-                className="w-4 h-4 rounded text-[#00a3e8] focus:ring-[#00a3e8] border-slate-300" />
-              <span className="text-xs font-bold text-slate-800">
-                Sí, me comprometo a asistir el 4 de Octubre del 2026 <span className="text-rose-500">*</span>
-              </span>
-            </label>
           </div>
 
           {error && (
