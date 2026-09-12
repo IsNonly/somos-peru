@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { supabase, DISTRITOS_META } from '../lib/supabase'
+import { supabase, DISTRITOS_TUMBES } from '../lib/supabase'
 import { useScope, enAmbito } from '../lib/scope'
 import { Download, RefreshCw, Search, Users, UserCheck, ShieldCheck, GraduationCap } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -46,7 +46,7 @@ const ROL_ALIASES: Record<string, string[]> = {
 }
 const rolMatches = (rol: string, filtro: string) => (ROL_ALIASES[filtro] ?? [filtro]).includes(rol)
 
-const DISTRITOS = Object.keys(DISTRITOS_META).sort((a, b) => a.localeCompare(b, 'es'))
+const DISTRITOS = [...DISTRITOS_TUMBES].sort((a, b) => a.localeCompare(b, 'es'))
 
 const SI_NO = ['Todos', 'Sí', 'No'] as const
 type SiNo = (typeof SI_NO)[number]

@@ -70,7 +70,7 @@ export default function App() {
         {/* Página de capacitación para personeros registrados */}
         <Route path="/capacitate" element={user ? <CapacitarPage /> : <Navigate to="/login" />} />
 
-        {/* Panel ConteoLima: solo Administrador / Coordinador */}
+        {/* Panel de coordinadores: solo Administrador / Coordinador */}
         <Route path="/panel" element={!user ? <Navigate to="/login" /> : esAdmin ? <PanelLayout /> : <Navigate to="/capacitate" />}>
           <Route index element={<PanelGeneral />} />
           <Route path="capacitaciones" element={<PanelCapacitaciones />} />

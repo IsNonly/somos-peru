@@ -17,14 +17,11 @@ interface PanelCtx {
   ambitoListo: boolean
 }
 
-const LIMA_METRO = [
-  'Ancón','Ate','Barranco','Breña','Carabayllo','Cercado de Lima','Chaclacayo','Chorrillos','Cieneguilla',
-  'Comas','El Agustino','Independencia','Jesús María','La Molina','La Victoria','Lince','Los Olivos',
-  'Lurigancho-Chosica','Lurín','Magdalena del Mar','Miraflores','Pachacámac','Pucusana','Pueblo Libre',
-  'Puente Piedra','Punta Hermosa','Punta Negra','Rímac','San Bartolo','San Borja','San Isidro',
-  'San Juan de Lurigancho','San Juan de Miraflores','San Luis','San Martín de Porres','San Miguel',
-  'Santa Anita','Santa María del Mar','Santa Rosa','Santiago de Surco','Surquillo','Villa El Salvador',
-  'Villa María del Triunfo',
+// Distritos de Tumbes (13, en sus 3 provincias): ámbito por defecto del Administrador.
+const DISTRITOS_TUMBES = [
+  'Tumbes', 'Corrales', 'La Cruz', 'Pampas de Hospital', 'San Jacinto', 'San Juan de la Virgen',
+  'Zorritos', 'Casitas', 'Canoas de Punta Sal',
+  'Zarumilla', 'Matapalo', 'Papayal', 'Aguas Verdes',
 ]
 const ROLES = [ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST, 'Administrador General']
 const wa = (tel?: string | null) => tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}` : undefined
@@ -53,7 +50,7 @@ export default function PanelGeneral() {
   const [distritosProvincia, setDistritosProvincia] = useState<string[]>([])
   useEffect(() => {
     if (!ambitoListo || !esProvincial || !miAmbito.provincia) return
-    const dep = miAmbito.departamento || 'Lima'
+    const dep = miAmbito.departamento || 'Tumbes'
     supabase.from('vista_ubigeo').select('distrito').eq('departamento', dep).eq('provincia', miAmbito.provincia)
       .then(({ data }) => setDistritosProvincia([...new Set((data ?? []).map((r: any) => r.distrito).filter(Boolean))]))
   }, [ambitoListo, esProvincial, miAmbito.departamento, miAmbito.provincia])
@@ -63,7 +60,7 @@ export default function PanelGeneral() {
     if (!ambitoListo) return
     if (esDistrital && miAmbito.distrito) { setFDist(miAmbito.distrito); return }
     if (esProvincial) {
-      setFDepto(miAmbito.departamento || 'Lima')
+      setFDepto(miAmbito.departamento || 'Tumbes')
       setFProv(miAmbito.provincia || '')
     }
   }, [ambitoListo, esDistrital, esProvincial, miAmbito.departamento, miAmbito.provincia, miAmbito.distrito])
@@ -85,15 +82,15 @@ export default function PanelGeneral() {
   }
 
   const d = usePanelData({
-    departamento: (esProvincial ? miAmbito.departamento : fDepto) || 'Lima',
-    provincia: esProvincial ? miAmbito.provincia : (fProv || (fDepto ? '' : 'Lima')),
+    departamento: (esProvincial ? miAmbito.departamento : fDepto) || 'Tumbes',
+    provincia: esProvincial ? miAmbito.provincia : fProv,
     distritos: distritosEfectivos,
   })
 
   // Opciones de ubigeo (vistas nacionales)
   const [departamentos, setDepartamentos] = useState<string[]>([])
   const [provincias, setProvincias] = useState<string[]>([])
-  const [distritos, setDistritos] = useState<string[]>(LIMA_METRO)
+  const [distritos, setDistritos] = useState<string[]>(DISTRITOS_TUMBES)
 
   useEffect(() => {
     if (!ambitoListo || !esAdmin) return
@@ -102,14 +99,14 @@ export default function PanelGeneral() {
         .sort((a, b) => a.localeCompare(b, 'es'))))
   }, [ambitoListo, esAdmin])
   useEffect(() => {
-    const dep = fDepto || 'Lima'
+    const dep = fDepto || 'Tumbes'
     supabase.from('vista_provincias').select('provincia').eq('departamento', dep).then(({ data }) =>
       setProvincias([...new Set((data ?? []).map((r: any) => r.provincia).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, 'es'))))
   }, [fDepto])
   useEffect(() => {
-    const dep = fDepto || 'Lima'
-    if (!fDepto && !fProv) { setDistritos(LIMA_METRO); return }
+    const dep = fDepto || 'Tumbes'
+    if (!fDepto && !fProv) { setDistritos(DISTRITOS_TUMBES); return }
     if (!fProv) { setDistritos([]); return }
     supabase.from('vista_ubigeo').select('distrito').eq('departamento', dep).eq('provincia', fProv).order('distrito')
       .then(({ data }) => setDistritos([...new Set((data ?? []).map((r: any) => r.distrito).filter(Boolean))]))
@@ -117,7 +114,7 @@ export default function PanelGeneral() {
 
   const setDepto = (v: string) => { setFDepto(v); setFProv(''); setFDist('') }
   const setProv = (v: string) => { setFProv(v); setFDist('') }
-  const ambito = fDist || fProv || fDepto || 'Lima Metropolitana'
+  const ambito = fDist || fProv || fDepto || 'Tumbes'
 
   const perfilesFiltrados = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -172,7 +169,7 @@ export default function PanelGeneral() {
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Centros y Mesas')
-    XLSX.writeFile(wb, `ConteoLima_Centros_${new Date().toISOString().split('T')[0]}.xlsx`)
+    XLSX.writeFile(wb, `SomosPeru_Tumbes_Centros_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   if (!ambitoListo || d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>
@@ -188,8 +185,8 @@ export default function PanelGeneral() {
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-sky-500" />
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-3 px-3 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0">
-          <Sel v={fDepto} set={setDepto} all="🗺️ Lima (Metrop.)" opts={departamentos} disabled={bloqueado('depto')} />
-          <Sel v={fProv} set={setProv} all={fDepto ? 'Todas las provincias' : 'Prov. de Lima'} opts={provincias} disabled={bloqueado('prov')} />
+          <Sel v={fDepto} set={setDepto} all="🗺️ Tumbes" opts={departamentos} disabled={bloqueado('depto')} />
+          <Sel v={fProv} set={setProv} all="Todas las provincias" opts={provincias} disabled={bloqueado('prov')} />
           <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={esProvincial ? distritosProvincia : distritos} disabled={bloqueado('dist')} />
           <Sel v={fRol} set={setFRol} all="🛡️ Todos los roles" opts={ROLES} />
           <Sel v={fExp} set={setFExp} all="⭐ Exp: Todos" opts={[['si', 'Con experiencia'], ['no', 'Sin experiencia']]} />

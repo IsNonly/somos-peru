@@ -49,8 +49,8 @@ async function traerTodo<T>(build: (from: number, to: number) => any): Promise<T
 
 export default function CentrosPage() {
   const { esCoordRegional, departamento } = useOutletContext<AdminCtx>()
-  const dep = esCoordRegional && departamento ? departamento : 'Lima'
-  const prov = dep === 'Lima' ? 'Lima' : ''
+  const dep = esCoordRegional && departamento ? departamento : 'Tumbes'
+  const prov = ''
   const [cols, setCols] = useState<Colegio[]>([])
   const [pers, setPers] = useState<Perfil[]>([])
   const [coords, setCoords] = useState<Perfil[]>([])
@@ -216,10 +216,10 @@ export default function CentrosPage() {
       {/* Indicadores */}
       <div>
         <p className="text-sm font-extrabold text-slate-900 mb-2 flex items-center gap-2">
-          <LayoutGrid size={16} /> Indicadores Electorales · {dep === 'Lima' ? 'Lima Metropolitana' : dep}
+          <LayoutGrid size={16} /> Indicadores Electorales · {dep}
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <Kpi color="#3b82f6" icon={Users}      value={kpis.persMesa.toLocaleString('es-PE')}  label="Personeros de Mesa" sub={`Inscritos en ${dep === 'Lima' ? 'Lima Metro' : dep}`} />
+          <Kpi color="#3b82f6" icon={Users}      value={kpis.persMesa.toLocaleString('es-PE')}  label="Personeros de Mesa" sub={`Inscritos en ${dep}`} />
           <Kpi color="#06b6d4" icon={Building2}   value={kpis.centros.toLocaleString('es-PE')}   label="Centros de Votación" sub="Con personal asignado" />
           <Kpi color="#f59e0b" icon={ShieldCheck} value={kpis.conPCV.toLocaleString('es-PE')}    label="Centros con PCV" sub="Personero de Local asignado" />
           <Kpi color="#22c55e" icon={ShieldCheck} value={String(kpis.coordDist)}                 label="Coord. Distritales" sub="Distritos activos" />

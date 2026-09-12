@@ -65,7 +65,7 @@ export function useScope(): Scope {
         const { data: u } = await supabase
           .from('vista_ubigeo').select('departamento, provincia').eq('distrito', dist)
         const rows = (u ?? []) as { departamento: string; provincia: string }[]
-        const pick = rows.find(r => r.departamento === 'Lima') ?? rows[0]
+        const pick = rows.find(r => r.departamento === 'Tumbes') ?? rows[0]
         if (pick) { dep = dep || pick.departamento; prov = prov || pick.provincia }
       }
 
@@ -99,7 +99,7 @@ export function useScope(): Scope {
       const distritoFijo = (esProvincial || esRegional) ? '' : dist
       if (vivo) setS({
         loading: false, perfil: p, esAdmin: false, distritos, ambitoLabel: label,
-        departamento: dep || (distritos[0] !== SIN_AMBITO ? 'Lima' : ''),
+        departamento: dep || (distritos[0] !== SIN_AMBITO ? 'Tumbes' : ''),
         provincia: prov,
         distrito: distritoFijo,
       })

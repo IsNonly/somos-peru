@@ -87,10 +87,10 @@ export interface PanelData {
 }
 
 export function usePanelData(scope?: { departamento?: string; provincia?: string; distritos?: string[] | null }): PanelData & { refetch: () => void } {
-  const dep = scope?.departamento || 'Lima'
+  const dep = scope?.departamento || 'Tumbes'
   // '' es un valor válido a propósito (== "todas las provincias" de `dep`); solo se
-  // usa el default 'Lima' cuando no se pasó ningún scope (mismo caso que `dep`).
-  const prov = scope?.provincia !== undefined ? scope.provincia : 'Lima'
+  // usa el default 'Tumbes' cuando no se pasó ningún scope (mismo caso que `dep`).
+  const prov = scope?.provincia !== undefined ? scope.provincia : ''
   const distritos = scope?.distritos ?? null
   const [d, setD] = useState<PanelData>({
     loading: true, colegios: [], perfiles: [], coordsDistritales: [], zonales: [],

@@ -143,23 +143,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Meta coverage — solo tiene sentido para Lima Metropolitana (meta fija conocida) */}
-      {!esCoordRegional && (
-        <div className="bg-[#16162a] border border-white/8 rounded-2xl p-6">
-          <h2 className="text-white font-semibold mb-1">Cobertura de Mesas</h2>
-          <p className="text-white/40 text-xs mb-4">Total meta Lima Metropolitana: 29,121 mesas</p>
-          <div className="relative h-3 bg-white/5 rounded-full overflow-hidden">
-            <div
-              className="absolute inset-y-0 left-0 bg-brand-red rounded-full transition-all"
-              style={{ width: `${Math.min(((stats?.total_personeros ?? 0) / 29121) * 100, 100)}%` }}
-            />
-          </div>
-          <div className="flex justify-between mt-2">
-            <span className="text-white/40 text-xs">{stats?.total_personeros ?? 0} cubiertas</span>
-            <span className="text-white/40 text-xs">{((stats?.total_personeros ?? 0) / 291.21).toFixed(1)}%</span>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

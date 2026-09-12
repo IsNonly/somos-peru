@@ -1,9 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { supabase, DISTRITOS_META } from './supabase'
+import { supabase, DISTRITOS_TUMBES } from './supabase'
 import { useScope } from './scope'
 
-// Los 43 distritos de Lima Metropolitana: ámbito por defecto del Administrador.
-const LIMA_METRO = Object.keys(DISTRITOS_META)
 const ESPECIALES = ['NULO', 'BLANCO', 'IMPUGNADO']
 
 export interface Filtros {
@@ -77,12 +75,12 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
           .sort((a, b) => a.localeCompare(b, 'es')))
       })
     } else {
-      setDepartamentos(f.departamento ? [f.departamento] : ['Lima'])
+      setDepartamentos(f.departamento ? [f.departamento] : ['Tumbes'])
     }
   }, [scope.loading, scope.esAdmin])
 
   useEffect(() => {
-    const dep = f.departamento || 'Lima'
+    const dep = f.departamento || 'Tumbes'
     if (!dep) { setProvincias([]); return }
     supabase.from('vista_provincias').select('provincia').eq('departamento', dep).then(({ data }) => {
       setProvincias([...new Set((data ?? []).map((d: any) => d.provincia).filter(Boolean))]
@@ -91,14 +89,14 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
   }, [f.departamento, scope.esAdmin])
 
   useEffect(() => {
-    const dep = f.departamento || 'Lima'
+    const dep = f.departamento || 'Tumbes'
     if (dep && f.provincia) {
       supabase.from('vista_ubigeo').select('distrito').eq('departamento', dep).eq('provincia', f.provincia).order('distrito').then(({ data }) => {
         setDistritos([...new Set((data ?? []).map((d: any) => d.distrito).filter(Boolean))]
           .sort((a, b) => a.localeCompare(b, 'es')))
       })
-    } else if (scope.esAdmin && (!f.departamento || f.departamento === 'Lima')) {
-      setDistritos([...LIMA_METRO].sort())   // ámbito por defecto: Lima Metropolitana
+    } else if (scope.esAdmin && (!f.departamento || f.departamento === 'Tumbes')) {
+      setDistritos([...DISTRITOS_TUMBES].sort())   // ámbito por defecto: Tumbes
     } else if (scope.esAdmin && f.departamento) {
       // Depto elegido, sin provincia todavía: TODOS sus distritos (todas sus provincias),
       // para no dejar la búsqueda "sin límite" (== nacional) mientras tanto.
@@ -118,8 +116,8 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
     let cq = supabase.from('colegios').select('nombre').eq('distrito', f.distrito)
     if (f.departamento) cq = cq.eq('departamento', f.departamento)
     if (f.provincia)    cq = cq.eq('provincia', f.provincia)
-    else if (scope.esAdmin && (!f.departamento || f.departamento === 'Lima'))
-      cq = cq.eq('departamento', 'Lima').eq('provincia', 'Lima')
+    else if (scope.esAdmin && (!f.departamento || f.departamento === 'Tumbes'))
+      cq = cq.eq('departamento', 'Tumbes')
     cq.order('nombre').then(({ data }) => setColegios((data ?? []).map((c: any) => c.nombre)))
   }, [f.distrito, f.departamento, f.provincia, scope.esAdmin])
 
@@ -176,16 +174,16 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
     if (!scope.esAdmin) return scope.distritos ?? null
     // Admin: si eligió provincia usa sus distritos; si eligió depto (sin provincia) usa
     // TODOS los distritos de ese depto (ya cargados arriba); si no, ámbito por defecto =
-    // Lima Metropolitana. `null` es solo el estado transitorio mientras `distritos` carga.
+    // Tumbes. `null` es solo el estado transitorio mientras `distritos` carga.
     if (f.provincia) return distritos.length ? distritos : null
-    if (f.departamento && f.departamento !== 'Lima') return distritos.length ? distritos : null
-    return LIMA_METRO
+    if (f.departamento && f.departamento !== 'Tumbes') return distritos.length ? distritos : null
+    return DISTRITOS_TUMBES
   }, [f.distrito, f.provincia, f.departamento, distritos, scope.esAdmin, scope.distritos])
 
   const ambitoLabel = useMemo(() => {
     if (f.distrito) return `Distrito de ${f.distrito}`
     if (f.provincia) return `Provincia de ${f.provincia}`
-    if (scope.esAdmin) return (f.departamento && f.departamento !== 'Lima') ? f.departamento : 'Lima Metropolitana'
+    if (scope.esAdmin) return (f.departamento && f.departamento !== 'Tumbes') ? f.departamento : 'Tumbes'
     return scope.ambitoLabel
   }, [f.distrito, f.provincia, f.departamento, scope.esAdmin, scope.ambitoLabel])
 

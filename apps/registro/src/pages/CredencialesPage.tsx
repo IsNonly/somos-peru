@@ -43,7 +43,7 @@ function exportarWord(profiles: Profile[]) {
           alignment: AlignmentType.CENTER,
         }),
         new Paragraph({
-          children: [new TextRun({ text: `Elecciones Regionales y Municipales Lima Metropolitana — ${new Date().toLocaleDateString('es-PE', { dateStyle: 'full' })}`, color: '888888', size: 18 })],
+          children: [new TextRun({ text: `Elecciones Regionales y Municipales — Tumbes — ${new Date().toLocaleDateString('es-PE', { dateStyle: 'full' })}`, color: '888888', size: 18 })],
           alignment: AlignmentType.CENTER,
         }),
         new Paragraph(''),

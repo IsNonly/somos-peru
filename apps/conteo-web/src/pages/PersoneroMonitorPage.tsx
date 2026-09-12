@@ -158,7 +158,7 @@ export default function PersoneroMonitorPage() {
         <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">👥 Monitoreo de Personeros, Asistencia y Envíos de Actas</h1>
         <p className="text-sm text-slate-500">
           Control de 1ª/2ª Asistencia y estado de transmisión: Conteo Manual 📝 e Imagen / OCR 🖼️ ·{' '}
-          <span className="text-sky-600 font-semibold">{ambitoLabel || 'Lima Metropolitana'}</span>
+          <span className="text-sky-600 font-semibold">{ambitoLabel || 'Tumbes'}</span>
         </p>
       </div>
 

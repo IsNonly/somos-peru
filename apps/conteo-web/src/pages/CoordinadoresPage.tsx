@@ -36,9 +36,9 @@ export default function CoordinadoresPage() {
     ;(async () => {
       setLoading(true)
       // '' es válido a propósito ("todas las provincias" del depto elegido); solo se cae
-      // a 'Lima' cuando tampoco se eligió un departamento distinto.
-      const dep = f.departamento || 'Lima'
-      const prov = f.provincia || (dep === 'Lima' ? 'Lima' : '')
+      // a 'Tumbes' cuando tampoco se eligió un departamento distinto.
+      const dep = f.departamento || 'Tumbes'
+      const prov = f.provincia || ''
       let cq = supabase.from('colegios').select('nombre, distrito, total_mesas').eq('departamento', dep)
       if (prov) cq = cq.eq('provincia', prov)
       if (distritosEfectivos) cq = cq.in('distrito', distritosEfectivos)
@@ -80,7 +80,7 @@ export default function CoordinadoresPage() {
       const mesas = mesasPorLocal.get(local) ?? 0
       const asist = asisPorLocal.get(local) ?? 0
       return {
-        id: p.id, nombre: p.nombre_completo, distrito: p.distrito_asignado ?? 'LIMA',
+        id: p.id, nombre: p.nombre_completo, distrito: p.distrito_asignado ?? 'TUMBES',
         colegio: local, mesas, asist, falt: Math.max(0, mesas - asist),
         perfil: p,
       }
@@ -122,7 +122,7 @@ export default function CoordinadoresPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">👤 Monitoreo de Coordinadores</h1>
-        <p className="text-sm text-slate-500">Resumen de asistencia y control de apertura de mesas · <span className="text-sky-600 font-semibold">{ambitoLabel || 'Lima Metropolitana'}</span></p>
+        <p className="text-sm text-slate-500">Resumen de asistencia y control de apertura de mesas · <span className="text-sky-600 font-semibold">{ambitoLabel || 'Tumbes'}</span></p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

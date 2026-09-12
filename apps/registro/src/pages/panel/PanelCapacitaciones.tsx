@@ -143,7 +143,7 @@ export default function PanelCapacitaciones() {
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Capacitaciones')
-    XLSX.writeFile(wb, `ConteoLima_Capacitaciones_${new Date().toISOString().split('T')[0]}.xlsx`)
+    XLSX.writeFile(wb, `SomosPeru_Tumbes_Capacitaciones_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   if (d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>

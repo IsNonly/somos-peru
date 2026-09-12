@@ -41,17 +41,11 @@ export interface Profile {
   fecha_registro: string
 }
 
+// Distritos de Tumbes (13, en sus 3 provincias)
 export const DISTRITOS = [
-  'Ancón','Ate','Barranco','Breña','Carabayllo','Cercado de Lima',
-  'Chaclacayo','Chorrillos','Cieneguilla','Comas','El Agustino',
-  'Independencia','Jesús María','La Molina','La Victoria','Lince',
-  'Los Olivos','Lurigancho-Chosica','Lurín','Magdalena del Mar',
-  'Miraflores','Pachacámac','Pucusana','Pueblo Libre','Puente Piedra',
-  'Punta Hermosa','Punta Negra','Rímac','San Bartolo','San Borja',
-  'San Isidro','San Juan de Lurigancho','San Juan de Miraflores',
-  'San Luis','San Martín de Porres','San Miguel','Santa Anita',
-  'Santa María del Mar','Santa Rosa','Santiago de Surco','Surquillo',
-  'Villa El Salvador','Villa María del Triunfo',
+  'Tumbes', 'Corrales', 'La Cruz', 'Pampas de Hospital', 'San Jacinto', 'San Juan de la Virgen',
+  'Zorritos', 'Casitas', 'Canoas de Punta Sal',
+  'Zarumilla', 'Matapalo', 'Papayal', 'Aguas Verdes',
 ]
 
 export const ROLES: Rol[] = [

@@ -250,7 +250,7 @@ export default function CapacitarPage() {
   const pctVideo = Math.min((videosVistos / VIDEO_VECES) * 100, 100)
 
   const cargoConstancia    = profile?.rol ?? 'Personero de Mesa'
-  const distritoConstancia = profile?.distrito_asignado ?? profile?.distrito_vota ?? 'Lima'
+  const distritoConstancia = profile?.distrito_asignado ?? profile?.distrito_vota ?? 'Tumbes'
   const fechaConstancia    = fechaLarga(fechaAprobacion ?? new Date())
   const centro             = profile?.local_asignado ?? profile?.local_votacion ?? '—'
 

@@ -39,7 +39,7 @@ function BarraFiltros() {
 
   return (
     <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex flex-wrap items-end gap-3">
-      <Campo k="departamento" label="Departamento" opts={departamentos} all="Lima" />
+      <Campo k="departamento" label="Departamento" opts={departamentos} all="Tumbes" />
       <Campo k="provincia"    label="Provincia"    opts={provincias}    all="Todas las provincias" />
       <Campo k="distrito"     label="Distrito"     opts={distritos}     all="Todos los distritos" />
       <Campo k="colegio"      label="Colegio"      opts={colegios}      all="Todos los colegios" />

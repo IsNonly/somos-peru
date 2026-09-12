@@ -167,7 +167,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">📊 Dashboard de Resultados Electorales</h1>
           <p className="text-sm text-slate-500">
-            Ámbito: <strong className="text-sky-600">{ambitoLabel || 'Lima Metropolitana'}</strong>
+            Ámbito: <strong className="text-sky-600">{ambitoLabel || 'Tumbes'}</strong>
             {listas.length > 0 && <span className="text-slate-400"> · {listas.length} listas</span>}
           </p>
         </div>
@@ -197,7 +197,7 @@ export default function DashboardPage() {
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="font-extrabold text-slate-900">Consolidado {ambitoLabel || 'Lima Metropolitana'}</h3>
+            <h3 className="font-extrabold text-slate-900">Consolidado {ambitoLabel || 'Tumbes'}</h3>
             <span className="text-xs text-slate-500">Total consolidado ({niveles.map(n => NIVEL_LABEL[n]).join(' + ') || '—'}, Manual + OCR)</span>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -212,7 +212,7 @@ export default function DashboardPage() {
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-100">
           <h3 className="font-extrabold text-slate-900 text-sm">Detalle de Partidos</h3>
-          <p className="text-xs text-slate-500">Listas de {ambitoLabel || 'Lima Metropolitana'} — fuente: tabla de candidaturas</p>
+          <p className="text-xs text-slate-500">Listas de {ambitoLabel || 'Tumbes'} — fuente: tabla de candidaturas</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

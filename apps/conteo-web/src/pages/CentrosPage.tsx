@@ -69,10 +69,10 @@ export default function CentrosPage() {
       setLoading(true)
       const dists = distritosEfectivos // null = sin límite
       // '' es válido a propósito ("todas las provincias" del depto elegido); solo se cae
-      // a 'Lima' cuando tampoco se eligió un departamento distinto (mismo criterio que
+      // a 'Tumbes' cuando tampoco se eligió un departamento distinto (mismo criterio que
       // apps/registro/src/lib/panel.ts).
-      const dep = f.departamento || 'Lima'
-      const prov = f.provincia || (dep === 'Lima' ? 'Lima' : '')
+      const dep = f.departamento || 'Tumbes'
+      const prov = f.provincia || ''
       const colsData = await traerTodo<Colegio>((from, to) => {
         let cq = supabase.from('colegios')
           .select('id, nombre, distrito, direccion, total_mesas, electores')
@@ -181,7 +181,7 @@ export default function CentrosPage() {
         <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">🏫 Centros de Votación</h1>
         <p className="text-sm text-slate-500">
           Mesas por colegio, Personero de Local a cargo y personeros de mesa inscritos ·{' '}
-          <span className="text-sky-600 font-semibold">{ambitoLabel || 'Lima Metropolitana'}</span>
+          <span className="text-sky-600 font-semibold">{ambitoLabel || 'Tumbes'}</span>
         </p>
       </div>
 

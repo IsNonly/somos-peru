@@ -1,11 +1,11 @@
 // ────────────────────────────────────────────────────────────────────────────
 // Candidaturas por ámbito, leídas de la BD (tabla `candidaturas`).
 //
-// Sustituye a las listas hardcodeadas de Lima que vivían en supabase.ts.
+// Sustituye a las listas hardcodeadas que vivían en supabase.ts.
 // Cada personero ve SOLO las listas de su departamento / provincia / distrito,
 // en los 3 niveles de la ERM 2026:
-//   REGIONAL   -> Gobernador Regional   (no aplica a Lima Metropolitana)
-//   PROVINCIAL -> Alcalde Provincial    (en Lima: Alcaldía Metropolitana)
+//   REGIONAL   -> Gobernador Regional
+//   PROVINCIAL -> Alcalde Provincial
 //   DISTRITAL  -> Alcalde Distrital
 // ────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabase'
@@ -63,7 +63,7 @@ function aCandidato(f: FilaCandidatura): Candidato {
 
 // ── Resolver el ámbito (dep/prov/dist) del personero ───────────────────────
 // Usa la asignación de trabajo; cae al lugar donde vota; completa dep/prov
-// faltantes desde `colegios` a partir del distrito (Lima Metro / Callao).
+// faltantes desde `colegios` a partir del distrito.
 export async function resolverAmbito(perfil: any): Promise<Ambito> {
   let departamento = perfil?.departamento_asignado ?? perfil?.departamento_vota ?? null
   let provincia = perfil?.provincia_asignado ?? perfil?.provincia_vota ?? null
@@ -77,9 +77,9 @@ export async function resolverAmbito(perfil: any): Promise<Ambito> {
       .not('departamento', 'is', null)
       .limit(50)
     if (data && data.length) {
-      // Preferir Lima/Lima si el mismo nombre de distrito se repite entre provincias
-      const lima = data.find(d => d.departamento === 'Lima' && d.provincia === 'Lima')
-      const elegido = lima ?? data[0]
+      // Preferir Tumbes si el mismo nombre de distrito se repite entre departamentos
+      const tumbes = data.find(d => d.departamento === 'Tumbes')
+      const elegido = tumbes ?? data[0]
       departamento = departamento ?? elegido.departamento
       provincia = provincia ?? elegido.provincia
     }
@@ -89,10 +89,7 @@ export async function resolverAmbito(perfil: any): Promise<Ambito> {
 
 const TITULOS: Record<NivelCandidatura, (a: Ambito) => string> = {
   REGIONAL: a => `Gobernador Regional${a.departamento ? ` — ${a.departamento}` : ''}`,
-  PROVINCIAL: a =>
-    a.departamento === 'Lima' && a.provincia === 'Lima'
-      ? 'Alcaldía Metropolitana de Lima'
-      : `Alcaldía Provincial${a.provincia ? ` — ${a.provincia}` : ''}`,
+  PROVINCIAL: a => `Alcaldía Provincial${a.provincia ? ` — ${a.provincia}` : ''}`,
   DISTRITAL: a => `Alcaldía Distrital${a.distrito ? ` — ${a.distrito}` : ''}`,
 }
 
@@ -121,9 +118,6 @@ export async function getCandidaturas(perfil: any): Promise<Candidaturas> {
   const provOK = (r: FilaCandidatura) => !ambito.provincia || norm(r.provincia) === norm(ambito.provincia)
   const distOK = (r: FilaCandidatura) => !ambito.distrito || norm(r.distrito) === norm(ambito.distrito)
 
-  // Lima Metropolitana (provincia de Lima) NO elige Gobernador Regional.
-  const limaMetro = norm(ambito.departamento) === 'lima' && norm(ambito.provincia) === 'lima'
-
   const bloques: BloqueCandidaturas[] = []
   const agregar = (nivel: NivelCandidatura, pred: (r: FilaCandidatura) => boolean) => {
     const fs = rows.filter(r => r.nivel === nivel && pred(r))
@@ -139,7 +133,7 @@ export async function getCandidaturas(perfil: any): Promise<Candidaturas> {
     })
   }
 
-  if (!limaMetro) agregar('REGIONAL', () => true)
+  agregar('REGIONAL', () => true)
   agregar('PROVINCIAL', provOK)
   agregar('DISTRITAL', r => provOK(r) && distOK(r))
 

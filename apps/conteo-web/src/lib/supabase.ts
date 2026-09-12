@@ -5,20 +5,12 @@ export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 )
 
-export const DISTRITOS_META: Record<string, number> = {
-  'Ancón':164,'Ate':1671,'Barranco':149,'Breña':349,'Carabayllo':861,
-  'Cercado de Lima':1015,'Chaclacayo':138,'Chorrillos':899,'Cieneguilla':105,
-  'Comas':1499,'El Agustino':566,'Independencia':595,'Jesús María':427,
-  'La Molina':574,'La Victoria':640,'Lince':290,'Los Olivos':984,
-  'Lurigancho-Chosica':550,'Lurín':248,'Magdalena del Mar':256,'Miraflores':478,
-  'Pachacámac':319,'Pucusana':44,'Pueblo Libre':337,'Puente Piedra':891,
-  'Punta Hermosa':33,'Punta Negra':25,'Rímac':560,'San Bartolo':24,
-  'San Borja':422,'San Isidro':282,'San Juan de Lurigancho':2731,
-  'San Juan de Miraflores':1115,'San Luis':228,'San Martín de Porres':1786,
-  'San Miguel':507,'Santa Anita':631,'Santa María del Mar':6,'Santa Rosa':68,
-  'Santiago de Surco':1179,'Surquillo':338,'Villa El Salvador':1171,
-  'Villa María del Triunfo':1234,
-}
+// Distritos de Tumbes (13, en sus 3 provincias): ámbito por defecto del Administrador.
+export const DISTRITOS_TUMBES = [
+  'Tumbes', 'Corrales', 'La Cruz', 'Pampas de Hospital', 'San Jacinto', 'San Juan de la Virgen',
+  'Zorritos', 'Casitas', 'Canoas de Punta Sal',
+  'Zarumilla', 'Matapalo', 'Papayal', 'Aguas Verdes',
+]
 
 export const PARTIDO_COLORES: Record<string, string> = {
   'Somos Perú': '#E8534A',
