@@ -574,7 +574,7 @@ export default function RegisterPage() {
 
           {/* SECCIÓN 3 */}
           <div className="border border-sky-200/80 bg-white rounded-2xl p-5 shadow-sm space-y-4">
-            <SectionHeader num="3" title="Rol y Asignación Electoral" />
+            <SectionHeader num="3" title="Rol Electoral" />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {([
