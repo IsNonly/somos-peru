@@ -3,6 +3,8 @@ import { supabase } from './supabase'
 
 // Ámbito geográfico del usuario logueado.
 // - Administrador General: ve todo (distritos = null) con filtros manuales.
+// - Coordinador Regional: ve TODO su departamento (todas sus provincias/distritos), vía
+//   `departamento_asignado` únicamente (sin provincia/distrito propios).
 // - Coordinador Provincial: ve TODA su provincia (todos sus distritos). Si solo tiene
 //   `distrito_asignado`, se deduce la provincia de ese distrito (vista_ubigeo).
 // - Coordinador de Distritos: ve SOLO su `distrito_asignado`.
@@ -56,6 +58,7 @@ export function useScope(): Scope {
       let prov = (p?.provincia_asignado ?? '').trim()
       const dist = (p?.distrito_asignado ?? '').trim()
       const esProvincial = /coordinador\s+provincial/i.test(rol)
+      const esRegional = /coordinador\s+regional/i.test(rol)
 
       // Si es Provincial y no tiene provincia asignada, deducirla de su distrito
       if (esProvincial && (!prov || !dep) && dist) {
@@ -68,7 +71,13 @@ export function useScope(): Scope {
 
       let distritos: string[]
       let label: string
-      if (esProvincial && dep && prov) {
+      if (esRegional && dep) {
+        // Coordinador Regional: ve TODO su departamento (todas sus provincias/distritos).
+        const { data: u } = await supabase
+          .from('vista_ubigeo').select('distrito').eq('departamento', dep)
+        distritos = [...new Set((u ?? []).map((c: any) => c.distrito).filter(Boolean))]
+        label = dep
+      } else if (esProvincial && dep && prov) {
         const { data: u } = await supabase
           .from('vista_ubigeo').select('distrito').eq('departamento', dep).eq('provincia', prov)
         distritos = [...new Set((u ?? []).map((c: any) => c.distrito).filter(Boolean))]
@@ -87,7 +96,7 @@ export function useScope(): Scope {
         label = 'Sin ámbito asignado'
       }
 
-      const distritoFijo = esProvincial ? '' : dist
+      const distritoFijo = (esProvincial || esRegional) ? '' : dist
       if (vivo) setS({
         loading: false, perfil: p, esAdmin: false, distritos, ambitoLabel: label,
         departamento: dep || (distritos[0] !== SIN_AMBITO ? 'Lima' : ''),
