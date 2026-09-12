@@ -25,7 +25,7 @@ function SidebarContent({ open, onNavigate }: { open: boolean; onNavigate?: () =
         <div className="w-9 h-9 rounded-xl bg-[#e11d48] flex items-center justify-center text-white text-lg flex-shrink-0">❤️</div>
         {open && (
           <div className="leading-tight min-w-0">
-            <p className="font-extrabold text-slate-900 text-sm truncate">ConteoLima</p>
+            <p className="font-extrabold text-slate-900 text-sm leading-tight">Registro y Monitoreo de Personeros</p>
             <p className="text-[10px] font-bold text-rose-500 tracking-wide">Somos Perú 2026</p>
           </div>
         )}
