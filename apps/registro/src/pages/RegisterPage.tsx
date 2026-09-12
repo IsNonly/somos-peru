@@ -513,11 +513,11 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {([
+                { id: 'Coordinador Regional', icon: Landmark, title: 'Coordinador Regional' },
                 { id: 'Coordinador Provincial', icon: Layers, title: 'Coordinador Provincial' },
                 { id: 'Coordinador Distrital', icon: MapPin, title: 'Coordinador Distrital' },
                 { id: 'Personero de Centro de Votación', icon: Building2, title: 'Personero de Centro de Votación' },
                 { id: 'Personero de Mesa', icon: Shield, title: 'Personero de Mesa' },
-                { id: 'Coordinador Regional', icon: Landmark, title: 'Coordinador Regional' },
               ] as const).map(item => {
                 const Icon = item.icon
                 const sel = form.rol === item.id
