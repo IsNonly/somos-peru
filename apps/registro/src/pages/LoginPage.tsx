@@ -80,7 +80,7 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-4 text-left">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              D.N.I. (Usuario) <span className="text-rose-500">*</span>
+              Usuario o Nombres <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
