@@ -85,6 +85,7 @@ En **Supabase → SQL Editor**, correr en este orden (todos son idempotentes):
 8. `supabase/seed_candidaturas_cali.sql` — siembra **el resto del país**: por cada depto/provincia/distrito que ya existe en `colegios` (CALI), la lista estándar de partidos **sin nombre de candidato**. Así cualquier ámbito ya deja contar. Los nombres reales se cargan luego con el Excel oficial:
    `node scripts/importar_candidaturas.mjs <excel>` (formato en el encabezado del script; `SUPABASE_SERVICE_ROLE` evita el bloqueo de RLS).
 9. `supabase/foto_instalacion_mesa.sql` — columnas `actas.foto_instalacion_url` / `actas.instalada_at` para la foto de "Instalación de Mesa de Sufragio" en la pantalla de inicio del personero.
+10. `supabase/seed_candidaturas_tumbes.sql` — candidatos reales a alcalde (nivel DISTRITAL) de los 13 distritos de Tumbes, de fuente prensa; desactiva los partidos de la plantilla CALI que no aparecen en esa lista.
 
 > `docs/somosperu_ambitos.md` lista en qué regiones/provincias compite Somos Perú (referencia para priorizar).
 
