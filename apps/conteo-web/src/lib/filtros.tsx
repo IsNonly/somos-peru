@@ -99,6 +99,13 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
       })
     } else if (scope.esAdmin && (!f.departamento || f.departamento === 'Lima')) {
       setDistritos([...LIMA_METRO].sort())   // ámbito por defecto: Lima Metropolitana
+    } else if (scope.esAdmin && f.departamento) {
+      // Depto elegido, sin provincia todavía: TODOS sus distritos (todas sus provincias),
+      // para no dejar la búsqueda "sin límite" (== nacional) mientras tanto.
+      supabase.from('vista_ubigeo').select('distrito').eq('departamento', dep).order('distrito').then(({ data }) => {
+        setDistritos([...new Set((data ?? []).map((d: any) => d.distrito).filter(Boolean))]
+          .sort((a, b) => a.localeCompare(b, 'es')))
+      })
     } else if (!scope.esAdmin && scope.distritos) {
       setDistritos([...scope.distritos].sort())
     } else {
@@ -167,9 +174,11 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
   const distritosEfectivos = useMemo<string[] | null>(() => {
     if (f.distrito) return [f.distrito]
     if (!scope.esAdmin) return scope.distritos ?? null
-    // Admin: si eligió provincia usa sus distritos; si no, ámbito por defecto = Lima Metropolitana
+    // Admin: si eligió provincia usa sus distritos; si eligió depto (sin provincia) usa
+    // TODOS los distritos de ese depto (ya cargados arriba); si no, ámbito por defecto =
+    // Lima Metropolitana. `null` es solo el estado transitorio mientras `distritos` carga.
     if (f.provincia) return distritos.length ? distritos : null
-    if (f.departamento && f.departamento !== 'Lima') return null   // otro departamento -> sin límite hasta elegir provincia
+    if (f.departamento && f.departamento !== 'Lima') return distritos.length ? distritos : null
     return LIMA_METRO
   }, [f.distrito, f.provincia, f.departamento, distritos, scope.esAdmin, scope.distritos])
 

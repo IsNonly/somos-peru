@@ -68,26 +68,39 @@ export default function CentrosPage() {
     ;(async () => {
       setLoading(true)
       const dists = distritosEfectivos // null = sin límite
+      // '' es válido a propósito ("todas las provincias" del depto elegido); solo se cae
+      // a 'Lima' cuando tampoco se eligió un departamento distinto (mismo criterio que
+      // apps/registro/src/lib/panel.ts).
+      const dep = f.departamento || 'Lima'
+      const prov = f.provincia || (dep === 'Lima' ? 'Lima' : '')
       const colsData = await traerTodo<Colegio>((from, to) => {
         let cq = supabase.from('colegios')
           .select('id, nombre, distrito, direccion, total_mesas, electores')
-          .eq('provincia', 'Lima').eq('departamento', 'Lima')
+          .eq('departamento', dep)
           .order('distrito').order('nombre').range(from, to)
+        if (prov) cq = cq.eq('provincia', prov)
         if (dists) cq = cq.in('distrito', dists)
         return cq
       })
-      const persData = await traerTodo<Perfil>((from, to) =>
+      const persRaw = await traerTodo<Perfil>((from, to) =>
         supabase.from('profiles')
           .select('nombre_completo, celular, rol, local_asignado, local_votacion, distrito_asignado, distrito_vota')
           .in('rol', [...ROLES_LOCAL, ROL_MESA])
           .order('nombre_completo').range(from, to))
       if (!vivo) return
+      // Acotar los perfiles a los distritos del departamento/provincia elegidos (derivado
+      // de colsData, ya filtrado arriba) — evita mezclar personeros de otro departamento
+      // que por casualidad comparta nombre de distrito.
+      const distritosAmbito = new Set(colsData.map(c => c.distrito).filter(Boolean) as string[])
+      const persData = persRaw.filter(p =>
+        (p.distrito_asignado && distritosAmbito.has(p.distrito_asignado)) ||
+        (p.distrito_vota && distritosAmbito.has(p.distrito_vota)))
       setCols(colsData)
       setPers(persData)
       setLoading(false)
     })()
     return () => { vivo = false }
-  }, [scopeLoading, distritosEfectivos])
+  }, [scopeLoading, distritosEfectivos, f.departamento, f.provincia])
 
   // Índices por (distrito + local): los nombres de colegio se repiten entre distritos
   const { encargadoPorLocal, mesasPorLocal } = useMemo(() => {

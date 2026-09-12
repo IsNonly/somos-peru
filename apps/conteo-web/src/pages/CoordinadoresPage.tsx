@@ -35,22 +35,32 @@ export default function CoordinadoresPage() {
     let vivo = true
     ;(async () => {
       setLoading(true)
+      // '' es válido a propósito ("todas las provincias" del depto elegido); solo se cae
+      // a 'Lima' cuando tampoco se eligió un departamento distinto.
+      const dep = f.departamento || 'Lima'
+      const prov = f.provincia || (dep === 'Lima' ? 'Lima' : '')
+      let cq = supabase.from('colegios').select('nombre, distrito, total_mesas').eq('departamento', dep)
+      if (prov) cq = cq.eq('provincia', prov)
+      if (distritosEfectivos) cq = cq.in('distrito', distritosEfectivos)
+      const { data: c } = await cq
+      if (!vivo) return
+
+      // Los perfiles se acotan a los distritos del ámbito (explícito, o derivado de los
+      // colegios ya filtrados por depto/provincia) — evita mezclar personas de otro
+      // departamento cuando no se restringe a un distrito puntual.
+      const distritosAmbito = distritosEfectivos ?? [...new Set((c ?? []).map((x: any) => x.distrito).filter(Boolean))]
       let pq = supabase.from('profiles')
         .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, local_asignado, asistencia_local_at, credencial_estado')
         .order('nombre_completo')
-      let cq = supabase.from('colegios').select('nombre, distrito, total_mesas')
-      if (distritosEfectivos) {
-        pq = pq.in('distrito_asignado', distritosEfectivos)
-        cq = cq.in('distrito', distritosEfectivos)
-      }
-      const [{ data: p }, { data: c }] = await Promise.all([pq, cq])
+      if (distritosAmbito.length) pq = pq.in('distrito_asignado', distritosAmbito)
+      const { data: p } = await pq
       if (!vivo) return
       setPerfiles((p ?? []) as Perfil[])
       setColegios((c ?? []) as Colegio[])
       setLoading(false)
     })()
     return () => { vivo = false }
-  }, [scopeLoading, distritosEfectivos])
+  }, [scopeLoading, distritosEfectivos, f.departamento, f.provincia])
 
   const { coords, kpi, resumen } = useMemo(() => {
     const persMesa = perfiles.filter(p => p.rol === 'Personero de Mesa')
