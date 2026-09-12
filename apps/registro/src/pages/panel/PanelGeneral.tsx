@@ -184,9 +184,9 @@ export default function PanelGeneral() {
       <section className="bg-white border border-slate-200 rounded-2xl p-4">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-[10px] font-black bg-slate-800 text-white rounded px-2 py-1 tracking-wide">JERARQUÍA DISTRITAL</span>
-          <h2 className="text-base font-extrabold text-slate-900">Red de Coordinadores Distritales de Lima ({d.coordsDistritales.length})</h2>
+          <h2 className="text-base font-extrabold text-slate-900">Red de Coordinadores Distritales de {ambito} ({d.coordsDistritales.length})</h2>
         </div>
-        <p className="text-xs text-slate-400 mb-3">Monitoreo general de Lima Metropolitana · cada tarjeta es el coordinador de un distrito.</p>
+        <p className="text-xs text-slate-400 mb-3">Monitoreo general de {ambito} · cada tarjeta es el coordinador de un distrito.</p>
         <div className="flex gap-3 overflow-x-auto pb-1">
           {d.coordsDistritales.map(c => (
             <div key={c.id} className="flex-shrink-0 w-64 border border-slate-200 rounded-xl p-3 bg-slate-50/60">
@@ -244,7 +244,7 @@ export default function PanelGeneral() {
           <LayoutGrid size={15} /> Indicadores Electorales · {ambito}
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <Kpi color="#3b82f6" icon={Users}      value={d.kpis.personerosMesa} label="Personeros de Mesa" sub="En Lima Metropolitana" />
+          <Kpi color="#3b82f6" icon={Users}      value={d.kpis.personerosMesa} label="Personeros de Mesa" sub={`En ${ambito}`} />
           <Kpi color="#06b6d4" icon={Building2}   value={d.kpis.centros}        label="Centros de Votación" sub="Con personal asignado" />
           <Kpi color="#f59e0b" icon={ShieldCheck} value={d.kpis.centrosConPCV}  label="Centros con PCV" sub="Personero de Centro asignado" />
           <Kpi color="#22c55e" icon={ShieldCheck} value={d.kpis.coordDistritales} label="Coord. Distritales" sub="Distritales activos" />

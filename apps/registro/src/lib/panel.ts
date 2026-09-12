@@ -88,7 +88,9 @@ export interface PanelData {
 
 export function usePanelData(scope?: { departamento?: string; provincia?: string; distritos?: string[] | null }): PanelData & { refetch: () => void } {
   const dep = scope?.departamento || 'Lima'
-  const prov = scope?.provincia || 'Lima'
+  // '' es un valor válido a propósito (== "todas las provincias" de `dep`); solo se
+  // usa el default 'Lima' cuando no se pasó ningún scope (mismo caso que `dep`).
+  const prov = scope?.provincia !== undefined ? scope.provincia : 'Lima'
   const distritos = scope?.distritos ?? null
   const [d, setD] = useState<PanelData>({
     loading: true, colegios: [], perfiles: [], coordsDistritales: [], zonales: [],
@@ -102,24 +104,39 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
     let vivo = true
     setD(prev => ({ ...prev, loading: true }))
     ;(async () => {
-      const [colegios, perfiles] = await Promise.all([
-        traerTodo<Colegio>((f, t) => {
-          let cq = supabase.from('colegios')
-            .select('id, nombre, distrito, direccion, total_mesas, electores')
-            .eq('departamento', dep).order('distrito').order('nombre').range(f, t)
-          if (prov) cq = cq.eq('provincia', prov)
-          if (distritos) cq = cq.in('distrito', distritos)
-          return cq
-        }),
-        traerTodo<Perfil>((f, t) => {
-          let pq = supabase.from('profiles')
-            .select('id, nombre_completo, dni, celular, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, credencial_estado, quiz_estado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos, modificado_por, modificado_at')
-            .order('nombre_completo').range(f, t)
-          if (distritos) pq = pq.in('distrito_asignado', distritos)
-          return pq
-        }),
-      ])
+      const colegios = await traerTodo<Colegio>((f, t) => {
+        let cq = supabase.from('colegios')
+          .select('id, nombre, distrito, direccion, total_mesas, electores')
+          .eq('departamento', dep).order('distrito').order('nombre').range(f, t)
+        if (prov) cq = cq.eq('provincia', prov)
+        if (distritos) cq = cq.in('distrito', distritos)
+        return cq
+      })
       if (!vivo) return
+
+      const perfilesRaw = await traerTodo<Perfil>((f, t) => {
+        let pq = supabase.from('profiles')
+          .select('id, nombre_completo, dni, celular, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, credencial_estado, quiz_estado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos, modificado_por, modificado_at')
+          .order('nombre_completo').range(f, t)
+        if (distritos) pq = pq.in('distrito_asignado', distritos)
+        return pq
+      })
+      if (!vivo) return
+
+      // Cuando no hay un distrito puntual (rol/selector), `distritos` llega null y antes
+      // esto NO acotaba nada: mezclaba personas de cualquier departamento (bug real: al
+      // filtrar por Tumbes seguían apareciendo coordinadores de Lima y viceversa). Se acota
+      // al conjunto de distritos que sí caen dentro del departamento/provincia elegidos
+      // (derivado de `colegios`, que ya viene filtrado por dep/prov arriba). Se acepta
+      // distrito_asignado O distrito_vota para no perder perfiles legados sin asignación.
+      const perfiles = distritos
+        ? perfilesRaw
+        : (() => {
+            const distritosAmbito = new Set(colegios.map(c => c.distrito).filter(Boolean) as string[])
+            return perfilesRaw.filter(p =>
+              (p.distrito_asignado && distritosAmbito.has(p.distrito_asignado)) ||
+              (p.distrito_vota && distritosAmbito.has(p.distrito_vota)))
+          })()
 
       const acreditado = (p: Perfil) => p.credencial_estado === 'Confirmado' || p.quiz_estado === 'Aprobado'
       const coordsDistritales = perfiles.filter(p => rolNorm(p.rol) === ROL_COORD_DIST)
