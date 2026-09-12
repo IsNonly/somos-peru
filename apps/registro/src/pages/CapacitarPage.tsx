@@ -1,6 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { Play, Lock, CheckCircle, LogOut, BookOpen, X, Download, Award } from 'lucide-react'
+import {
+  Play, Lock, CheckCircle, LogOut, BookOpen, X, Download, Award, Users, ChevronRight, MapPin,
+  type LucideIcon,
+} from 'lucide-react'
 import Constancia from '../components/Constancia'
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
@@ -14,6 +17,8 @@ const PDF_TIEMPO_MIN = 60 // segundos requeridos de lectura
 
 const VIDEO_URL = '/videos/Capacitacion_Personero_ERM_2026.mp4'
 const VIDEO_VECES = 2 // veces que hay que ver el video completo
+
+const FECHA_LIMITE = '03/10/2026 a las 11:59 p. m.'
 
 const QUIZ: { pregunta: string; opciones: string[]; correcta: number }[] = [
   {
@@ -68,6 +73,8 @@ const QUIZ: { pregunta: string; opciones: string[]; correcta: number }[] = [
   },
 ]
 
+type Paso = 'video' | 'cartilla' | 'quiz'
+
 interface Profile {
   nombre_completo: string
   dni: string
@@ -75,6 +82,8 @@ interface Profile {
   distrito_asignado: string | null
   distrito_vota: string | null
   mesa_asignada: string | null
+  local_asignado: string | null
+  local_votacion: string | null
   quiz_estado: string | null
   videos_vistos: number
   pdfs_vistos: number
@@ -87,7 +96,7 @@ export default function CapacitarPage() {
   const [videosVistos, setVideosVistos] = useState(0)
   const [pdfsVistos, setPdfsVistos]   = useState(0)
   const [quizEstado, setQuizEstado]   = useState<string | null>(null)
-  const [quizMode, setQuizMode]       = useState(false)
+  const [paso, setPaso]               = useState<Paso>('video')
   const [currentQ, setCurrentQ]       = useState(0)
   const [respuestas, setRespuestas]   = useState<number[]>([])
   const [quizDone, setQuizDone]       = useState<{ puntaje: number; aprobado: boolean } | null>(null)
@@ -95,15 +104,12 @@ export default function CapacitarPage() {
   const [verConstancia, setVerConstancia] = useState(false)
   const [fechaAprobacion, setFechaAprobacion] = useState<Date | null>(null)
 
-  // PDF modal state
-  const [pdfModal, setPdfModal]       = useState(false)
-  const [pdfAbierto, setPdfAbierto]   = useState(false)
+  // Lectura de la cartilla (temporizador anti-salto)
   const [segundosLectura, setSegundosLectura] = useState(0)
   const [lecturaCompleta, setLecturaCompleta] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Video state
-  const [videoOpen, setVideoOpen]     = useState(false)
+  // Video
   const videoRef  = useRef<HTMLVideoElement | null>(null)
   const maxPosRef = useRef(0)   // punto más avanzado alcanzado en la reproducción actual (anti-adelanto)
 
@@ -115,7 +121,7 @@ export default function CapacitarPage() {
 
       // Resolver el perfil por DNI: profiles.id no siempre = auth.users.id
       const dni = (user.email ?? '').split('@')[0]
-      const cols = 'id, nombre_completo, dni, rol, distrito_asignado, distrito_vota, mesa_asignada, quiz_estado, videos_vistos, pdfs_vistos'
+      const cols = 'id, nombre_completo, dni, rol, distrito_asignado, distrito_vota, mesa_asignada, local_asignado, local_votacion, quiz_estado, videos_vistos, pdfs_vistos'
       let { data: p } = await supabase.from('profiles').select(cols).eq('dni', dni).maybeSingle()
       if (!p) {
         const r = await supabase.from('profiles').select(cols).eq('id', user.id).maybeSingle()
@@ -125,9 +131,15 @@ export default function CapacitarPage() {
 
       if (p) {
         setProfile(p as Profile)
-        setVideosVistos(p.videos_vistos || 0)
-        setPdfsVistos(p.pdfs_vistos || 0)
+        const videos = p.videos_vistos || 0
+        const pdfs = p.pdfs_vistos || 0
+        setVideosVistos(videos)
+        setPdfsVistos(pdfs)
         setQuizEstado(p.quiz_estado)
+        // Aterriza en el primer paso pendiente
+        if (videos < VIDEO_VECES) setPaso('video')
+        else if (pdfs < 1) setPaso('cartilla')
+        else setPaso('quiz')
         if (p.quiz_estado === 'Aprobado') {
           setQuizDone({ puntaje: 5, aprobado: true })
           // Fecha del primer intento aprobado, para la constancia
@@ -138,16 +150,16 @@ export default function CapacitarPage() {
           setFechaAprobacion(intento?.created_at ? new Date(intento.created_at) : new Date())
         }
         // Si ya leyó el PDF antes, marcar lectura completa
-        if ((p.pdfs_vistos || 0) >= 1) setLecturaCompleta(true)
+        if (pdfs >= 1) setLecturaCompleta(true)
       }
       setLoading(false)
     }
     init()
   }, [])
 
-  // Temporizador: corre mientras el modal está abierto y no se ha completado
+  // Temporizador de lectura: corre mientras el paso "cartilla" está activo y no se ha completado
   useEffect(() => {
-    if (pdfModal && !lecturaCompleta) {
+    if (paso === 'cartilla' && pdfsVistos < 1 && !lecturaCompleta) {
       timerRef.current = setInterval(() => {
         setSegundosLectura(s => {
           const next = s + 1
@@ -160,24 +172,14 @@ export default function CapacitarPage() {
       }, 1000)
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [pdfModal, lecturaCompleta])
-
-  const abrirPDF = () => {
-    setPdfModal(true)
-    setPdfAbierto(true)
-  }
-
-  const cerrarPDF = () => {
-    setPdfModal(false)
-    // El timer acumulado se conserva aunque cierre el modal
-  }
+  }, [paso, pdfsVistos, lecturaCompleta])
 
   const marcarPdfLeido = async () => {
-    if (!lecturaCompleta) return
-    if (pdfsVistos >= 1) return
+    if (!lecturaCompleta || pdfsVistos >= 1) return
     const nuevo = pdfsVistos + 1
     setPdfsVistos(nuevo)
     await supabase.from('profiles').update({ pdfs_vistos: nuevo }).eq('id', userId)
+    setPaso('quiz')
   }
 
   // Registra el punto más avanzado visto (para no dejar adelantar el video)
@@ -199,7 +201,11 @@ export default function CapacitarPage() {
     await supabase.from('profiles').update({ videos_vistos: nuevo }).eq('id', userId)
   }
 
-  const puedeQuiz = videosVistos >= 2 && pdfsVistos >= 1 && !quizDone
+  const doneVideo    = videosVistos >= VIDEO_VECES
+  const doneCartilla = pdfsVistos >= 1
+  const doneQuiz     = quizEstado === 'Aprobado'
+  const unlockedCartilla = doneVideo
+  const unlockedQuiz     = doneVideo && doneCartilla
 
   const responder = (idx: number) => {
     const nuevas = [...respuestas, idx]
@@ -221,18 +227,32 @@ export default function CapacitarPage() {
     }
   }
 
+  const reintentarQuiz = () => {
+    setCurrentQ(0)
+    setRespuestas([])
+    setQuizDone(null)
+  }
+
   const handleSalir = async () => {
     await supabase.auth.signOut()
     window.location.href = '/login'
   }
 
+  const irAPaso = (destino: Paso) => {
+    if (destino === 'cartilla' && !unlockedCartilla) return
+    if (destino === 'quiz' && !unlockedQuiz) return
+    setPaso(destino)
+  }
+
   const firstName = profile?.nombre_completo?.split(' ')[0] ?? ''
   const tiempoRestante = Math.max(0, PDF_TIEMPO_MIN - segundosLectura)
-  const pct = Math.min((segundosLectura / PDF_TIEMPO_MIN) * 100, 100)
+  const pctLectura = Math.min((segundosLectura / PDF_TIEMPO_MIN) * 100, 100)
+  const pctVideo = Math.min((videosVistos / VIDEO_VECES) * 100, 100)
 
   const cargoConstancia    = profile?.rol ?? 'Personero de Mesa'
   const distritoConstancia = profile?.distrito_asignado ?? profile?.distrito_vota ?? 'Lima'
   const fechaConstancia    = fechaLarga(fechaAprobacion ?? new Date())
+  const centro             = profile?.local_asignado ?? profile?.local_votacion ?? '—'
 
   // Constancia de Participación a pantalla completa
   if (verConstancia) return (
@@ -266,187 +286,78 @@ export default function CapacitarPage() {
     </div>
   )
 
-  // Modal PDF a pantalla completa
-  if (pdfModal) return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black">
-      {/* Barra superior */}
-      <div className="flex items-center justify-between px-4 py-3 bg-[#00a3e8] text-white flex-shrink-0">
-        <div className="flex-1">
-          <p className="text-xs font-bold truncate">Cartilla del Personero ERM 2026</p>
-          {!lecturaCompleta && (
-            <p className="text-[11px] opacity-80">Permanece leyendo — {tiempoRestante}s restantes</p>
-          )}
-          {lecturaCompleta && (
-            <p className="text-[11px] font-bold text-green-200">¡Lectura completada! Ya puedes confirmar.</p>
-          )}
-        </div>
-        <button
-          onClick={cerrarPDF}
-          className="ml-3 p-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-all"
-        >
-          <X size={18} />
-        </button>
-      </div>
-
-      {/* Barra de progreso */}
-      <div className="h-1.5 bg-white/20 flex-shrink-0">
-        <div
-          className={`h-full transition-all duration-1000 ${lecturaCompleta ? 'bg-green-400' : 'bg-white'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-
-      {/* PDF embebido */}
-      <iframe
-        src={PDF_URL}
-        className="flex-1 w-full border-0"
-        title="Cartilla del Personero ERM 2026"
-      />
-
-      {/* Barra inferior */}
-      <div className="flex-shrink-0 px-4 py-3 bg-white border-t border-slate-200">
-        {!lecturaCompleta ? (
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[#00a3e8] rounded-full transition-all duration-1000"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <span className="text-xs font-bold text-slate-500 tabular-nums w-14 text-right">
-              {segundosLectura}s / {PDF_TIEMPO_MIN}s
-            </span>
-          </div>
-        ) : (
-          <button
-            onClick={() => { marcarPdfLeido(); cerrarPDF() }}
-            className="w-full py-3.5 bg-green-500 hover:bg-green-600 text-white font-extrabold rounded-2xl text-sm shadow-lg shadow-green-500/30 transition-all flex items-center justify-center gap-2"
-          >
-            <CheckCircle size={18} />
-            Confirmar lectura y continuar
-          </button>
-        )}
-      </div>
-    </div>
-  )
-
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#c9e6f8]">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="w-8 h-8 border-2 border-[#00a3e8] border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
-  /* ── MODO QUIZ ── */
-  if (quizMode && !quizDone) {
-    const q = QUIZ[currentQ]
-    return (
-      <div className="min-h-screen bg-[#c9e6f8] flex items-center justify-center p-4">
-        <div className="w-full max-w-lg bg-white rounded-[24px] p-6 shadow-xl border border-sky-100">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-bold text-slate-800">Cuestionario Oficial</h2>
-            <span className="text-xs text-slate-400 font-semibold">{currentQ + 1} / {QUIZ.length}</span>
-          </div>
-          <div className="h-1.5 bg-slate-100 rounded-full mb-5">
-            <div className="bg-[#00a3e8] h-1.5 rounded-full transition-all" style={{ width: `${(currentQ / QUIZ.length) * 100}%` }} />
-          </div>
-          <p className="text-sm font-semibold text-slate-800 mb-4">{q.pregunta}</p>
-          <div className="space-y-2.5">
-            {q.opciones.map((op, i) => (
-              <button key={i} onClick={() => responder(i)}
-                className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 text-slate-700 hover:border-[#00a3e8] hover:bg-sky-50 text-sm transition-all">
-                <span className="font-bold text-[#00a3e8] mr-2">{String.fromCharCode(65 + i)}.</span>{op}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const pasoTitulo = paso === 'video' ? 'Ver Curso' : paso === 'cartilla' ? 'Leer Cartilla' : 'Evaluación'
 
   return (
-    <div className="min-h-screen bg-[#c9e6f8] flex items-center justify-center p-4 py-8">
-      <div className="w-full max-w-md bg-white rounded-[24px] shadow-xl border border-sky-100 overflow-hidden">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
-          <div>
-            <h1 className="text-xl font-extrabold text-slate-900">Capacítate</h1>
-            <p className="text-xs text-slate-400 font-medium">Ficha de Capacitación de Personeros</p>
-          </div>
-          <button onClick={handleSalir}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-500 hover:bg-rose-100 text-xs font-bold transition-colors">
-            <LogOut size={13} />
-            Salir
-          </button>
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <header className="flex items-center justify-between px-4 sm:px-6 py-3.5 bg-white border-b border-slate-200">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-[#e11d48] flex items-center justify-center text-white text-base flex-shrink-0">❤️</div>
+          <span className="text-lg font-extrabold text-slate-900">Capacítate</span>
         </div>
+        <button onClick={handleSalir}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-500 hover:bg-rose-100 text-xs font-bold transition-colors">
+          <LogOut size={13} />
+          Cerrar sesión
+        </button>
+      </header>
 
-        <div className="px-6 py-4 space-y-4">
-          {/* Bienvenida */}
-          <div className="bg-sky-50 rounded-2xl p-4 border border-sky-100">
-            <p className="text-sm font-bold text-slate-800 mb-2">
-              ¡Bienvenido, <span className="text-[#00a3e8]">{firstName}</span>!
-            </p>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="px-2.5 py-0.5 bg-white rounded-full text-slate-600 border border-slate-200 font-medium">
-                DNI: {profile?.dni ?? '—'}
-              </span>
-              <span className="px-2.5 py-0.5 bg-white rounded-full text-slate-600 border border-slate-200 font-medium">
-                Distrito: {profile?.distrito_asignado ?? 'No aplica'}
-              </span>
-              <span className="px-2.5 py-0.5 bg-white rounded-full text-slate-600 border border-slate-200 font-medium">
-                Mesa: {profile?.mesa_asignada ?? 'No aplica'}
-              </span>
+      <div className="max-w-[1400px] mx-auto p-4 sm:p-6">
+        {/* Breadcrumb */}
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 mb-1">
+          {profile?.rol ?? 'Personero'} <ChevronRight size={12} /> Curso Virtual para Personeros 2026
+        </p>
+        <h1 className="text-2xl font-extrabold text-slate-900 mb-4">{pasoTitulo}</h1>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_280px] gap-4 sm:gap-6 items-start">
+
+          {/* Sidebar: menú de pasos */}
+          <aside className="lg:sticky lg:top-6 space-y-4">
+            <div className="hidden lg:flex bg-gradient-to-br from-sky-50 to-sky-100 rounded-2xl border border-sky-100 items-center justify-center py-6">
+              <Users size={40} className="text-[#00a3e8]" strokeWidth={1.5} />
             </div>
-          </div>
 
-          {/* Estadísticas de progreso */}
-          <div className="grid grid-cols-3 gap-2">
-            <StatCard label="Videos vistos"     value={videosVistos} total={2} done={videosVistos >= 2} />
-            <StatCard label="Cartilla leída"    value={pdfsVistos}   total={1} done={pdfsVistos >= 1} />
-            <div className="rounded-2xl border border-slate-200 p-3 text-center">
-              <p className="text-[10px] text-slate-400 font-semibold leading-tight mb-1.5">Evaluación</p>
-              <p className={`text-xs font-extrabold ${
-                quizEstado === 'Aprobado' ? 'text-green-500' :
-                quizEstado === 'Reprobado' ? 'text-red-500' : 'text-amber-500'
-              }`}>
-                {quizEstado === 'Aprobado' ? 'Aprobado' : quizEstado === 'Reprobado' ? 'Reprobado' : 'Pendiente'}
+            <div className="bg-white rounded-2xl border border-slate-200 p-2">
+              <p className="hidden lg:block px-2.5 pt-1.5 pb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                Menú principal
+              </p>
+              <div className="flex lg:flex-col gap-1.5 overflow-x-auto">
+                <PasoNav n={1} label="Ver curso" icon={Play} activo={paso === 'video'}
+                  bloqueado={false} completado={doneVideo} onClick={() => irAPaso('video')} />
+                <PasoNav n={2} label="Cartilla" icon={BookOpen} activo={paso === 'cartilla'}
+                  bloqueado={!unlockedCartilla} completado={doneCartilla} onClick={() => irAPaso('cartilla')} />
+                <PasoNav n={3} label="Evaluación" icon={Award} activo={paso === 'quiz'}
+                  bloqueado={!unlockedQuiz} completado={doneQuiz} onClick={() => irAPaso('quiz')} />
+              </div>
+            </div>
+
+            <div className="hidden lg:block bg-amber-50 border border-amber-100 rounded-2xl p-3.5">
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Ten presente que <strong>el curso estará habilitado hasta el {FECHA_LIMITE}</strong>. Luego de esa fecha, ya no podrás ingresar.
               </p>
             </div>
-          </div>
+          </aside>
 
-          {/* Acciones */}
-          <div className="space-y-2">
+          {/* Contenido principal */}
+          <main className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
 
-            {/* Paso 1: Video de capacitación — verlo completo 2 veces */}
-            <div className={`rounded-2xl border transition-all ${
-              videosVistos >= VIDEO_VECES ? 'border-green-200 bg-green-50/50' : 'border-slate-200 bg-white hover:border-sky-200'
-            }`}>
-              <div className="flex items-center gap-3 p-3.5">
-                <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center flex-shrink-0">
-                  <Play size={17} className={videosVistos >= VIDEO_VECES ? 'text-green-500' : 'text-[#00a3e8]'} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-800">Video de Capacitación</p>
-                  <p className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    {videosVistos >= VIDEO_VECES
-                      ? 'Video visto 2 de 2 ✓'
-                      : `Debes verlo completo 2 veces — llevas ${videosVistos} de 2`}
+            {paso === 'video' && (
+              <div>
+                <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-[#0b3d6b] text-white">
+                  <p className="text-xs sm:text-sm font-bold truncate">
+                    Curso virtual para personeros ERM 2026 – Módulo 1 / Oficina Nacional de Procesos Electorales
                   </p>
+                  <span className="text-[11px] font-semibold text-sky-200 flex-shrink-0">Video Oficial</span>
                 </div>
-                {videosVistos >= VIDEO_VECES ? (
-                  <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
-                ) : (
-                  <button
-                    onClick={() => setVideoOpen(o => !o)}
-                    className="text-xs px-3 py-1.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-lg flex-shrink-0"
-                  >
-                    {videoOpen ? 'Ocultar' : 'Ver video'}
-                  </button>
-                )}
-              </div>
 
-              {videoOpen && videosVistos < VIDEO_VECES && (
-                <div className="px-3.5 pb-3.5">
+                <div className="p-4 sm:p-5 space-y-4">
                   <video
                     ref={videoRef}
                     src={VIDEO_URL}
@@ -458,123 +369,235 @@ export default function CapacitarPage() {
                     onEnded={onVideoEnded}
                     className="w-full rounded-xl bg-black aspect-video"
                   />
-                  <p className="text-[11px] text-slate-400 mt-2">
-                    Reproducción {videosVistos + 1} de 2. No se puede adelantar el video; al terminar sigue el paso de la cartilla.
-                  </p>
-                </div>
-              )}
-            </div>
 
-            {/* Cartilla PDF con temporizador */}
-            <div className={`rounded-2xl border transition-all ${
-              pdfsVistos >= 1 ? 'border-green-200 bg-green-50/50' : 'border-slate-200 bg-white hover:border-sky-200'
-            }`}>
-              <div className="flex items-center gap-3 p-3.5">
-                <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center flex-shrink-0">
-                  <BookOpen size={17} className={pdfsVistos >= 1 ? 'text-green-500' : 'text-[#00a3e8]'} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-800 truncate">Cartilla del Personero ERM 2026</p>
-                  <p className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    {pdfsVistos >= 1
-                      ? 'Cartilla leída ✓'
-                      : pdfAbierto
-                        ? lecturaCompleta
-                          ? 'Lectura completada — puedes confirmar'
-                          : `Leyendo... ${tiempoRestante}s restantes`
-                        : 'Debes leer la cartilla completa (mín. 1 min)'}
-                  </p>
-                </div>
+                  <div className={`rounded-xl border p-3.5 ${doneVideo ? 'border-green-200 bg-green-50/60' : 'border-slate-200 bg-slate-50'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`flex items-center gap-1.5 text-xs font-bold ${doneVideo ? 'text-green-600' : 'text-slate-500'}`}>
+                        {doneVideo && <CheckCircle size={14} />}
+                        Video completado al {Math.round(pctVideo)}%
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">{videosVistos}/{VIDEO_VECES}</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${doneVideo ? 'bg-green-400' : 'bg-[#00a3e8]'}`}
+                        style={{ width: `${pctVideo}%` }} />
+                    </div>
+                    {!doneVideo && (
+                      <p className="text-[11px] text-slate-400 mt-2">
+                        Debes ver el video completo {VIDEO_VECES} veces sin adelantarlo. Llevas {videosVistos} de {VIDEO_VECES}.
+                      </p>
+                    )}
+                  </div>
 
-                {pdfsVistos >= 1 ? (
-                  <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
-                ) : lecturaCompleta ? (
-                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                  <div className="flex justify-end">
                     <button
-                      onClick={abrirPDF}
-                      className="text-xs px-3 py-1.5 bg-slate-100 text-slate-500 font-bold rounded-lg transition-all"
+                      onClick={() => irAPaso('cartilla')}
+                      disabled={!unlockedCartilla}
+                      className={`inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-extrabold shadow-lg transition-all ${
+                        unlockedCartilla
+                          ? 'bg-green-500 hover:bg-green-600 text-white shadow-green-500/30'
+                          : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
+                      }`}
                     >
-                      Ver cartilla
-                    </button>
-                    <button
-                      onClick={marcarPdfLeido}
-                      className="text-xs px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg transition-all flex items-center gap-1"
-                    >
-                      <CheckCircle size={12} /> Confirmar
+                      {unlockedCartilla ? <CheckCircle size={17} /> : <Lock size={15} />}
+                      Continuar a Leer Cartilla
+                      <ChevronRight size={16} />
                     </button>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {paso === 'cartilla' && (
+              <div>
+                <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-[#0b3d6b] text-white">
+                  <p className="text-xs sm:text-sm font-bold truncate">Cartilla del Personero ERM 2026</p>
+                  {!doneCartilla && (
+                    <span className="text-[11px] font-semibold text-sky-200 flex-shrink-0">
+                      {lecturaCompleta ? '¡Lectura completada!' : `${tiempoRestante}s restantes`}
+                    </span>
+                  )}
+                </div>
+
+                <div className="h-1.5 bg-slate-100 flex-shrink-0">
+                  <div
+                    className={`h-full transition-all duration-1000 ${lecturaCompleta || doneCartilla ? 'bg-green-400' : 'bg-[#00a3e8]'}`}
+                    style={{ width: `${doneCartilla ? 100 : pctLectura}%` }}
+                  />
+                </div>
+
+                <iframe
+                  src={PDF_URL}
+                  className="w-full border-0"
+                  style={{ height: '65vh', minHeight: 420 }}
+                  title="Cartilla del Personero ERM 2026"
+                />
+
+                <div className="p-4 sm:p-5">
+                  {doneCartilla ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-green-600">
+                        <CheckCircle size={15} /> Cartilla leída
+                      </span>
+                      <button
+                        onClick={() => irAPaso('quiz')}
+                        disabled={!unlockedQuiz}
+                        className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-extrabold shadow-lg bg-green-500 hover:bg-green-600 text-white shadow-green-500/30 transition-all"
+                      >
+                        <CheckCircle size={17} /> Continuar a Evaluación <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  ) : lecturaCompleta ? (
+                    <button
+                      onClick={marcarPdfLeido}
+                      className="w-full py-3.5 bg-green-500 hover:bg-green-600 text-white font-extrabold rounded-2xl text-sm shadow-lg shadow-green-500/30 transition-all flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle size={18} />
+                      Confirmar lectura y continuar
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-[#00a3e8] rounded-full transition-all duration-1000" style={{ width: `${pctLectura}%` }} />
+                      </div>
+                      <span className="text-xs font-bold text-slate-500 tabular-nums w-16 text-right">
+                        {segundosLectura}s / {PDF_TIEMPO_MIN}s
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {paso === 'quiz' && (
+              <div>
+                <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-[#0b3d6b] text-white">
+                  <p className="text-xs sm:text-sm font-bold truncate">Cuestionario Oficial — Evaluación de Personeros</p>
+                  {!quizDone && <span className="text-[11px] font-semibold text-sky-200 flex-shrink-0">{currentQ + 1} / {QUIZ.length}</span>}
+                </div>
+
+                {!unlockedQuiz ? (
+                  <div className="p-8 flex flex-col items-center text-center gap-2">
+                    <Lock size={28} className="text-slate-300" />
+                    <p className="text-sm font-bold text-slate-500">Evaluación bloqueada</p>
+                    <p className="text-xs text-slate-400">Debes completar el video y la cartilla primero.</p>
+                  </div>
+                ) : quizDone ? (
+                  <div className="p-6 sm:p-8 flex flex-col items-center text-center gap-3">
+                    {quizDone.aprobado ? (
+                      <>
+                        <CheckCircle size={40} className="text-green-500" />
+                        <p className="text-base font-extrabold text-slate-800">¡Evaluación aprobada!</p>
+                        <p className="text-sm text-slate-500">Obtuviste {quizDone.puntaje} de {QUIZ.length} respuestas correctas.</p>
+                        <p className="text-xs text-slate-400">Ya puedes descargar tu constancia en el panel de la derecha.</p>
+                      </>
+                    ) : (
+                      <>
+                        <X size={40} className="text-red-400" />
+                        <p className="text-base font-extrabold text-slate-800">No aprobaste esta vez</p>
+                        <p className="text-sm text-slate-500">Obtuviste {quizDone.puntaje} de {QUIZ.length}. Necesitas al menos 4/5.</p>
+                        <button
+                          onClick={reintentarQuiz}
+                          className="mt-2 px-5 py-2.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-xl text-sm transition-all"
+                        >
+                          Reintentar evaluación
+                        </button>
+                      </>
+                    )}
+                  </div>
                 ) : (
-                  <button
-                    onClick={abrirPDF}
-                    className="text-xs px-3 py-1.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-lg transition-all flex items-center gap-1 flex-shrink-0"
-                  >
-                    <BookOpen size={12} />
-                    {pdfAbierto ? `${tiempoRestante}s` : 'Leer cartilla'}
-                  </button>
+                  <div className="p-4 sm:p-5">
+                    <div className="h-1.5 bg-slate-100 rounded-full mb-5">
+                      <div className="bg-[#00a3e8] h-1.5 rounded-full transition-all" style={{ width: `${(currentQ / QUIZ.length) * 100}%` }} />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800 mb-4">{QUIZ[currentQ].pregunta}</p>
+                    <div className="space-y-2.5">
+                      {QUIZ[currentQ].opciones.map((op, i) => (
+                        <button key={i} onClick={() => responder(i)}
+                          className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 text-slate-700 hover:border-[#00a3e8] hover:bg-sky-50 text-sm transition-all">
+                          <span className="font-bold text-[#00a3e8] mr-2">{String.fromCharCode(65 + i)}.</span>{op}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
+              </div>
+            )}
+          </main>
+
+          {/* Panel derecho: acreditación */}
+          <aside className="space-y-4">
+            {doneQuiz && (
+              <div className="bg-green-50 border border-green-100 rounded-2xl p-4 text-center">
+                <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
+                  <Award size={22} className="text-green-500" />
+                </div>
+                <p className="text-xs font-bold text-green-700 leading-snug mb-3">
+                  ¡Capacitación completada exitosamente! Tienes acceso a todos tus materiales y constancia oficial.
+                </p>
+                <button
+                  onClick={() => setVerConstancia(true)}
+                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-xl transition-all"
+                >
+                  <Award size={14} /> Constancia de Capacitación
+                </button>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl border border-slate-200 p-4">
+              <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-3">
+                <MapPin size={13} className="text-[#00a3e8]" /> Datos de Acreditación
+              </p>
+              <div className="space-y-2 text-xs">
+                <DatoFila label="DNI" value={profile?.dni ?? '—'} />
+                <DatoFila label="Rol" value={profile?.rol ?? '—'} />
+                <DatoFila label="Distrito" value={profile?.distrito_asignado ?? profile?.distrito_vota ?? '—'} />
+                <DatoFila label="Centro" value={centro} />
               </div>
             </div>
 
-            {/* Cuestionario */}
-            <ActionItem
-              icon={<CheckCircle size={17} className={puedeQuiz ? 'text-[#00a3e8]' : 'text-slate-300'} />}
-              title="Cuestionario de Preguntas"
-              subtitle={puedeQuiz ? 'Listo — debes aprobar 4/5 preguntas' : 'Bloqueado (Ver 2 vídeos y leer la cartilla)'}
-              unlocked={puedeQuiz}
-              done={quizEstado === 'Aprobado'}
-              onAction={() => setQuizMode(true)}
-              actionLabel="Iniciar"
-            />
-
-            {/* Constancia de Participación */}
-            <ActionItem
-              icon={<Award size={17} className={quizEstado === 'Aprobado' ? 'text-[#00a3e8]' : 'text-slate-300'} />}
-              title="Constancia de Participación"
-              subtitle={quizEstado === 'Aprobado'
-                ? 'Lista — con tu nombre, fecha, cargo y distrito'
-                : 'Bloqueado (Aprobar: 4/5 en Cuestionario)'}
-              unlocked={quizEstado === 'Aprobado'}
-              done={false}
-              onAction={() => setVerConstancia(true)}
-              actionLabel="Ver / Descargar"
-            />
-          </div>
+            <div className="lg:hidden bg-amber-50 border border-amber-100 rounded-2xl p-3.5">
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                El curso estará habilitado hasta el <strong>{FECHA_LIMITE}</strong>.
+              </p>
+            </div>
+          </aside>
         </div>
       </div>
     </div>
   )
 }
 
-function StatCard({ label, value, total, done }: { label: string; value: number; total: number; done: boolean }) {
+function PasoNav({ n, label, icon: Icon, activo, bloqueado, completado, onClick }: {
+  n: number; label: string; icon: LucideIcon
+  activo: boolean; bloqueado: boolean; completado: boolean; onClick: () => void
+}) {
   return (
-    <div className="rounded-2xl border border-slate-200 p-3 text-center">
-      <p className="text-[10px] text-slate-400 font-semibold leading-tight mb-1">{label}</p>
-      <p className={`text-base font-extrabold ${done ? 'text-green-500' : 'text-[#00a3e8]'}`}>{value}/{total}</p>
-    </div>
+    <button
+      onClick={onClick}
+      disabled={bloqueado}
+      className={`flex-1 lg:flex-none flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+        activo
+          ? 'bg-[#00a3e8] text-white shadow-md shadow-sky-500/20'
+          : bloqueado
+            ? 'text-slate-300 cursor-not-allowed'
+            : 'text-slate-600 hover:bg-sky-50'
+      }`}
+    >
+      <Icon size={16} className={activo ? 'text-white' : bloqueado ? 'text-slate-300' : 'text-[#00a3e8]'} />
+      <span className="flex-1 text-left truncate">{n}. {label}</span>
+      {completado
+        ? <CheckCircle size={16} className={activo ? 'text-white' : 'text-green-500'} />
+        : bloqueado && <Lock size={13} className="text-slate-300" />}
+    </button>
   )
 }
 
-function ActionItem({ icon, title, subtitle, unlocked, done, onAction, actionLabel }: {
-  icon: React.ReactNode; title: string; subtitle: string
-  unlocked: boolean; done: boolean; onAction: () => void; actionLabel: string
-}) {
+function DatoFila({ label, value }: { label: string; value: string }) {
   return (
-    <div className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all ${
-      unlocked ? 'border-slate-200 bg-white hover:border-sky-200' : 'border-slate-100 bg-slate-50/50 opacity-70'
-    }`}>
-      <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center flex-shrink-0">{icon}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-bold text-slate-800 truncate">{title}</p>
-        <p className="text-[11px] text-slate-400 leading-tight mt-0.5 line-clamp-1">{subtitle}</p>
-      </div>
-      {unlocked && !done && (
-        <button onClick={onAction}
-          className="text-xs px-3 py-1.5 bg-[#00a3e8] hover:bg-[#0092d0] text-white font-bold rounded-lg transition-all flex-shrink-0">
-          {actionLabel}
-        </button>
-      )}
-      {done && <CheckCircle size={18} className="text-green-500 flex-shrink-0" />}
-      {!unlocked && <Lock size={16} className="text-slate-300 flex-shrink-0" />}
+    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-50 last:border-0">
+      <span className="text-slate-400 font-medium">{label}:</span>
+      <span className="text-slate-700 font-bold text-right truncate max-w-[60%]">{value}</span>
     </div>
   )
 }
