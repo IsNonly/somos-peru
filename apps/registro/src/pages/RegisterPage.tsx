@@ -328,6 +328,7 @@ export default function RegisterPage() {
   const esPersonero = form.rol === 'Personero de Mesa' || form.rol === 'Personero de Centro de Votación'
   const esCoordProvincial = form.rol === 'Coordinador Provincial'
   const esCoordDistrital = form.rol === 'Coordinador Distrital'
+  const esCoordRegional = form.rol === 'Coordinador Regional'
   const esColegioMultiple = esCoordProvincial || esCoordDistrital
 
   // Cascada "lugar de votación": al cambiar un nivel se limpian los inferiores
@@ -582,6 +583,7 @@ export default function RegisterPage() {
                 { id: 'Coordinador Distrital', icon: MapPin, title: 'Coordinador Distrital' },
                 { id: 'Personero de Centro de Votación', icon: Building2, title: 'Personero de Centro de Votación' },
                 { id: 'Personero de Mesa', icon: Shield, title: 'Personero de Mesa' },
+                { id: 'Coordinador Regional', icon: Landmark, title: 'Coordinador Regional' },
               ] as const).map(item => {
                 const Icon = item.icon
                 const sel = form.rol === item.id
@@ -616,6 +618,15 @@ export default function RegisterPage() {
                     )}
                   </SelectWrap>
                 </div>
+              </div>
+            )}
+
+            {/* Coordinador Regional: solo elige el departamento a su cargo */}
+            {esCoordRegional && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <GeoSelect label="Departamento" icon={<Landmark size={18} />}
+                  value={form.departamentoAsignado} onChange={setDepAsig}
+                  options={departamentos} placeholder="Seleccione Departamento" />
               </div>
             )}
 
