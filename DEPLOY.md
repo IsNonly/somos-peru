@@ -84,6 +84,7 @@ En **Supabase → SQL Editor**, correr en este orden (todos son idempotentes):
 7. `supabase/seed_candidaturas.sql` — siembra **Lima Metropolitana** + los 5 distritos donde opera SP (data de prensa, con nombres de candidato).
 8. `supabase/seed_candidaturas_cali.sql` — siembra **el resto del país**: por cada depto/provincia/distrito que ya existe en `colegios` (CALI), la lista estándar de partidos **sin nombre de candidato**. Así cualquier ámbito ya deja contar. Los nombres reales se cargan luego con el Excel oficial:
    `node scripts/importar_candidaturas.mjs <excel>` (formato en el encabezado del script; `SUPABASE_SERVICE_ROLE` evita el bloqueo de RLS).
+9. `supabase/foto_instalacion_mesa.sql` — columnas `actas.foto_instalacion_url` / `actas.instalada_at` para la foto de "Instalación de Mesa de Sufragio" en la pantalla de inicio del personero.
 
 > `docs/somosperu_ambitos.md` lista en qué regiones/provincias compite Somos Perú (referencia para priorizar).
 

@@ -11,7 +11,8 @@ import { subirImagenActa } from '../lib/storage'
 import {
   Camera, Send, CheckCircle, AlertTriangle,
   Loader, MapPin, Key, ChevronDown, ChevronUp, Minus, Plus,
-  Info, PencilLine, Filter, LogOut, UserCheck, Map as MapIcon,
+  Info, PencilLine, LogOut, UserCheck, Map as MapIcon,
+  Eye, Layers, ChevronLeft, X, UserCircle2, type LucideIcon,
 } from 'lucide-react'
 
 type Modo = 'MANUAL' | 'IMAGEN'
@@ -120,6 +121,8 @@ function ConteoPageInner() {
   const [mesaConfirmada, setMesaConfirmada] = useState(false)
   const [electoresHabiles, setElectoresHabiles] = useState('')
   const [modo, setModo]               = useState<Modo>('MANUAL')
+  const [vista, setVista]             = useState<'landing' | 'conteo'>('landing')
+  const [verModal, setVerModal]       = useState<Modo | null>(null)
   const [fase, setFase]               = useState<Fase>('setup')
   const [cand, setCand]               = useState<Candidaturas | null>(null)
   const [candLoading, setCandLoading] = useState(true)
@@ -137,6 +140,11 @@ function ConteoPageInner() {
   const [showKeyInput, setShowKeyInput] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Foto de instalación de mesa (evidencia previa al escrutinio)
+  const [fotoInstalacion, setFotoInstalacion]   = useState<string | null>(null)
+  const [subiendoInstalacion, setSubiendoInstalacion] = useState(false)
+  const instalacionInputRef = useRef<HTMLInputElement>(null)
+
   const bloques = cand?.bloques ?? []
 
   useEffect(() => {
@@ -153,6 +161,13 @@ function ConteoPageInner() {
       setGeminiKey(key)
       if (p?.mesa_asignada) setMesa(p.mesa_asignada)
       if (p?.acta_transmitida) setFase('enviado')
+
+      // Si ya se tomó la foto de instalación antes, recuperarla
+      if (p?.mesa_asignada) {
+        const { data: acta } = await supabase.from('actas')
+          .select('foto_instalacion_url').eq('mesa_numero', p.mesa_asignada).maybeSingle()
+        if (acta?.foto_instalacion_url) setFotoInstalacion(acta.foto_instalacion_url)
+      }
     }
     init()
   }, [])
@@ -208,6 +223,48 @@ function ConteoPageInner() {
       { enableHighAccuracy: true, timeout: 12000 }
     )
   }, [perfil])
+
+  // ── Foto de instalación de mesa (evidencia previa al escrutinio) ───────
+  const tomarFotoInstalacion = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!mesa.trim()) { setError('Ingresa el número de mesa antes de tomar la foto de instalación.'); return }
+    const mime = file.type || 'image/jpeg'
+
+    const reader = new FileReader()
+    reader.onload = async ev => {
+      const dataUrl = ev.target?.result as string
+      setSubiendoInstalacion(true)
+      setError('')
+      try {
+        const url = await subirImagenActa(mesa.trim(), dataUrl, mime)
+        if (!url) { setError('No se pudo subir la foto. Inténtalo de nuevo.'); setSubiendoInstalacion(false); return }
+
+        const dep  = cand?.ambito.departamento ?? perfil?.departamento_asignado ?? perfil?.departamento_vota ?? null
+        const prov = cand?.ambito.provincia    ?? perfil?.provincia_asignado    ?? perfil?.provincia_vota    ?? null
+        const dist = cand?.ambito.distrito     ?? perfil?.distrito_asignado     ?? perfil?.distrito_vota     ?? null
+
+        await supabase.from('actas').upsert({
+          mesa_numero:          mesa.trim(),
+          colegio_nombre:       perfil?.local_asignado ?? perfil?.local_votacion ?? null,
+          departamento:         dep,
+          provincia:            prov,
+          distrito:             dist,
+          personero_id:         userId || null,
+          personero_dni:        perfil?.dni ?? null,
+          foto_instalacion_url: url,
+          instalada_at:         new Date().toISOString(),
+        }, { onConflict: 'mesa_numero' })
+
+        setFotoInstalacion(url)
+      } catch {
+        setError('No se pudo guardar la foto de instalación. Inténtalo de nuevo.')
+      }
+      setSubiendoInstalacion(false)
+    }
+    reader.readAsDataURL(file)
+  }
 
   // ── Manejar foto ────────────────────────────────────────────────────────
   const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -376,35 +433,37 @@ function ConteoPageInner() {
 
   const ambitoTxt = [cand?.ambito.distrito, cand?.ambito.provincia, cand?.ambito.departamento]
     .filter(Boolean).join(', ')
+  const centro = perfil?.local_asignado ?? perfil?.local_votacion ?? 'Sin centro asignado'
+  const distritoTxt = perfil?.distrito_asignado ?? perfil?.distrito_vota ?? cand?.ambito.distrito ?? '—'
 
-  return (
-    <div className="max-w-3xl mx-auto p-4 sm:p-5 space-y-4 fade-in">
-
-      {/* Tarjeta del personero */}
-      <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center flex-shrink-0">
-          <UserCheck size={18} className="text-sky-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-widest text-white/35 font-bold">Personero</p>
-          <p className="text-white font-bold text-sm truncate">{perfil?.nombre_completo ?? '—'}</p>
-          <p className="text-white/40 text-xs truncate">
-            DNI: <span className="text-sky-400 font-medium">{perfil?.dni ?? '—'}</span>
-            {ambitoTxt && <> {'·'} {ambitoTxt}</>}
-          </p>
-        </div>
-        <button onClick={detectarGPS}
-          className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border bg-white/[0.02] flex-shrink-0 ${gpsBtn}`}>
-          {gpsStatus === 'loading'
-            ? <Loader size={13} className="animate-spin" />
-            : <MapPin size={13} />}
-          <span className="hidden sm:inline">Confirmar Llegada</span>
-        </button>
-        <button onClick={() => supabase.auth.signOut()}
-          className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center justify-center flex-shrink-0">
-          <LogOut size={15} />
-        </button>
+  const personeroCard = (
+    <div className="bg-[#131a2e] border border-white/10 rounded-2xl p-4 flex items-center gap-3">
+      <UserCircle2 size={26} className="text-white/70 flex-shrink-0" strokeWidth={1.5} />
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] uppercase tracking-widest text-white/35 font-bold">Personero</p>
+        <p className="text-white font-bold text-sm truncate">{perfil?.nombre_completo ?? '—'}</p>
+        <p className="text-white/40 text-xs truncate">
+          DNI: {perfil?.dni ?? '—'} <span className="mx-1 text-white/20">|</span> Distrito: {distritoTxt}
+        </p>
       </div>
+      <button onClick={detectarGPS}
+        className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border bg-white/[0.02] flex-shrink-0 ${gpsBtn}`}>
+        {gpsStatus === 'loading'
+          ? <Loader size={13} className="animate-spin" />
+          : <MapPin size={13} />}
+        <span className="hidden sm:inline">Confirmar Llegada</span>
+      </button>
+      <button onClick={() => supabase.auth.signOut()}
+        className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center justify-center flex-shrink-0">
+        <LogOut size={15} />
+      </button>
+    </div>
+  )
+
+  // ── LANDING: instalación de mesa + elegir método de escrutinio ──────────
+  if (vista === 'landing') return (
+    <div className="max-w-3xl mx-auto p-4 sm:p-5 space-y-4 fade-in">
+      {personeroCard}
 
       {gpsMsg && (
         <p className={`text-xs px-2 -mt-1 ${
@@ -414,54 +473,143 @@ function ConteoPageInner() {
         </p>
       )}
 
-      {/* Vista: Manual / Imagen */}
-      <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-2 flex items-center gap-2">
-        <span className="flex items-center gap-1 text-white/40 text-xs font-semibold px-2 flex-shrink-0">
-          <Filter size={12} /> Vista:
-        </span>
-        <div className="flex-1 grid grid-cols-2 gap-2">
-          {(['MANUAL', 'IMAGEN'] as Modo[]).map(m => (
-            <button key={m} onClick={() => setModo(m)}
-              className={`py-2.5 rounded-xl text-sm font-bold border transition-all ${
-                modo === m
-                  ? 'bg-sky-500/15 border-sky-500/50 text-sky-300'
-                  : 'bg-transparent border-white/8 text-white/45'}`}>
-              {m === 'MANUAL' ? 'Conteo Manual' : 'Conteo por Imagen'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Número de Mesa / Acta + electores hábiles */}
-      <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-white font-bold text-sm">Número de Mesa / Acta:</span>
-          <span className="font-mono text-white/30 text-sm border border-white/10 rounded-lg px-3 py-1 tabular-nums">
-            {mesa.trim() || '000000'}
+      {/* Instalación de Mesa de Sufragio */}
+      <div className="bg-gradient-to-br from-sky-500/[0.06] to-[#131a2e] border border-sky-500/25 rounded-2xl p-4 space-y-3 shadow-[0_0_24px_-8px_rgba(56,189,248,0.25)]">
+        <p className="flex items-center gap-2 text-sky-400 font-extrabold text-sm">
+          <span className="w-6 h-6 rounded-md bg-sky-500 flex items-center justify-center flex-shrink-0">
+            <Camera size={13} className="text-white" />
           </span>
+          Instalación de Mesa de Sufragio
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+          <div>
+            <label className="text-white/40 text-[11px] font-semibold mb-1 block">Mesa de sufragio:</label>
+            <input value={mesa} onChange={e => { setMesa(e.target.value); setMesaConfirmada(false) }}
+              placeholder="000000"
+              className="w-full bg-[#0b0f1d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 outline-none focus:border-sky-500/50" />
+          </div>
+          <div>
+            <label className="text-white/40 text-[11px] font-semibold mb-1 block">Centro de votación:</label>
+            <input value={centro} disabled readOnly
+              className="w-full bg-[#0b0f1d]/60 border border-white/10 rounded-xl px-4 py-2.5 text-white/50 text-sm outline-none cursor-not-allowed" />
+          </div>
+          <button onClick={() => instalacionInputRef.current?.click()} disabled={subiendoInstalacion}
+            className="py-2.5 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap">
+            {subiendoInstalacion
+              ? <Loader size={15} className="animate-spin" />
+              : fotoInstalacion ? <CheckCircle size={15} /> : <Camera size={15} />}
+            {fotoInstalacion ? 'Foto lista' : 'Tomar Foto'}
+          </button>
+          <input ref={instalacionInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={tomarFotoInstalacion} />
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sky-400 text-sm font-semibold flex-shrink-0">Mesa:</span>
-          <input value={mesa} onChange={e => { setMesa(e.target.value); setMesaConfirmada(false) }}
-            placeholder="Ingresa tu mesa…"
-            className="flex-1 min-w-0 bg-[#0b0f1d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 outline-none focus:border-sky-500/50" />
-          <label className={`flex items-center gap-1.5 text-sm font-semibold flex-shrink-0 cursor-pointer ${mesaConfirmada ? 'text-sky-400' : 'text-white/40'}`}>
+        {fotoInstalacion && (
+          <div className="flex items-center gap-2 rounded-xl overflow-hidden border border-white/10 w-fit">
+            <img src={fotoInstalacion} alt="Instalación de mesa" className="h-14 w-20 object-cover" />
+            <span className="pr-3 text-green-400 text-[11px] font-semibold flex items-center gap-1">
+              <CheckCircle size={12} /> Evidencia guardada
+            </span>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <label className={`flex items-center gap-1.5 text-sm font-semibold cursor-pointer ${mesaConfirmada ? 'text-sky-400' : 'text-white/40'}`}>
             <input type="checkbox" checked={mesaConfirmada}
               onChange={e => setMesaConfirmada(e.target.checked && !!mesa.trim())}
               className="accent-sky-500 w-4 h-4" />
-            Confirmar
+            Confirmar mesa
           </label>
+          <div className="flex items-center gap-2">
+            <span className="text-sky-400 text-xs font-semibold flex-shrink-0">Electores hábiles:</span>
+            <input value={electoresHabiles} inputMode="numeric"
+              onChange={e => setElectoresHabiles(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="Ej. 300"
+              className="w-24 bg-[#0b0f1d] border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs placeholder-white/25 outline-none focus:border-sky-500/50 tabular-nums" />
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sky-400 text-sm font-semibold flex-shrink-0">Electores hábiles de la mesa:</span>
-          <input value={electoresHabiles} inputMode="numeric"
-            onChange={e => setElectoresHabiles(e.target.value.replace(/\D/g, '').slice(0, 4))}
-            placeholder="Ej. 300"
-            className="w-28 bg-[#0b0f1d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 outline-none focus:border-sky-500/50 tabular-nums" />
+      </div>
+
+      {/* Escrutinio: elegir método */}
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between px-1">
+          <p className="flex items-center gap-2 text-white font-extrabold text-sm">
+            <Layers size={16} className="text-white/60" /> Escrutinio
+          </p>
+          <span className="text-white/30 text-[11px] font-mono">Mesa de sufragio {mesa.trim() || '---'}</span>
         </div>
-        <p className="text-white/25 text-[11px]">
-          El número impreso en el acta (padrón de la mesa). Sirve para cuadrar el total de votos.
-        </p>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <TarjetaEscrutinio
+            color="sky" icon={PencilLine}
+            titulo="Registro Manual"
+            desc="Ingreso casilla por casilla para candidatos y actas."
+            botonLabel="Registro Manual"
+            onIniciar={() => { setModo('MANUAL'); setVista('conteo') }}
+            onVer={() => setVerModal('MANUAL')}
+          />
+          <TarjetaEscrutinio
+            color="violet" icon={Camera}
+            titulo="Conteo por Imagen (OCR)"
+            desc="Escaneo inteligente de actas con IA y extracción de votos."
+            botonLabel="Escanear Acta"
+            onIniciar={() => { setModo('IMAGEN'); setVista('conteo') }}
+            onVer={() => setVerModal('IMAGEN')}
+          />
+        </div>
+      </div>
+
+      {verModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4 fade-in"
+          onClick={() => setVerModal(null)}>
+          <div className="w-full max-w-sm bg-[#121829] border border-white/10 rounded-3xl p-6 space-y-4"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-bold text-sm">
+                {verModal === 'MANUAL' ? 'Registro Manual' : 'Conteo por Imagen (OCR)'}
+              </h3>
+              <button onClick={() => setVerModal(null)} className="text-white/40 hover:text-white/70">
+                <X size={18} />
+              </button>
+            </div>
+            {granTotal === 0 ? (
+              <p className="text-white/40 text-xs">Aún no has registrado votos.</p>
+            ) : (
+              <div className="grid gap-2 text-center" style={{ gridTemplateColumns: `repeat(${bloques.length + 1}, minmax(0, 1fr))` }}>
+                {bloques.map(b => (
+                  <div key={b.nivel}>
+                    <p className="text-white/40 text-[9px] uppercase tracking-widest font-semibold">{b.nivel}</p>
+                    <p className="text-white text-base font-extrabold tabular-nums">{totalNivel(b.nivel)}</p>
+                  </div>
+                ))}
+                <div>
+                  <p className="text-white/40 text-[9px] uppercase tracking-widest font-semibold">Total</p>
+                  <p className="text-sky-400 text-base font-extrabold tabular-nums">{granTotal}</p>
+                </div>
+              </div>
+            )}
+            <p className="text-white/30 text-[11px]">Estado: Pendiente de transmisión.</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  // ── CONTEO: candidatos del método elegido ────────────────────────────────
+  return (
+    <div className="max-w-3xl mx-auto p-4 sm:p-5 space-y-4 fade-in">
+
+      {/* Volver + método activo */}
+      <div className="flex items-center gap-3">
+        <button onClick={() => setVista('landing')}
+          className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 text-white/60 flex items-center justify-center flex-shrink-0">
+          <ChevronLeft size={17} />
+        </button>
+        <div className="min-w-0">
+          <p className="text-white font-bold text-sm truncate">
+            {modo === 'MANUAL' ? 'Registro Manual' : 'Conteo por Imagen (OCR)'}
+          </p>
+          <p className="text-white/35 text-xs truncate">
+            Mesa {mesa.trim() || '000000'} {'·'} {centro}
+          </p>
+        </div>
       </div>
 
       {/* Modo IMAGEN: foto del acta + OCR */}
@@ -592,6 +740,43 @@ function ConteoPageInner() {
           Ingresa el N° de mesa y marca "Confirmar" para habilitar el envío.
         </p>
       )}
+    </div>
+  )
+}
+
+// ── Tarjeta de método de escrutinio (Registro Manual / Conteo por Imagen) ────
+function TarjetaEscrutinio({ color, icon: Icon, titulo, desc, botonLabel, onIniciar, onVer }: {
+  color: 'sky' | 'violet'; icon: LucideIcon
+  titulo: string; desc: string; botonLabel: string
+  onIniciar: () => void; onVer: () => void
+}) {
+  const tema = color === 'sky'
+    ? { fondo: 'from-sky-500/10 to-[#131a2e] border-sky-500/20', icono: 'bg-sky-500', boton: 'bg-sky-500 hover:bg-sky-400' }
+    : { fondo: 'from-violet-500/10 to-[#131a2e] border-violet-500/20', icono: 'bg-violet-500', boton: 'bg-gradient-to-r from-purple-600 to-violet-500 hover:opacity-90' }
+  return (
+    <div className={`bg-gradient-to-br ${tema.fondo} border rounded-2xl p-3.5 flex flex-col gap-2.5`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${tema.icono}`}>
+          <Icon size={16} className="text-white" />
+        </div>
+        <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-1 rounded-full bg-white/10 text-white/50 flex-shrink-0">
+          Pendiente
+        </span>
+      </div>
+      <div className="min-w-0">
+        <p className="text-white font-bold text-xs leading-tight">{titulo}</p>
+        <p className="text-white/40 text-[10px] leading-snug mt-1">{desc}</p>
+      </div>
+      <div className="mt-auto space-y-1.5">
+        <button onClick={onIniciar}
+          className={`w-full py-2 rounded-xl text-white text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${tema.boton}`}>
+          <Icon size={12} /> {botonLabel}
+        </button>
+        <button onClick={onVer}
+          className="w-full py-1.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[11px] font-semibold flex items-center justify-center gap-1.5">
+          <Eye size={12} /> Ver
+        </button>
+      </div>
     </div>
   )
 }

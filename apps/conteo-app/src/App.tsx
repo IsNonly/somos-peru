@@ -1,10 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { CheckSquare } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import LoginPage from './pages/LoginPage'
 import ConteoPage from './pages/ConteoPage'
 import HistorialPage from './pages/HistorialPage'
-import BottomNav from './components/BottomNav'
 import GateCapacitacion, { type Pasos } from './components/GateCapacitacion'
 import PersoneroLocalPage from './pages/PersoneroLocalPage'
 import IrAlPanel from './components/IrAlPanel'
@@ -99,7 +99,18 @@ export default function App() {
   return (
     <BrowserRouter>
       {user && <div className="fixed inset-0 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto pb-20">
+        <header className="flex items-center gap-2.5 px-4 py-3 bg-[#0b0f19] border-b border-white/8 flex-shrink-0">
+          <div className="flex items-center gap-2 text-indigo-400">
+            <div className="p-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10">
+              <CheckSquare size={18} className="text-indigo-400" />
+            </div>
+            <span className="font-extrabold text-base tracking-tight text-white">VotoReal</span>
+          </div>
+          <span className="text-[9px] font-bold font-mono tracking-wider px-2 py-0.5 rounded-full bg-[#161d31] text-indigo-400 border border-indigo-500/20">
+            MÓVIL
+          </span>
+        </header>
+        <div className="flex-1 overflow-y-auto">
           <Routes>
             <Route path="/" element={<Navigate to="/conteo" />} />
             <Route path="/conteo" element={<ConteoPage />} />
@@ -107,7 +118,6 @@ export default function App() {
             <Route path="*" element={<Navigate to="/conteo" />} />
           </Routes>
         </div>
-        <BottomNav />
       </div>}
       {!user && (
         <Routes>
