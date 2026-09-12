@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import type { AdminCtx } from '../components/Layout'
 import { Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -33,16 +35,17 @@ const KPI = ({ icon: Icon, label, value, color }: { icon: any; label: string; va
 )
 
 export default function DashboardPage() {
+  const { esCoordRegional, departamento } = useOutletContext<AdminCtx>()
   const [stats, setStats] = useState<Stats | null>(null)
   const [distDist, setDistDist] = useState<DistritoCount[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetch = async () => {
-      const [{ data: profiles }, { data: metas }] = await Promise.all([
-        supabase.from('profiles').select('rol, quiz_estado, videos_vistos, pdfs_vistos, credencial_estado, distrito_asignado, acta_transmitida'),
-        supabase.from('distritos').select('nombre, meta_mesas'),
-      ])
+      let pq = supabase.from('profiles')
+        .select('rol, quiz_estado, videos_vistos, pdfs_vistos, credencial_estado, distrito_asignado, acta_transmitida, departamento_asignado, departamento_vota')
+      if (esCoordRegional && departamento) pq = pq.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
+      const { data: profiles } = await pq
 
       if (profiles) {
         const personeros   = profiles.filter(p => p.rol === 'Personero de Mesa' || p.rol === 'Personero de Centro de Votación' || p.rol === 'Personero de Local de Votación').length
@@ -78,7 +81,7 @@ export default function DashboardPage() {
       setLoading(false)
     }
     fetch()
-  }, [])
+  }, [esCoordRegional, departamento])
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -112,7 +115,10 @@ export default function DashboardPage() {
       <div>
         <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Panel de Control</p>
         <h1 className="text-white text-2xl font-bold">Dashboard Electoral</h1>
-        <p className="text-white/40 text-sm mt-1">Avance meta total — Elecciones Regionales y Municipales 2026</p>
+        <p className="text-white/40 text-sm mt-1">
+          Avance meta total — Elecciones Regionales y Municipales 2026
+          {esCoordRegional && departamento && <> · <span className="text-white/70 font-semibold">{departamento}</span></>}
+        </p>
       </div>
 
       {/* KPIs */}
@@ -137,21 +143,23 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Meta coverage */}
-      <div className="bg-[#16162a] border border-white/8 rounded-2xl p-6">
-        <h2 className="text-white font-semibold mb-1">Cobertura de Mesas</h2>
-        <p className="text-white/40 text-xs mb-4">Total meta Lima Metropolitana: 29,121 mesas</p>
-        <div className="relative h-3 bg-white/5 rounded-full overflow-hidden">
-          <div
-            className="absolute inset-y-0 left-0 bg-brand-red rounded-full transition-all"
-            style={{ width: `${Math.min(((stats?.total_personeros ?? 0) / 29121) * 100, 100)}%` }}
-          />
+      {/* Meta coverage — solo tiene sentido para Lima Metropolitana (meta fija conocida) */}
+      {!esCoordRegional && (
+        <div className="bg-[#16162a] border border-white/8 rounded-2xl p-6">
+          <h2 className="text-white font-semibold mb-1">Cobertura de Mesas</h2>
+          <p className="text-white/40 text-xs mb-4">Total meta Lima Metropolitana: 29,121 mesas</p>
+          <div className="relative h-3 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className="absolute inset-y-0 left-0 bg-brand-red rounded-full transition-all"
+              style={{ width: `${Math.min(((stats?.total_personeros ?? 0) / 29121) * 100, 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-2">
+            <span className="text-white/40 text-xs">{stats?.total_personeros ?? 0} cubiertas</span>
+            <span className="text-white/40 text-xs">{((stats?.total_personeros ?? 0) / 291.21).toFixed(1)}%</span>
+          </div>
         </div>
-        <div className="flex justify-between mt-2">
-          <span className="text-white/40 text-xs">{stats?.total_personeros ?? 0} cubiertas</span>
-          <span className="text-white/40 text-xs">{((stats?.total_personeros ?? 0) / 291.21).toFixed(1)}%</span>
-        </div>
-      </div>
+      )}
     </div>
   )
 }

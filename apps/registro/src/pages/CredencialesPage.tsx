@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Profile } from '../lib/supabase'
+import type { AdminCtx } from '../components/Layout'
 import { Award, Download, Search, CheckCircle, FileText, File } from 'lucide-react'
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell,
@@ -91,20 +93,22 @@ function exportarCSV(profiles: Profile[]) {
 }
 
 export default function CredencialesPage() {
+  const { esCoordRegional, departamento } = useOutletContext<AdminCtx>()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    supabase.from('profiles')
+    let q = supabase.from('profiles')
       .select('*')
       .eq('credencial_estado', 'Confirmado')
       .order('fecha_registro', { ascending: false })
-      .then(({ data }) => {
-        setProfiles((data ?? []) as Profile[])
-        setLoading(false)
-      })
-  }, [])
+    if (esCoordRegional && departamento) q = q.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
+    q.then(({ data }) => {
+      setProfiles((data ?? []) as Profile[])
+      setLoading(false)
+    })
+  }, [esCoordRegional, departamento])
 
   const filtered = profiles.filter(p =>
     !search || p.nombre_completo?.toLowerCase().includes(search.toLowerCase()) || p.dni?.includes(search)

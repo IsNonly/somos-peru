@@ -1,7 +1,12 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Building2, Users, BookOpen, Award, LogOut, Menu, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+
+export interface AdminCtx {
+  esCoordRegional: boolean
+  departamento: string   // '' = sin restricción (Administrador General ve todo el país)
+}
 
 const NAV = [
   { to: '/admin/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
@@ -14,6 +19,22 @@ const NAV = [
 export default function Layout() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
+  const [ctx, setCtx] = useState<AdminCtx>({ esCoordRegional: false, departamento: '' })
+
+  useEffect(() => {
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const dni = (user.email ?? '').split('@')[0]
+      let { data } = await supabase.from('profiles').select('rol, departamento_asignado').eq('dni', dni).maybeSingle()
+      if (!data) {
+        const r = await supabase.from('profiles').select('rol, departamento_asignado').eq('id', user.id).maybeSingle()
+        data = r.data
+      }
+      const esCoordRegional = data?.rol === 'Coordinador Regional'
+      setCtx({ esCoordRegional, departamento: esCoordRegional ? (data?.departamento_asignado || '') : '' })
+    })()
+  }, [])
 
   const logout = async () => {
     await supabase.auth.signOut()
@@ -73,7 +94,7 @@ export default function Layout() {
         </header>
 
         <main className="flex-1 p-4 lg:p-8">
-          <Outlet />
+          <Outlet context={ctx} />
         </main>
       </div>
     </div>

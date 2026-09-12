@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { supabase, DISTRITOS, ROLES, generarToken, generarClave } from '../lib/supabase'
 import type { Profile, Rol } from '../lib/supabase'
+import type { AdminCtx } from '../components/Layout'
 import { rolNorm } from '../lib/panel'
 import { Search, Download, X, CheckCircle, XCircle, Clock, MessageCircle } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -30,6 +32,7 @@ const BADGE_CRED: Record<string, { cls: string; icon: any }> = {
 }
 
 export default function PersonerosPage() {
+  const { esCoordRegional, departamento } = useOutletContext<AdminCtx>()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -37,13 +40,22 @@ export default function PersonerosPage() {
   const [distFilter, setDistFilter] = useState('')
   const [credFilter, setCredFilter] = useState('')
   const [detalle, setDetalle] = useState<Profile | null>(null)
+  const [distritosDepto, setDistritosDepto] = useState<string[]>(DISTRITOS)
+
+  useEffect(() => {
+    if (!esCoordRegional || !departamento) return
+    supabase.from('vista_ubigeo').select('distrito').eq('departamento', departamento).order('distrito')
+      .then(({ data }) => setDistritosDepto([...new Set((data ?? []).map((d: any) => d.distrito).filter(Boolean))]))
+  }, [esCoordRegional, departamento])
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('profiles').select('*').order('fecha_registro', { ascending: false })
+    let q = supabase.from('profiles').select('*').order('fecha_registro', { ascending: false })
+    if (esCoordRegional && departamento) q = q.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
+    const { data } = await q
     setProfiles((data ?? []) as Profile[])
     setLoading(false)
-  }, [])
+  }, [esCoordRegional, departamento])
 
   useEffect(() => { load() }, [load])
 
@@ -121,7 +133,7 @@ export default function PersonerosPage() {
         <select value={distFilter} onChange={e => setDistFilter(e.target.value)}
           className="bg-[#16162a] border border-white/8 rounded-xl px-3 py-2 text-sm text-white/70 outline-none">
           <option value="">Todos los distritos</option>
-          {DISTRITOS.map(d => <option key={d} value={d}>{d}</option>)}
+          {distritosDepto.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         <select value={credFilter} onChange={e => setCredFilter(e.target.value)}
           className="bg-[#16162a] border border-white/8 rounded-xl px-3 py-2 text-sm text-white/70 outline-none">

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { supabase, DISTRITOS } from '../lib/supabase'
+import type { AdminCtx } from '../components/Layout'
 import { Search, Download, Building2, LayoutGrid, ShieldCheck, MapPin, Users, Phone, AlertTriangle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -46,9 +48,13 @@ async function traerTodo<T>(build: (from: number, to: number) => any): Promise<T
 }
 
 export default function CentrosPage() {
+  const { esCoordRegional, departamento } = useOutletContext<AdminCtx>()
+  const dep = esCoordRegional && departamento ? departamento : 'Lima'
+  const prov = dep === 'Lima' ? 'Lima' : ''
   const [cols, setCols] = useState<Colegio[]>([])
   const [pers, setPers] = useState<Perfil[]>([])
   const [coords, setCoords] = useState<Perfil[]>([])
+  const [distritosDepto, setDistritosDepto] = useState<string[]>(DISTRITOS)
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [dist, setDist] = useState('')
@@ -59,12 +65,17 @@ export default function CentrosPage() {
     let vivo = true
     ;(async () => {
       setLoading(true)
-      const [colsData, persData, coordData] = await Promise.all([
-        traerTodo<Colegio>((from, to) =>
-          supabase.from('colegios')
-            .select('id, nombre, distrito, direccion, total_mesas, electores')
-            .eq('provincia', 'Lima').eq('departamento', 'Lima')
-            .order('distrito').order('nombre').range(from, to)),
+      let cq = supabase.from('colegios')
+        .select('id, nombre, distrito, direccion, total_mesas, electores')
+        .eq('departamento', dep)
+      if (prov) cq = cq.eq('provincia', prov)
+      const colsData = await traerTodo<Colegio>((from, to) => cq.order('distrito').order('nombre').range(from, to))
+      if (!vivo) return
+
+      const distritosAmbito = new Set(colsData.map(c => c.distrito).filter(Boolean) as string[])
+      setDistritosDepto([...distritosAmbito].sort((a, b) => a.localeCompare(b, 'es')))
+
+      const [persRaw, coordRaw] = await Promise.all([
         traerTodo<Perfil>((from, to) =>
           supabase.from('profiles')
             .select('nombre_completo, celular, rol, local_asignado, local_votacion, distrito_asignado, distrito_vota')
@@ -75,10 +86,17 @@ export default function CentrosPage() {
             .in('rol', [...ROLES_COORD_DIST, 'Coordinador Provincial']).range(from, to)),
       ])
       if (!vivo) return
-      setCols(colsData); setPers(persData); setCoords(coordData); setLoading(false)
+      const enAmbito = (p: Perfil) => {
+        const d = p.distrito_asignado || p.distrito_vota
+        return !!d && distritosAmbito.has(d)
+      }
+      setCols(colsData)
+      setPers(persRaw.filter(enAmbito))
+      setCoords(coordRaw.filter(enAmbito))
+      setLoading(false)
     })()
     return () => { vivo = false }
-  }, [])
+  }, [dep, prov])
 
   const { encPorLocal, mesasPorLocal, zonalPorDistrito } = useMemo(() => {
     const enc = new Map<string, { nombre: string; celular: string | null }>()
@@ -182,7 +200,7 @@ export default function CentrosPage() {
         <select value={dist} onChange={e => setDist(e.target.value)}
           className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none">
           <option value="">📍 Todos los distritos</option>
-          {DISTRITOS.map(d => <option key={d} value={d}>{d}</option>)}
+          {distritosDepto.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         <select value={orden} onChange={e => setOrden(e.target.value as any)}
           className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none">
@@ -198,10 +216,10 @@ export default function CentrosPage() {
       {/* Indicadores */}
       <div>
         <p className="text-sm font-extrabold text-slate-900 mb-2 flex items-center gap-2">
-          <LayoutGrid size={16} /> Indicadores Electorales · Lima Metropolitana
+          <LayoutGrid size={16} /> Indicadores Electorales · {dep === 'Lima' ? 'Lima Metropolitana' : dep}
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <Kpi color="#3b82f6" icon={Users}      value={kpis.persMesa.toLocaleString('es-PE')}  label="Personeros de Mesa" sub="Inscritos en Lima Metro" />
+          <Kpi color="#3b82f6" icon={Users}      value={kpis.persMesa.toLocaleString('es-PE')}  label="Personeros de Mesa" sub={`Inscritos en ${dep === 'Lima' ? 'Lima Metro' : dep}`} />
           <Kpi color="#06b6d4" icon={Building2}   value={kpis.centros.toLocaleString('es-PE')}   label="Centros de Votación" sub="Con personal asignado" />
           <Kpi color="#f59e0b" icon={ShieldCheck} value={kpis.conPCV.toLocaleString('es-PE')}    label="Centros con PCV" sub="Personero de Local asignado" />
           <Kpi color="#22c55e" icon={ShieldCheck} value={String(kpis.coordDist)}                 label="Coord. Distritales" sub="Distritos activos" />

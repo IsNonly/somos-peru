@@ -19,6 +19,9 @@ import type { User } from '@supabase/supabase-js'
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [esAdmin, setEsAdmin] = useState(false)
+  // "Coordinador Regional" también es esAdmin (entra a /panel y /admin), pero su
+  // destino post-login es /admin (panel completo, acotado a su depto) en vez de /panel.
+  const [esCoordRegional, setEsCoordRegional] = useState(false)
   // Hasta que no se resuelva el rol del usuario logueado NO renderizamos las
   // rutas (si no, el redirect de /login se evalúa con esAdmin viejo y manda
   // al admin a /capacitate).
@@ -31,7 +34,7 @@ export default function App() {
     const resolver = async (u: User | null) => {
       setRolListo(false)
       setUser(u)
-      if (!u) { if (vivo) { setEsAdmin(false); setRolListo(true) } ; return }
+      if (!u) { if (vivo) { setEsAdmin(false); setEsCoordRegional(false); setRolListo(true) } ; return }
       const dni = (u.email ?? '').split('@')[0]
       let { data } = await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()
       if (!data) {
@@ -41,6 +44,7 @@ export default function App() {
       if (!vivo) return
       const rol = data?.rol || ''
       setEsAdmin(rol.includes('Administrador') || rol.includes('Coordinador'))
+      setEsCoordRegional(rol === 'Coordinador Regional')
       setRolListo(true)
     }
 
@@ -61,7 +65,7 @@ export default function App() {
         {/* Rutas públicas */}
         <Route path="/" element={<RegisterPage />} />
         <Route path="/registro" element={<RegisterPage />} />
-        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to={esAdmin ? '/panel' : '/capacitate'} />} />
+        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to={esCoordRegional ? '/admin' : esAdmin ? '/panel' : '/capacitate'} />} />
 
         {/* Página de capacitación para personeros registrados */}
         <Route path="/capacitate" element={user ? <CapacitarPage /> : <Navigate to="/login" />} />
