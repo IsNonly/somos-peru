@@ -1,9 +1,14 @@
 node_modules/
 dist/
+.vercel
 
 .env
 .env.*
 !.env.example
+
+# Credenciales locales de cada instancia (una por provincia), pasadas por chat
+# y usadas solo por los scripts de bootstrap. Nunca van al repo.
+scripts/.instancias/
 *.local
 .DS_Store
 .claude/
@@ -16,3 +21,6 @@ dist/
 CALI.xlsx
 # ...salvo el video de capacitación que sí necesita desplegarse
 !apps/registro/public/videos/*.mp4
+
+.vercel
+.env*

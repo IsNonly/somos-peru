@@ -54,12 +54,14 @@ async function main() {
 
   const env = leerEnv(path.resolve(envPath))
   const supabaseUrl = env.VITE_SUPABASE_URL
-  const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error(`❌ Faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY en ${envPath}`)
+  // `colegios` solo acepta INSERT de `authenticated`/`service_role` (rls_seguridad.sql) —
+  // se necesita la service_role key, la anon key no alcanza.
+  const supabaseKey = env.SUPABASE_SERVICE_ROLE || env.VITE_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !env.SUPABASE_SERVICE_ROLE) {
+    console.error(`❌ Falta VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE en ${envPath}`)
     process.exit(1)
   }
-  const supabase = createClient(supabaseUrl, supabaseAnonKey)
+  const supabase = createClient(supabaseUrl, supabaseKey)
 
   const filePath = path.resolve('../CALI.xlsx')
   console.log(`📖 Leyendo ${filePath} ...`)
