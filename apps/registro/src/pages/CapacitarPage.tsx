@@ -207,7 +207,7 @@ export default function CapacitarPage() {
   const unlockedCartilla = doneVideo
   const unlockedQuiz     = doneVideo && doneCartilla
 
-  const responder = (idx: number) => {
+  const responder = async (idx: number) => {
     const nuevas = [...respuestas, idx]
     setRespuestas(nuevas)
     if (currentQ + 1 < QUIZ.length) {
@@ -217,9 +217,12 @@ export default function CapacitarPage() {
       const aprobado = puntaje >= 4
       setQuizDone({ puntaje, aprobado })
       if (aprobado) setFechaAprobacion(new Date())
-      supabase.from('quiz_intentos').insert({ user_id: authId, puntaje, aprobado, respuestas: nuevas })
+      // Los query builders de supabase-js son "lazy": si no se les hace await,
+      // el request nunca se envía. Sin el await de estas dos líneas, el quiz
+      // quedaba "Aprobado" solo en el estado local de React y nunca en la BD.
+      await supabase.from('quiz_intentos').insert({ user_id: authId, puntaje, aprobado, respuestas: nuevas })
       // Al aprobar el quiz la capacitación queda completa -> cuenta habilitada
-      supabase.from('profiles').update({
+      await supabase.from('profiles').update({
         quiz_estado: aprobado ? 'Aprobado' : 'Reprobado',
         ...(aprobado ? { credencial_estado: 'Confirmado' } : {}),
       }).eq('id', userId)

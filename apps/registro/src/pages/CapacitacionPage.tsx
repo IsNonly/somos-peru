@@ -136,7 +136,7 @@ export default function CapacitacionPage() {
   const pdfsOk   = items.filter(i => i.tipo === 'PDF').filter(i => isCompletado(i.id)).length >= 2
   const puedeQuiz = videosOk && pdfsOk && !quizDone
 
-  const responder = (idx: number) => {
+  const responder = async (idx: number) => {
     const nuevas = [...respuestas, idx]
     setRespuestas(nuevas)
     if (currentQ + 1 < QUIZ.length) {
@@ -145,8 +145,9 @@ export default function CapacitacionPage() {
       const puntaje = nuevas.reduce((acc, r, i) => acc + (r === QUIZ[i].correcta ? 1 : 0), 0)
       const aprobado = puntaje >= 4
       setQuizDone({ puntaje, aprobado })
-      supabase.from('quiz_intentos').insert({ user_id: authId, puntaje, aprobado, respuestas: nuevas })
-      supabase.from('profiles').update({ quiz_estado: aprobado ? 'Aprobado' : 'Reprobado' }).eq('id', userId)
+      // Sin await, el query builder de supabase-js nunca envía el request.
+      await supabase.from('quiz_intentos').insert({ user_id: authId, puntaje, aprobado, respuestas: nuevas })
+      await supabase.from('profiles').update({ quiz_estado: aprobado ? 'Aprobado' : 'Reprobado' }).eq('id', userId)
     }
   }
 

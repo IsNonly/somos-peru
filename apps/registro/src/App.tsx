@@ -53,32 +53,39 @@ export default function App() {
     return () => { vivo = false; subscription.unsubscribe() }
   }, [])
 
-  if (!rolListo) return (
+  const Spinner = (
     <div className="min-h-screen flex items-center justify-center bg-[#c9e6f8]">
       <div className="w-8 h-8 border-2 border-[#00a3e8] border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
+  // El gate de `rolListo` se aplica POR RUTA (no como early-return global antes
+  // de <BrowserRouter>): un early-return global desmonta TODA la app -incluida
+  // RegisterPage- cada vez que cambia el estado de auth. Como el registro ahora
+  // autentica al usuario al instante (confirm email OFF), eso pasaba justo
+  // después de registrarse y borraba la pantalla de éxito (token/clave) antes
+  // de que el personero la viera. Las rutas públicas (/ y /registro) no
+  // dependen de esAdmin/esCoordRegional, así que no necesitan esperar a `rolListo`.
   return (
     <BrowserRouter>
       <Routes>
         {/* Rutas públicas */}
         <Route path="/" element={<RegisterPage />} />
         <Route path="/registro" element={<RegisterPage />} />
-        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to={esCoordRegional ? '/admin' : esAdmin ? '/panel' : '/capacitate'} />} />
+        <Route path="/login" element={!rolListo ? Spinner : !user ? <LoginPage /> : <Navigate to={esCoordRegional ? '/admin' : esAdmin ? '/panel' : '/capacitate'} />} />
 
         {/* Página de capacitación para personeros registrados */}
-        <Route path="/capacitate" element={user ? <CapacitarPage /> : <Navigate to="/login" />} />
+        <Route path="/capacitate" element={!rolListo ? Spinner : user ? <CapacitarPage /> : <Navigate to="/login" />} />
 
         {/* Panel de coordinadores: solo Administrador / Coordinador */}
-        <Route path="/panel" element={!user ? <Navigate to="/login" /> : esAdmin ? <PanelLayout /> : <Navigate to="/capacitate" />}>
+        <Route path="/panel" element={!rolListo ? Spinner : !user ? <Navigate to="/login" /> : esAdmin ? <PanelLayout /> : <Navigate to="/capacitate" />}>
           <Route index element={<PanelGeneral />} />
           <Route path="capacitaciones" element={<PanelCapacitaciones />} />
           <Route path="trayecto" element={<PanelTrayecto />} />
         </Route>
 
         {/* Panel admin clásico: solo Administrador / Coordinador */}
-        <Route path="/admin" element={!user ? <Navigate to="/login" /> : esAdmin ? <Layout /> : <Navigate to="/capacitate" />}>
+        <Route path="/admin" element={!rolListo ? Spinner : !user ? <Navigate to="/login" /> : esAdmin ? <Layout /> : <Navigate to="/capacitate" />}>
           <Route index element={<Navigate to="/admin/dashboard" />} />
           <Route path="dashboard"    element={<DashboardPage />} />
           <Route path="centros"      element={<CentrosPage />} />
