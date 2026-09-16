@@ -3,12 +3,17 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev:registro":    "cd apps/registro    && npm run dev",
-    "dev:conteo-app":  "cd apps/conteo-app  && npm run dev",
-    "dev:conteo-web":  "cd apps/conteo-web  && npm run dev",
-    "build:registro":  "cd apps/registro    && npm run build",
-    "build:app":       "cd apps/conteo-app  && npm run build",
-    "build:web":       "cd apps/conteo-web  && npm run build",
+    "dev:registro": "cd apps/registro    && npm run dev",
+    "dev:conteo-app": "cd apps/conteo-app  && npm run dev",
+    "dev:conteo-web": "cd apps/conteo-web  && npm run dev",
+    "build:registro": "cd apps/registro    && npm run build",
+    "build:app": "cd apps/conteo-app  && npm run build",
+    "build:web": "cd apps/conteo-web  && npm run build",
     "install:all": "cd apps/registro && npm install && cd ../conteo-app && npm install && cd ../conteo-web && npm install"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "pg": "^8.23.0",
+    "xlsx": "^0.18.5"
   }
 }
