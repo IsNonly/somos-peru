@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { supabase, DISTRITOS } from '../lib/supabase'
+import { supabase, AMBITO_DISTRITOS, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import type { AdminCtx } from '../components/Layout'
 import { Search, Download, Building2, LayoutGrid, ShieldCheck, MapPin, Users, Phone, AlertTriangle } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -49,12 +49,12 @@ async function traerTodo<T>(build: (from: number, to: number) => any): Promise<T
 
 export default function CentrosPage() {
   const { esCoordRegional, departamento } = useOutletContext<AdminCtx>()
-  const dep = esCoordRegional && departamento ? departamento : 'Tumbes'
+  const dep = esCoordRegional && departamento ? departamento : AMBITO_DEPARTAMENTO
   const prov = ''
   const [cols, setCols] = useState<Colegio[]>([])
   const [pers, setPers] = useState<Perfil[]>([])
   const [coords, setCoords] = useState<Perfil[]>([])
-  const [distritosDepto, setDistritosDepto] = useState<string[]>(DISTRITOS)
+  const [distritosDepto, setDistritosDepto] = useState<string[]>(AMBITO_DISTRITOS)
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [dist, setDist] = useState('')

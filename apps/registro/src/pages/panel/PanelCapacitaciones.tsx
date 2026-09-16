@@ -10,7 +10,7 @@ import {
   MessageCircle, PieChart, BarChart3, CheckCircle2, Pencil, Lock, Save, Trash2,
   User, Phone, ShieldCheck, MapPin, Building2, Hash, Sparkles,
 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { supabase, AMBITO_DEPARTAMENTO } from '../../lib/supabase'
 import {
   usePanelData, rolNorm, ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST,
   type Perfil, type Colegio,
@@ -143,7 +143,7 @@ export default function PanelCapacitaciones() {
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Capacitaciones')
-    XLSX.writeFile(wb, `SomosPeru_Tumbes_Capacitaciones_${new Date().toISOString().split('T')[0]}.xlsx`)
+    XLSX.writeFile(wb, `SomosPeru_${AMBITO_DEPARTAMENTO}_Capacitaciones_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   if (d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>

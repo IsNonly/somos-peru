@@ -5,12 +5,15 @@ export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 )
 
-// Distritos de Tumbes (13, en sus 3 provincias): ámbito por defecto del Administrador.
-export const DISTRITOS_TUMBES = [
-  'Tumbes', 'Corrales', 'La Cruz', 'Pampas de Hospital', 'San Jacinto', 'San Juan de la Virgen',
-  'Zorritos', 'Casitas', 'Canoas de Punta Sal',
-  'Zarumilla', 'Matapalo', 'Papayal', 'Aguas Verdes',
-]
+// Ámbito operado por esta instancia (una por provincia/distrito, cada una con su
+// propia base Supabase). Default = Tumbes para no requerir env vars nuevas en ese deploy.
+export const AMBITO_DEPARTAMENTO = (import.meta.env.VITE_AMBITO_DEPARTAMENTO as string) || 'Tumbes'
+export const AMBITO_PROVINCIAS = ((import.meta.env.VITE_AMBITO_PROVINCIAS as string) || 'Tumbes,Zarumilla,Contralmirante Villar')
+  .split(',').map(s => s.trim()).filter(Boolean)
+// Distritos del ámbito (13 de Tumbes, en sus 3 provincias, por defecto): ámbito por defecto del Administrador.
+export const AMBITO_DISTRITOS = ((import.meta.env.VITE_AMBITO_DISTRITOS as string) ||
+  'Tumbes,Corrales,La Cruz,Pampas de Hospital,San Jacinto,San Juan de la Virgen,Zorritos,Casitas,Canoas de Punta Sal,Zarumilla,Matapalo,Papayal,Aguas Verdes')
+  .split(',').map(s => s.trim()).filter(Boolean)
 
 export const PARTIDO_COLORES: Record<string, string> = {
   'Somos Perú': '#E8534A',

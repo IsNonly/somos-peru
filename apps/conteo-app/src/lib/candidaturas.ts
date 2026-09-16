@@ -8,7 +8,7 @@
 //   PROVINCIAL -> Alcalde Provincial
 //   DISTRITAL  -> Alcalde Distrital
 // ────────────────────────────────────────────────────────────────────────────
-import { supabase } from './supabase'
+import { supabase, AMBITO_DEPARTAMENTO } from './supabase'
 import type { Candidato } from './supabase'
 
 export type NivelCandidatura = 'REGIONAL' | 'PROVINCIAL' | 'DISTRITAL'
@@ -77,9 +77,9 @@ export async function resolverAmbito(perfil: any): Promise<Ambito> {
       .not('departamento', 'is', null)
       .limit(50)
     if (data && data.length) {
-      // Preferir Tumbes si el mismo nombre de distrito se repite entre departamentos
-      const tumbes = data.find(d => d.departamento === 'Tumbes')
-      const elegido = tumbes ?? data[0]
+      // Preferir el departamento de esta instancia si el mismo nombre de distrito se repite entre departamentos
+      const propio = data.find(d => d.departamento === AMBITO_DEPARTAMENTO)
+      const elegido = propio ?? data[0]
       departamento = departamento ?? elegido.departamento
       provincia = provincia ?? elegido.provincia
     }

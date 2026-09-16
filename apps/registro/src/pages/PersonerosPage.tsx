@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { supabase, DISTRITOS, ROLES, generarToken, generarClave } from '../lib/supabase'
+import { supabase, AMBITO_DISTRITOS, ROLES, generarToken, generarClave } from '../lib/supabase'
 import type { Profile, Rol } from '../lib/supabase'
 import type { AdminCtx } from '../components/Layout'
 import { rolNorm } from '../lib/panel'
@@ -40,7 +40,7 @@ export default function PersonerosPage() {
   const [distFilter, setDistFilter] = useState('')
   const [credFilter, setCredFilter] = useState('')
   const [detalle, setDetalle] = useState<Profile | null>(null)
-  const [distritosDepto, setDistritosDepto] = useState<string[]>(DISTRITOS)
+  const [distritosDepto, setDistritosDepto] = useState<string[]>(AMBITO_DISTRITOS)
 
   useEffect(() => {
     if (!esCoordRegional || !departamento) return

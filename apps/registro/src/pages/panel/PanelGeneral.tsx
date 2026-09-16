@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import * as XLSX from 'xlsx'
-import { supabase } from '../../lib/supabase'
+import { supabase, AMBITO_DEPARTAMENTO, AMBITO_DISTRITOS } from '../../lib/supabase'
 import {
   usePanelData, rolNorm, type CentroFila, type ZonaGrupo,
   ROL_MESA, ROL_LOCAL, ROL_COORD_DIST, ROL_ZONAL,
@@ -17,12 +17,6 @@ interface PanelCtx {
   ambitoListo: boolean
 }
 
-// Distritos de Tumbes (13, en sus 3 provincias): ámbito por defecto del Administrador.
-const DISTRITOS_TUMBES = [
-  'Tumbes', 'Corrales', 'La Cruz', 'Pampas de Hospital', 'San Jacinto', 'San Juan de la Virgen',
-  'Zorritos', 'Casitas', 'Canoas de Punta Sal',
-  'Zarumilla', 'Matapalo', 'Papayal', 'Aguas Verdes',
-]
 const ROLES = [ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST, 'Administrador General']
 const wa = (tel?: string | null) => tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}` : undefined
 
@@ -50,7 +44,7 @@ export default function PanelGeneral() {
   const [distritosProvincia, setDistritosProvincia] = useState<string[]>([])
   useEffect(() => {
     if (!ambitoListo || !esProvincial || !miAmbito.provincia) return
-    const dep = miAmbito.departamento || 'Tumbes'
+    const dep = miAmbito.departamento || AMBITO_DEPARTAMENTO
     supabase.from('vista_ubigeo').select('distrito').eq('departamento', dep).eq('provincia', miAmbito.provincia)
       .then(({ data }) => setDistritosProvincia([...new Set((data ?? []).map((r: any) => r.distrito).filter(Boolean))]))
   }, [ambitoListo, esProvincial, miAmbito.departamento, miAmbito.provincia])
@@ -60,7 +54,7 @@ export default function PanelGeneral() {
     if (!ambitoListo) return
     if (esDistrital && miAmbito.distrito) { setFDist(miAmbito.distrito); return }
     if (esProvincial) {
-      setFDepto(miAmbito.departamento || 'Tumbes')
+      setFDepto(miAmbito.departamento || AMBITO_DEPARTAMENTO)
       setFProv(miAmbito.provincia || '')
     }
   }, [ambitoListo, esDistrital, esProvincial, miAmbito.departamento, miAmbito.provincia, miAmbito.distrito])
@@ -82,7 +76,7 @@ export default function PanelGeneral() {
   }
 
   const d = usePanelData({
-    departamento: (esProvincial ? miAmbito.departamento : fDepto) || 'Tumbes',
+    departamento: (esProvincial ? miAmbito.departamento : fDepto) || AMBITO_DEPARTAMENTO,
     provincia: esProvincial ? miAmbito.provincia : fProv,
     distritos: distritosEfectivos,
   })
@@ -90,22 +84,22 @@ export default function PanelGeneral() {
   // Opciones de ubigeo (vistas nacionales)
   const [departamentos, setDepartamentos] = useState<string[]>([])
   const [provincias, setProvincias] = useState<string[]>([])
-  const [distritos, setDistritos] = useState<string[]>(DISTRITOS_TUMBES)
+  const [distritos, setDistritos] = useState<string[]>(AMBITO_DISTRITOS)
 
-  // Solo se opera en Tumbes por ahora — no se ofrece el resto del país en el selector.
+  // Solo se opera en el ámbito de esta instancia por ahora — no se ofrece el resto del país en el selector.
   useEffect(() => {
     if (!ambitoListo || !esAdmin) return
-    setDepartamentos(['Tumbes'])
+    setDepartamentos([AMBITO_DEPARTAMENTO])
   }, [ambitoListo, esAdmin])
   useEffect(() => {
-    const dep = fDepto || 'Tumbes'
+    const dep = fDepto || AMBITO_DEPARTAMENTO
     supabase.from('vista_provincias').select('provincia').eq('departamento', dep).then(({ data }) =>
       setProvincias([...new Set((data ?? []).map((r: any) => r.provincia).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, 'es'))))
   }, [fDepto])
   useEffect(() => {
-    const dep = fDepto || 'Tumbes'
-    if (!fDepto && !fProv) { setDistritos(DISTRITOS_TUMBES); return }
+    const dep = fDepto || AMBITO_DEPARTAMENTO
+    if (!fDepto && !fProv) { setDistritos(AMBITO_DISTRITOS); return }
     if (!fProv) { setDistritos([]); return }
     supabase.from('vista_ubigeo').select('distrito').eq('departamento', dep).eq('provincia', fProv).order('distrito')
       .then(({ data }) => setDistritos([...new Set((data ?? []).map((r: any) => r.distrito).filter(Boolean))]))
@@ -113,7 +107,7 @@ export default function PanelGeneral() {
 
   const setDepto = (v: string) => { setFDepto(v); setFProv(''); setFDist('') }
   const setProv = (v: string) => { setFProv(v); setFDist('') }
-  const ambito = fDist || fProv || fDepto || 'Tumbes'
+  const ambito = fDist || fProv || fDepto || AMBITO_DEPARTAMENTO
 
   const perfilesFiltrados = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -168,7 +162,7 @@ export default function PanelGeneral() {
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Centros y Mesas')
-    XLSX.writeFile(wb, `SomosPeru_Tumbes_Centros_${new Date().toISOString().split('T')[0]}.xlsx`)
+    XLSX.writeFile(wb, `SomosPeru_${AMBITO_DEPARTAMENTO}_Centros_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   if (!ambitoListo || d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>
@@ -184,7 +178,7 @@ export default function PanelGeneral() {
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-sky-500" />
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-3 px-3 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0">
-          <Sel v={fDepto} set={setDepto} all="🗺️ Tumbes" opts={departamentos} disabled={bloqueado('depto')} />
+          <Sel v={fDepto} set={setDepto} all={`🗺️ ${AMBITO_DEPARTAMENTO}`} opts={departamentos} disabled={bloqueado('depto')} />
           <Sel v={fProv} set={setProv} all="Todas las provincias" opts={provincias} disabled={bloqueado('prov')} />
           <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={esProvincial ? distritosProvincia : distritos} disabled={bloqueado('dist')} />
           <Sel v={fRol} set={setFRol} all="🛡️ Todos los roles" opts={ROLES} />

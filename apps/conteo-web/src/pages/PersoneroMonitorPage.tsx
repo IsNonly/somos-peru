@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
 import { restablecerClavePersonero } from '../lib/personeroActions'
 import EditarPersoneroModal from '../components/EditarPersoneroModal'
@@ -158,7 +158,7 @@ export default function PersoneroMonitorPage() {
         <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">👥 Monitoreo de Personeros, Asistencia y Envíos de Actas</h1>
         <p className="text-sm text-slate-500">
           Control de 1ª/2ª Asistencia y estado de transmisión: Conteo Manual 📝 e Imagen / OCR 🖼️ ·{' '}
-          <span className="text-sky-600 font-semibold">{ambitoLabel || 'Tumbes'}</span>
+          <span className="text-sky-600 font-semibold">{ambitoLabel || AMBITO_DEPARTAMENTO}</span>
         </p>
       </div>
 

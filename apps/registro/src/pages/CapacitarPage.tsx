@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import {
   Play, Lock, CheckCircle, LogOut, BookOpen, X, Download, Award, Users, ChevronRight, MapPin,
   type LucideIcon,
@@ -250,7 +250,7 @@ export default function CapacitarPage() {
   const pctVideo = Math.min((videosVistos / VIDEO_VECES) * 100, 100)
 
   const cargoConstancia    = profile?.rol ?? 'Personero de Mesa'
-  const distritoConstancia = profile?.distrito_asignado ?? profile?.distrito_vota ?? 'Tumbes'
+  const distritoConstancia = profile?.distrito_asignado ?? profile?.distrito_vota ?? AMBITO_DEPARTAMENTO
   const fechaConstancia    = fechaLarga(fechaAprobacion ?? new Date())
   const centro             = profile?.local_asignado ?? profile?.local_votacion ?? '—'
 

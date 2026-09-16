@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from './supabase'
+import { supabase, AMBITO_DEPARTAMENTO } from './supabase'
 
 export const norm = (t: string | null | undefined) =>
   String(t ?? '')
@@ -87,9 +87,9 @@ export interface PanelData {
 }
 
 export function usePanelData(scope?: { departamento?: string; provincia?: string; distritos?: string[] | null }): PanelData & { refetch: () => void } {
-  const dep = scope?.departamento || 'Tumbes'
+  const dep = scope?.departamento || AMBITO_DEPARTAMENTO
   // '' es un valor válido a propósito (== "todas las provincias" de `dep`); solo se
-  // usa el default 'Tumbes' cuando no se pasó ningún scope (mismo caso que `dep`).
+  // usa el default del ámbito cuando no se pasó ningún scope (mismo caso que `dep`).
   const prov = scope?.provincia !== undefined ? scope.provincia : ''
   const distritos = scope?.distritos ?? null
   const [d, setD] = useState<PanelData>({

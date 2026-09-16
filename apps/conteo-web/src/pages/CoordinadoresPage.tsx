@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
 import { restablecerClavePersonero } from '../lib/personeroActions'
 import EditarPersoneroModal from '../components/EditarPersoneroModal'
@@ -36,8 +36,8 @@ export default function CoordinadoresPage() {
     ;(async () => {
       setLoading(true)
       // '' es válido a propósito ("todas las provincias" del depto elegido); solo se cae
-      // a 'Tumbes' cuando tampoco se eligió un departamento distinto.
-      const dep = f.departamento || 'Tumbes'
+      // al ámbito de la instancia cuando tampoco se eligió un departamento distinto.
+      const dep = f.departamento || AMBITO_DEPARTAMENTO
       const prov = f.provincia || ''
       let cq = supabase.from('colegios').select('nombre, distrito, total_mesas').eq('departamento', dep)
       if (prov) cq = cq.eq('provincia', prov)
@@ -80,7 +80,7 @@ export default function CoordinadoresPage() {
       const mesas = mesasPorLocal.get(local) ?? 0
       const asist = asisPorLocal.get(local) ?? 0
       return {
-        id: p.id, nombre: p.nombre_completo, distrito: p.distrito_asignado ?? 'TUMBES',
+        id: p.id, nombre: p.nombre_completo, distrito: p.distrito_asignado ?? AMBITO_DEPARTAMENTO.toUpperCase(),
         colegio: local, mesas, asist, falt: Math.max(0, mesas - asist),
         perfil: p,
       }
@@ -122,7 +122,7 @@ export default function CoordinadoresPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">👤 Monitoreo de Coordinadores</h1>
-        <p className="text-sm text-slate-500">Resumen de asistencia y control de apertura de mesas · <span className="text-sky-600 font-semibold">{ambitoLabel || 'Tumbes'}</span></p>
+        <p className="text-sm text-slate-500">Resumen de asistencia y control de apertura de mesas · <span className="text-sky-600 font-semibold">{ambitoLabel || AMBITO_DEPARTAMENTO}</span></p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

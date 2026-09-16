@@ -5,6 +5,10 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
 export const supabase = createClient(url, key)
 
+// Ámbito operado por esta instancia (una por provincia/distrito, cada una con su
+// propia base Supabase). Default = Tumbes para no requerir env vars nuevas en ese deploy.
+export const AMBITO_DEPARTAMENTO = (import.meta.env.VITE_AMBITO_DEPARTAMENTO as string) || 'Tumbes'
+
 // Devuelve el perfil del usuario logueado. Resuelve por DNI (parte antes del @
 // del email de login) porque en la base importada `profiles.id` no siempre
 // coincide con `auth.users.id`; cae a búsqueda por id como respaldo.

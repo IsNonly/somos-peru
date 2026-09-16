@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import type { Profile } from '../lib/supabase'
 import type { AdminCtx } from '../components/Layout'
 import { Award, Download, Search, CheckCircle, FileText, File } from 'lucide-react'
@@ -43,7 +43,7 @@ function exportarWord(profiles: Profile[]) {
           alignment: AlignmentType.CENTER,
         }),
         new Paragraph({
-          children: [new TextRun({ text: `Elecciones Regionales y Municipales — Tumbes — ${new Date().toLocaleDateString('es-PE', { dateStyle: 'full' })}`, color: '888888', size: 18 })],
+          children: [new TextRun({ text: `Elecciones Regionales y Municipales — ${AMBITO_DEPARTAMENTO} — ${new Date().toLocaleDateString('es-PE', { dateStyle: 'full' })}`, color: '888888', size: 18 })],
           alignment: AlignmentType.CENTER,
         }),
         new Paragraph(''),

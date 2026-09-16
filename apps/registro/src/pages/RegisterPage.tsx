@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase, generarToken, generarClave4 } from '../lib/supabase'
+import { supabase, generarToken, generarClave4, AMBITO_DEPARTAMENTO, AMBITO_PROVINCIAS } from '../lib/supabase'
 import type { Rol } from '../lib/supabase'
 import {
   User, Phone, CreditCard, MapPin, Building2, Check,
@@ -249,13 +249,11 @@ export default function RegisterPage() {
   const [cargandoAsignado, setCargandoAsignado] = useState(false)
   const [colegiosReservados, setColegiosReservados] = useState<Set<string>>(new Set())
 
-  // Ámbito fijo: solo se registra gente de Tumbes por ahora, así que el
-  // departamento nunca se pide — se fija directo a 'Tumbes'.
-  const [provincias] = useState<ProvinciaRow[]>([
-    { departamento: 'Tumbes', provincia: 'Tumbes' },
-    { departamento: 'Tumbes', provincia: 'Zarumilla' },
-    { departamento: 'Tumbes', provincia: 'Contralmirante Villar' },
-  ])
+  // Ámbito fijo: solo se registra gente del ámbito de esta instancia por ahora,
+  // así que el departamento nunca se pide — se fija directo a AMBITO_DEPARTAMENTO.
+  const [provincias] = useState<ProvinciaRow[]>(
+    AMBITO_PROVINCIAS.map(provincia => ({ departamento: AMBITO_DEPARTAMENTO, provincia }))
+  )
   const [distritosAsignado, setDistritosAsignado] = useState<string[]>([])
 
   const [form, setForm] = useState<FormState>({
@@ -263,7 +261,7 @@ export default function RegisterPage() {
     dni: '',
     celular: '',
     rol: 'Personero de Mesa',
-    departamentoAsignado: 'Tumbes',
+    departamentoAsignado: AMBITO_DEPARTAMENTO,
     provinciaAsignado: '',
     distritoAsignado: '',
     localesAsignados: [],
@@ -277,7 +275,7 @@ export default function RegisterPage() {
   const esCoordDistrital = form.rol === 'Coordinador Distrital'
   const esColegioMultiple = esCoordProvincial || esCoordDistrital
 
-  // Cascada "asignación electoral" (el departamento ya está fijo en 'Tumbes')
+  // Cascada "asignación electoral" (el departamento ya está fijo en AMBITO_DEPARTAMENTO)
   const setProvAsig = (v: string) => setForm(p => ({ ...p, provinciaAsignado: v, distritoAsignado: '', localAsignado: '', localesAsignados: [] }))
   const setDistAsig = (v: string) => setForm(p => ({ ...p, distritoAsignado: v, localAsignado: '', localesAsignados: [] }))
 
