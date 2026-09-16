@@ -66,17 +66,10 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
     }))
   }, [scope.loading, scope.esAdmin, scope.departamento, scope.provincia, scope.distrito])
 
-  // Departamentos — de la vista deduplicada del ubigeo nacional (25 deptos + Callao)
+  // Solo se opera en Tumbes por ahora — no se ofrece el resto del país en el selector.
   useEffect(() => {
     if (scope.loading) return
-    if (scope.esAdmin) {
-      supabase.from('vista_departamentos').select('departamento').then(({ data }) => {
-        setDepartamentos([...new Set((data ?? []).map((d: any) => d.departamento).filter(Boolean))]
-          .sort((a, b) => a.localeCompare(b, 'es')))
-      })
-    } else {
-      setDepartamentos(f.departamento ? [f.departamento] : ['Tumbes'])
-    }
+    setDepartamentos(['Tumbes'])
   }, [scope.loading, scope.esAdmin])
 
   useEffect(() => {

@@ -92,11 +92,10 @@ export default function PanelGeneral() {
   const [provincias, setProvincias] = useState<string[]>([])
   const [distritos, setDistritos] = useState<string[]>(DISTRITOS_TUMBES)
 
+  // Solo se opera en Tumbes por ahora — no se ofrece el resto del país en el selector.
   useEffect(() => {
     if (!ambitoListo || !esAdmin) return
-    supabase.from('vista_departamentos').select('departamento').then(({ data }) =>
-      setDepartamentos([...new Set((data ?? []).map((r: any) => r.departamento).filter(Boolean))]
-        .sort((a, b) => a.localeCompare(b, 'es'))))
+    setDepartamentos(['Tumbes'])
   }, [ambitoListo, esAdmin])
   useEffect(() => {
     const dep = fDepto || 'Tumbes'
