@@ -235,7 +235,13 @@ export default function DashboardPage() {
                   const tot = porN.reduce((a, b) => a + b, 0)
                   return { l, porN, tot }
                 })
-                .sort((a, b) => b.tot - a.tot)
+                .sort((a, b) => {
+                  const aEsp = VOTOS_ESPECIALES.some(e => e.partido === a.l.partido)
+                  const bEsp = VOTOS_ESPECIALES.some(e => e.partido === b.l.partido)
+                  if (aEsp !== bEsp) return aEsp ? 1 : -1
+                  if (aEsp && bEsp) return 0 // mantiene el orden Blanco/Nulo/Impugnado de VOTOS_ESPECIALES
+                  return b.tot - a.tot
+                })
                 .map(({ l, porN, tot }) => {
                   const pct = granTotal > 0 ? (tot / granTotal) * 100 : 0
                   return (
