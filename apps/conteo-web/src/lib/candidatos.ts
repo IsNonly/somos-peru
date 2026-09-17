@@ -1,7 +1,7 @@
 export const VOTOS_ESPECIALES = [
-  { partido: 'NULO',      color: '#94a3b8' },
-  { partido: 'BLANCO',    color: '#cbd5e1' },
-  { partido: 'IMPUGNADO', color: '#f97316' },
+  { partido: 'BLANCO',    nombre: 'Votos en Blanco', color: '#cbd5e1' },
+  { partido: 'NULO',      nombre: 'Votos Nulos',     color: '#94a3b8' },
+  { partido: 'IMPUGNADO', nombre: 'Votos Impugnados',color: '#f97316' },
 ]
 
 // Ruta al logo del partido en /public/partidos/<slug>.png (fallback: badge de iniciales)

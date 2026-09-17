@@ -10,7 +10,7 @@ import {
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 interface Voto { nivel: string; partido: string; cantidad: number; metodo: string }
-interface Lista { partido: string; letra: string; color: string; orden: number }
+interface Lista { partido: string; nombre?: string; letra: string; color: string; orden: number }
 
 type Nivel = 'REGIONAL' | 'PROVINCIAL' | 'DISTRITAL'
 const NIVEL_LABEL: Record<Nivel, string> = {
@@ -129,7 +129,7 @@ export default function DashboardPage() {
     }
     return [
       ...base,
-      ...VOTOS_ESPECIALES.map(e => ({ partido: e.partido, letra: e.partido.slice(0, 4), color: e.color, orden: 1000 })),
+      ...VOTOS_ESPECIALES.map(e => ({ partido: e.partido, nombre: e.nombre, letra: e.partido.slice(0, 4), color: e.color, orden: 1000 })),
     ]
   }, [listas, votos])
 
@@ -201,7 +201,7 @@ export default function DashboardPage() {
             <span className="text-xs text-slate-500">Total consolidado ({niveles.map(n => NIVEL_LABEL[n]).join(' + ') || '—'}, Manual + OCR)</span>
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <span className="bg-emerald-50 text-emerald-600 font-bold rounded-full px-2.5 py-1">Total: {granTotal.toLocaleString('es-PE')}</span>
+            <span className="bg-emerald-50 text-emerald-600 font-bold rounded-full px-2.5 py-1">Total de Votos Emitidos: {granTotal.toLocaleString('es-PE')}</span>
             <span className="bg-slate-100 text-slate-500 font-semibold rounded px-2 py-1">Mesas: {mesas}</span>
           </div>
         </div>
@@ -248,7 +248,7 @@ export default function DashboardPage() {
                             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 font-semibold text-slate-800 whitespace-nowrap">{l.partido}</td>
+                      <td className="px-4 py-2.5 font-semibold text-slate-800 whitespace-nowrap">{l.nombre ?? l.partido}</td>
                       {porN.map((n, i) => (
                         <td key={i} className="px-4 py-2.5 text-sky-700 font-semibold tabular-nums">{n.toLocaleString('es-PE')}</td>
                       ))}
