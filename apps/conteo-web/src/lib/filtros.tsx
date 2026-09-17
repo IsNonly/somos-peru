@@ -27,7 +27,6 @@ interface Ctx {
   provincias: string[]
   distritos: string[]
   colegios: string[]
-  mesas: string[]
   partidos: string[]
   // del scope
   esAdmin: boolean
@@ -127,14 +126,6 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
     })
   }, [scope.loading, f.departamento])
 
-  const [mesas, setMesas] = useState<string[]>([])
-  useEffect(() => {
-    if (!f.colegio) { setMesas([]); return }
-    supabase.from('actas').select('mesa_numero').eq('colegio_nombre', f.colegio).order('mesa_numero').then(({ data }) => {
-      setMesas([...new Set((data ?? []).map((m: any) => m.mesa_numero).filter(Boolean))])
-    })
-  }, [f.colegio])
-
   const set = (k: keyof Filtros, v: string) => {
     setF(prev => {
       const next = { ...prev, [k]: v }
@@ -182,7 +173,7 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
 
   const value: Ctx = {
     f, set, reset,
-    departamentos, provincias, distritos, colegios, mesas, partidos,
+    departamentos, provincias, distritos, colegios, partidos,
     esAdmin: scope.esAdmin,
     bloqueado,
     ambitoLabel,

@@ -25,7 +25,7 @@ const selCls =
   'disabled:bg-slate-100 disabled:text-slate-400 min-w-[9rem] max-w-[12rem]'
 
 function BarraFiltros() {
-  const { f, set, reset, departamentos, provincias, distritos, colegios, mesas, partidos, bloqueado } = useFiltros()
+  const { f, set, reset, departamentos, provincias, distritos, colegios, partidos, bloqueado } = useFiltros()
 
   const Campo = ({ k, label, opts, all }: { k: keyof Filtros; label: string; opts: string[]; all: string }) => (
     <label className="flex flex-col gap-0.5">
@@ -37,13 +37,21 @@ function BarraFiltros() {
     </label>
   )
 
+  const CampoTexto = ({ k, label, placeholder }: { k: keyof Filtros; label: string; placeholder: string }) => (
+    <label className="flex flex-col gap-0.5">
+      <span className="text-[11px] font-semibold text-slate-500">{label}</span>
+      <input className={selCls} value={f[k]} disabled={bloqueado(k)} placeholder={placeholder}
+        onChange={e => set(k, e.target.value)} />
+    </label>
+  )
+
   return (
     <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex flex-wrap items-end gap-3">
       <Campo k="departamento" label="Departamento" opts={departamentos} all={AMBITO_DEPARTAMENTO} />
       <Campo k="provincia"    label="Provincia"    opts={provincias}    all="Todas las provincias" />
       <Campo k="distrito"     label="Distrito"     opts={distritos}     all="Todos los distritos" />
       <Campo k="colegio"      label="Centro de Votación" opts={colegios} all="Todos los centros de votación" />
-      <Campo k="mesa"         label="Mesa"         opts={mesas}         all="Todas las mesas" />
+      <CampoTexto k="mesa"    label="Mesa"         placeholder="N° de mesa" />
       <Campo k="partido"      label="Partido"      opts={partidos}      all="Todos los partidos" />
       <label className="flex flex-col gap-0.5 ml-auto">
         <span className="text-[11px] font-semibold text-slate-500">Acciones</span>
