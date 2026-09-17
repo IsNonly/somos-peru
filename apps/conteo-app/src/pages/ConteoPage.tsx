@@ -580,7 +580,7 @@ function ConteoPageInner() {
                   </div>
                 ))}
                 <div>
-                  <p className="text-white/40 text-[9px] uppercase tracking-widest font-semibold">Total</p>
+                  <p className="text-white/40 text-[9px] uppercase tracking-widest font-semibold">Total de Votos Emitidos</p>
                   <p className="text-sky-400 text-base font-extrabold tabular-nums">{granTotal}</p>
                 </div>
               </div>
@@ -715,7 +715,7 @@ function ConteoPageInner() {
             </div>
           ))}
           <div>
-            <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Gran Total</p>
+            <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Total de Votos Emitidos</p>
             <p className="text-sky-400 text-lg font-extrabold tabular-nums">{granTotal}</p>
           </div>
         </div>

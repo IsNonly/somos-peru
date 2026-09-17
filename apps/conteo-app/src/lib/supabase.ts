@@ -38,8 +38,8 @@ export interface Candidato {
 
 // Votos especiales aplicables a los 3 niveles (regional / provincial / distrital)
 export const VOTOS_ESPECIALES: Candidato[] = [
-  { id: 'nulos',      nombre: 'Votos Nulos',     partido: 'NULO',      color: '#ef4444', letra: 'NULO'   },
   { id: 'blancos',    nombre: 'Votos en Blanco', partido: 'BLANCO',    color: '#94a3b8', letra: 'BLANCO' },
+  { id: 'nulos',      nombre: 'Votos Nulos',     partido: 'NULO',      color: '#ef4444', letra: 'NULO'   },
   { id: 'impugnados', nombre: 'Votos Impugnados',partido: 'IMPUGNADO', color: '#f97316', letra: 'IMP'    },
 ]
 
