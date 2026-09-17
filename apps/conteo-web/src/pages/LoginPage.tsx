@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import { Check, Lock, User, Sun, Moon } from 'lucide-react'
 
 export default function LoginPage() {
@@ -93,7 +93,7 @@ export default function LoginPage() {
           Voto Real
         </h1>
         <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-          Plataforma Electoral Profesional — LIMA • ONPE
+          Plataforma Electoral Profesional — {AMBITO_DEPARTAMENTO.toUpperCase()} • ONPE
         </p>
 
         <h2 className={`text-sm font-bold mt-6 mb-5 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>

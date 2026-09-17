@@ -161,7 +161,7 @@ export default function CentrosPage() {
   const exportar = () => {
     const data = filas.map(c => ({
       Distrito: c.distrito ?? '',
-      Colegio: c.nombre,
+      'Centro de Votación': c.nombre,
       Dirección: c.direccion ?? '',
       Mesas: c.total_mesas ?? 0,
       Electores: c.electores ?? 0,
@@ -180,7 +180,7 @@ export default function CentrosPage() {
       <div>
         <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">🏫 Centros de Votación</h1>
         <p className="text-sm text-slate-500">
-          Mesas por colegio, Personero de Local a cargo y personeros de mesa inscritos ·{' '}
+          Mesas por centro de votación, Personero de Local a cargo y personeros de mesa inscritos ·{' '}
           <span className="text-sky-600 font-semibold">{ambitoLabel || AMBITO_DEPARTAMENTO}</span>
         </p>
       </div>
@@ -196,7 +196,7 @@ export default function CentrosPage() {
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
           <p className="font-extrabold text-slate-900 text-sm">
-            Detalle por colegio ({filas.length})
+            Detalle por centro de votación ({filas.length})
             {noCruzan > 0 && (
               <span className="ml-2 text-[11px] font-semibold text-amber-600">
                 · {noCruzan} personero(s) con local no reconocido
@@ -206,7 +206,7 @@ export default function CentrosPage() {
           <div className="flex flex-wrap gap-2">
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-2 text-slate-400" />
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar colegio, distrito, encargado…"
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar centro de votación, distrito, encargado…"
                 className="text-sm rounded-lg border border-slate-300 pl-8 pr-3 py-1.5 outline-none focus:border-sky-500 w-64" />
             </div>
             <select value={orden} onChange={e => setOrden(e.target.value as any)}
@@ -230,7 +230,7 @@ export default function CentrosPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-                {['Colegio', 'Distrito', 'Dirección', 'Mesas', 'Electores', 'Personero de Local (a cargo)', 'Personeros de Mesa'].map(h => (
+                {['Centro de Votación', 'Distrito', 'Dirección', 'Mesas', 'Electores', 'Personero de Local (a cargo)', 'Personeros de Mesa'].map(h => (
                   <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>

@@ -42,7 +42,7 @@ function BarraFiltros() {
       <Campo k="departamento" label="Departamento" opts={departamentos} all={AMBITO_DEPARTAMENTO} />
       <Campo k="provincia"    label="Provincia"    opts={provincias}    all="Todas las provincias" />
       <Campo k="distrito"     label="Distrito"     opts={distritos}     all="Todos los distritos" />
-      <Campo k="colegio"      label="Colegio"      opts={colegios}      all="Todos los colegios" />
+      <Campo k="colegio"      label="Centro de Votación" opts={colegios} all="Todos los centros de votación" />
       <Campo k="mesa"         label="Mesa"         opts={mesas}         all="Todas las mesas" />
       <Campo k="partido"      label="Partido"      opts={partidos}      all="Todos los partidos" />
       <label className="flex flex-col gap-0.5 ml-auto">
@@ -69,7 +69,7 @@ function Shell() {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-sky-700 flex items-center justify-center text-white font-black">✓</div>
           <div className="leading-tight">
             <p className="text-white font-extrabold text-base">Voto Real</p>
-            <p className="text-sky-400 text-[10px] font-bold tracking-widest">LIMA</p>
+            <p className="text-sky-400 text-[10px] font-bold tracking-widest">{AMBITO_DEPARTAMENTO.toUpperCase()}</p>
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -94,9 +94,9 @@ function Shell() {
         <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm font-bold">
             <button onClick={() => setOpen(true)} className="xl:hidden p-1.5 rounded-md bg-slate-100"><Menu size={18} /></button>
-            <span className="text-sky-600">lima</span>
+            <span className="text-sky-600">{AMBITO_DEPARTAMENTO.toLowerCase()}</span>
             <span className="text-slate-300">/</span>
-            <span className="text-sky-600">LIMA</span>
+            <span className="text-sky-600">{AMBITO_DEPARTAMENTO.toUpperCase()}</span>
           </div>
           <div className="flex items-center gap-2">
             <button className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-slate-600 border border-slate-300 rounded-md px-2.5 py-1.5">
