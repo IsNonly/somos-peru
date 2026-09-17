@@ -229,7 +229,7 @@ function ConteoPageInner() {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    if (!mesa.trim()) { setError('Ingresa el número de mesa antes de tomar la foto de instalación.'); return }
+    if (mesa.length !== 6) { setError('Ingresa los 6 dígitos del número de mesa antes de tomar la foto de instalación.'); return }
     const mime = file.type || 'image/jpeg'
 
     const reader = new FileReader()
@@ -325,7 +325,7 @@ function ConteoPageInner() {
 
   // ── Enviar acta ─────────────────────────────────────────────────────────
   const enviar = async () => {
-    if (!mesa.trim()) { setError('Ingresa el número de mesa.'); return }
+    if (mesa.length !== 6) { setError('Ingresa los 6 dígitos del número de mesa.'); return }
     if (!bloques.length) { setError('No hay listas de candidatos cargadas para tu ámbito. Avisa a tu coordinador.'); return }
     if (granTotal === 0) { setError('Ingresa al menos un voto.'); return }
     setEnviando(true); setError('')
@@ -484,16 +484,20 @@ function ConteoPageInner() {
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
           <div>
             <label className="text-white/40 text-[11px] font-semibold mb-1 block">Mesa de sufragio:</label>
-            <input value={mesa} onChange={e => { setMesa(e.target.value); setMesaConfirmada(false) }}
+            <input value={mesa} inputMode="numeric"
+              onChange={e => { setMesa(e.target.value.replace(/\D/g, '').slice(0, 6)); setMesaConfirmada(false) }}
               placeholder="000000"
-              className="w-full bg-[#0b0f1d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 outline-none focus:border-sky-500/50" />
+              className="w-full bg-[#0b0f1d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 outline-none focus:border-sky-500/50 tabular-nums" />
+            {mesa.length > 0 && mesa.length < 6 && (
+              <p className="text-amber-400 text-[10px] mt-1">Faltan {6 - mesa.length} dígito{6 - mesa.length === 1 ? '' : 's'}.</p>
+            )}
           </div>
           <div>
             <label className="text-white/40 text-[11px] font-semibold mb-1 block">Centro de votación:</label>
             <input value={centro} disabled readOnly
               className="w-full bg-[#0b0f1d]/60 border border-white/10 rounded-xl px-4 py-2.5 text-white/50 text-sm outline-none cursor-not-allowed" />
           </div>
-          <button onClick={() => instalacionInputRef.current?.click()} disabled={subiendoInstalacion}
+          <button onClick={() => instalacionInputRef.current?.click()} disabled={subiendoInstalacion || mesa.length !== 6}
             className="py-2.5 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap">
             {subiendoInstalacion
               ? <Loader size={15} className="animate-spin" />
@@ -511,9 +515,9 @@ function ConteoPageInner() {
           </div>
         )}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <label className={`flex items-center gap-1.5 text-sm font-semibold cursor-pointer ${mesaConfirmada ? 'text-sky-400' : 'text-white/40'}`}>
-            <input type="checkbox" checked={mesaConfirmada}
-              onChange={e => setMesaConfirmada(e.target.checked && !!mesa.trim())}
+          <label className={`flex items-center gap-1.5 text-sm font-semibold ${mesa.length === 6 ? 'cursor-pointer' : 'cursor-not-allowed'} ${mesaConfirmada ? 'text-sky-400' : 'text-white/40'}`}>
+            <input type="checkbox" checked={mesaConfirmada} disabled={mesa.length !== 6}
+              onChange={e => setMesaConfirmada(e.target.checked && mesa.length === 6)}
               className="accent-sky-500 w-4 h-4" />
             Confirmar mesa
           </label>
@@ -729,7 +733,7 @@ function ConteoPageInner() {
       )}
 
       {/* Transmitir */}
-      <button onClick={enviar} disabled={enviando || ocrLoading || !mesa.trim() || !mesaConfirmada || !bloques.length}
+      <button onClick={enviar} disabled={enviando || ocrLoading || mesa.length !== 6 || !mesaConfirmada || !bloques.length}
         className="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-500 hover:opacity-95 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 active:scale-[0.98]">
         {enviando
           ? <><Loader size={16} className="animate-spin" /> Transmitiendo…</>
