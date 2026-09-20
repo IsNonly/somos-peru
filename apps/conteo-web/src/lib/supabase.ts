@@ -5,14 +5,15 @@ export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY as string
 )
 
-// Ámbito operado por esta instancia (una por provincia/distrito, todas sobre la
-// misma base Supabase). Default = Cercado de Lima + Villa El Salvador.
+// Ámbito operado por esta instancia (una por distrito — Cercado de Lima y Villa El
+// Salvador son 2 instancias separadas, cada una con sus propias env vars, aunque
+// comparten la misma base Supabase). Default de este deploy = Cercado de Lima.
 export const AMBITO_DEPARTAMENTO = (import.meta.env.VITE_AMBITO_DEPARTAMENTO as string) || 'Lima'
 export const AMBITO_PROVINCIAS = ((import.meta.env.VITE_AMBITO_PROVINCIAS as string) || 'Lima')
   .split(',').map(s => s.trim()).filter(Boolean)
-// Distritos del ámbito (Cercado de Lima + Villa El Salvador por defecto): ámbito por defecto del Administrador.
+// Distrito del ámbito (Cercado de Lima por defecto): ámbito por defecto del Administrador.
 export const AMBITO_DISTRITOS = ((import.meta.env.VITE_AMBITO_DISTRITOS as string) ||
-  'Cercado de Lima,Villa El Salvador')
+  'Cercado de Lima')
   .split(',').map(s => s.trim()).filter(Boolean)
 
 export const PARTIDO_COLORES: Record<string, string> = {
