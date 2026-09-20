@@ -41,15 +41,15 @@ export interface Profile {
   fecha_registro: string
 }
 
-// Ámbito operado por esta instancia (una por provincia/distrito, cada una con su
-// propia base Supabase). Default = Tumbes para no requerir env vars nuevas en ese deploy.
-export const AMBITO_DEPARTAMENTO = (import.meta.env.VITE_AMBITO_DEPARTAMENTO as string) || 'Tumbes'
-export const AMBITO_PROVINCIAS = ((import.meta.env.VITE_AMBITO_PROVINCIAS as string) || 'Tumbes,Zarumilla,Contralmirante Villar')
+// Ámbito operado por esta instancia (una por provincia/distrito, todas sobre la
+// misma base Supabase). Default = Cercado de Lima + Villa El Salvador.
+export const AMBITO_DEPARTAMENTO = (import.meta.env.VITE_AMBITO_DEPARTAMENTO as string) || 'Lima'
+export const AMBITO_PROVINCIAS = ((import.meta.env.VITE_AMBITO_PROVINCIAS as string) || 'Lima')
   .split(',').map(s => s.trim()).filter(Boolean)
 export const AMBITO_DISTRITOS = ((import.meta.env.VITE_AMBITO_DISTRITOS as string) ||
-  'Tumbes,Corrales,La Cruz,Pampas de Hospital,San Jacinto,San Juan de la Virgen,Zorritos,Casitas,Canoas de Punta Sal,Zarumilla,Matapalo,Papayal,Aguas Verdes')
+  'Cercado de Lima,Villa El Salvador')
   .split(',').map(s => s.trim()).filter(Boolean)
-export const AMBITO_TOKEN_PREFIX = (import.meta.env.VITE_AMBITO_TOKEN_PREFIX as string) || 'TB2026'
+export const AMBITO_TOKEN_PREFIX = (import.meta.env.VITE_AMBITO_TOKEN_PREFIX as string) || 'LM2026'
 
 export const ROLES: Rol[] = [
   'Administrador General',
