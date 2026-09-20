@@ -43,12 +43,12 @@ export interface Profile {
 
 // Ámbito operado por esta instancia (una por distrito — Cercado de Lima y Villa El
 // Salvador son 2 instancias separadas, cada una con su propia base Supabase y sus
-// propias env vars). Default de este deploy = Cercado de Lima.
+// propias env vars). Default de este deploy = Cercado de Lima (ubigeo: distrito "Lima").
 export const AMBITO_DEPARTAMENTO = (import.meta.env.VITE_AMBITO_DEPARTAMENTO as string) || 'Lima'
 export const AMBITO_PROVINCIAS = ((import.meta.env.VITE_AMBITO_PROVINCIAS as string) || 'Lima')
   .split(',').map(s => s.trim()).filter(Boolean)
 export const AMBITO_DISTRITOS = ((import.meta.env.VITE_AMBITO_DISTRITOS as string) ||
-  'Cercado de Lima')
+  'Lima')
   .split(',').map(s => s.trim()).filter(Boolean)
 export const AMBITO_TOKEN_PREFIX = (import.meta.env.VITE_AMBITO_TOKEN_PREFIX as string) || 'CDL2026'
 
