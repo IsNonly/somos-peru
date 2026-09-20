@@ -6,8 +6,8 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 export const supabase = createClient(url, key)
 
 // Ámbito operado por esta instancia (una por distrito — Cercado de Lima y Villa El
-// Salvador son 2 instancias separadas, cada una con sus propias env vars, aunque
-// comparten la misma base Supabase). Default de este deploy = Cercado de Lima.
+// Salvador son 2 instancias separadas, cada una con su propia base Supabase y sus
+// propias env vars). Default de este deploy = Cercado de Lima.
 export const AMBITO_DEPARTAMENTO = (import.meta.env.VITE_AMBITO_DEPARTAMENTO as string) || 'Lima'
 
 // Devuelve el perfil del usuario logueado. Resuelve por DNI (parte antes del @

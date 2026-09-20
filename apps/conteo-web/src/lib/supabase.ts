@@ -6,8 +6,8 @@ export const supabase = createClient(
 )
 
 // Ámbito operado por esta instancia (una por distrito — Cercado de Lima y Villa El
-// Salvador son 2 instancias separadas, cada una con sus propias env vars, aunque
-// comparten la misma base Supabase). Default de este deploy = Cercado de Lima.
+// Salvador son 2 instancias separadas, cada una con su propia base Supabase y sus
+// propias env vars). Default de este deploy = Cercado de Lima.
 export const AMBITO_DEPARTAMENTO = (import.meta.env.VITE_AMBITO_DEPARTAMENTO as string) || 'Lima'
 export const AMBITO_PROVINCIAS = ((import.meta.env.VITE_AMBITO_PROVINCIAS as string) || 'Lima')
   .split(',').map(s => s.trim()).filter(Boolean)
