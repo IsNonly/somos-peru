@@ -89,6 +89,33 @@ En **Supabase → SQL Editor**, correr en este orden (todos son idempotentes):
 
 > `docs/somosperu_ambitos.md` lista en qué regiones/provincias compite Somos Perú (referencia para priorizar).
 
+### Repurposear una instancia existente (proyecto Supabase ya bootstrapeado)
+
+En vez de crear un proyecto Supabase nuevo, se puede **reusar** uno que ya
+operaba otra provincia/distrito una vez que esa etapa terminó. Mapeo actual:
+
+| Proyecto Supabase (antes) | Ámbito nuevo |
+|---|---|
+| Tumbes | Villa El Salvador |
+| Arequipa | Cercado de Lima |
+
+Pasos, en el SQL Editor / terminal del proyecto a reusar:
+1. `supabase/reset_instancia_para_reuso.sql` — ⚠️ **destructivo**: borra todas las
+   cuentas, el padrón (`colegios`/`mesas`), actas/votos/asistencias y las
+   candidaturas del ámbito viejo. Lee el encabezado del archivo antes de correrlo.
+2. `node scripts/importar_cali_ambito.mjs` — importa el padrón/colegios del
+   distrito nuevo (Cercado de Lima o Villa El Salvador).
+3. `supabase/seed_candidaturas_cali.sql` — siembra la plantilla de partidos
+   para el distrito nuevo (deja contar mientras se cargan los candidatos reales).
+4. Candidatos reales del distrito (prensa 2026 o Excel oficial ONPE/JNE):
+   `node scripts/importar_candidaturas.mjs <excel>`.
+5. `node scripts/crear_admin.mjs --env <.env de esa instancia> --dni ... --nombre "..." --password ...`
+   para el primer Administrador General de esa instancia.
+6. En Vercel, apuntar los 3 proyectos de esa instancia (`registro`/`conteo-app`/
+   `conteo-web`) a `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` de este mismo
+   proyecto reusado, y a las `VITE_AMBITO_*` del distrito correspondiente
+   (ver `.env.example` de cada app).
+
 ### Auth settings (Supabase → Authentication)
 - **Site URL:** la URL de `registro` en Vercel.
 - **Redirect URLs:** agregar las 3 URLs de Vercel.
