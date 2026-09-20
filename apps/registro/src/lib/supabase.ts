@@ -67,6 +67,8 @@ export const generarToken = (dni: string) => `SP-${AMBITO_TOKEN_PREFIX}-${dni}`
 // Genera clave acceso tipo SP + 4 dígitos aleatorios
 export const generarClave = () => `SP${Math.floor(1000 + Math.random() * 9000)}`
 
-// Clave de acceso numérica de 4 dígitos (contraseña real de login para roles
-// que no son Personero de Mesa; ver RegisterPage.tsx)
-export const generarClave4 = () => String(Math.floor(1000 + Math.random() * 9000))
+// Clave de acceso numérica de 6 dígitos (contraseña real de login para roles
+// que no son Personero de Mesa; ver RegisterPage.tsx). Antes eran 4 dígitos,
+// pero Supabase Auth exige contraseñas de mínimo 6 caracteres y el signUp
+// fallaba silenciosamente para estos roles.
+export const generarClave4 = () => String(Math.floor(100000 + Math.random() * 900000))

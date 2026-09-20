@@ -348,7 +348,7 @@ export default function RegisterPage() {
       const email = `${cleanDni}@somosperu.com`
       // Personero de Mesa: su contraseña es el DNI. Los otros 3 roles (Personero de
       // Centro de Votación, Coordinador Provincial, Coordinador Distrital): una clave
-      // numérica aleatoria de 4 dígitos, que también queda como contraseña real de login.
+      // numérica aleatoria de 6 dígitos, que también queda como contraseña real de login.
       const esMesa = form.rol === 'Personero de Mesa'
       const clave = esMesa ? cleanDni : generarClave4()
       const password = clave
