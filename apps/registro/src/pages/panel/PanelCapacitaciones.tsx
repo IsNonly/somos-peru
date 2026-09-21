@@ -26,7 +26,7 @@ type Estado = 'completo' | 'proceso' | 'noiniciado'
 function estadoDe(p: Perfil): Estado {
   const v = p.videos_vistos ?? 0
   const pdf = p.pdfs_vistos ?? 0
-  if (v >= 2 && pdf >= 1 && p.quiz_estado === 'Aprobado') return 'completo'
+  if (v >= 1 && pdf >= 1 && p.quiz_estado === 'Aprobado') return 'completo'
   if (v === 0 && pdf === 0 && p.quiz_estado !== 'Aprobado' && p.quiz_estado !== 'Reprobado') return 'noiniciado'
   return 'proceso'
 }
@@ -75,7 +75,7 @@ export default function PanelCapacitaciones() {
 
   const kpis = useMemo(() => {
     const total = cohorte.length || 1
-    const videoOk = cohorte.filter(p => (p.videos_vistos ?? 0) >= 2).length
+    const videoOk = cohorte.filter(p => (p.videos_vistos ?? 0) >= 1).length
     const pdfOk = cohorte.filter(p => (p.pdfs_vistos ?? 0) >= 1).length
     const quizOk = cohorte.filter(p => p.quiz_estado === 'Aprobado').length
     const completo = conEstado.filter(x => x.estado === 'completo').length
@@ -108,7 +108,7 @@ export default function PanelCapacitaciones() {
       const dist = p.distrito_asignado || p.distrito_vota || 'Sin distrito'
       const e = map.get(dist) ?? { total: 0, video: 0, pdf: 0 }
       e.total++
-      if ((p.videos_vistos ?? 0) >= 2) e.video++
+      if ((p.videos_vistos ?? 0) >= 1) e.video++
       if ((p.pdfs_vistos ?? 0) >= 1) e.pdf++
       map.set(dist, e)
     }
@@ -118,7 +118,7 @@ export default function PanelCapacitaciones() {
   const barData = {
     labels: porDistrito.map(([dist]) => dist),
     datasets: [
-      { label: 'Video completo (2/2)', data: porDistrito.map(([, v]) => v.video), backgroundColor: '#0ea5e9', borderRadius: 5 },
+      { label: 'Video completo (1/1)', data: porDistrito.map(([, v]) => v.video), backgroundColor: '#0ea5e9', borderRadius: 5 },
       { label: 'Cartilla leída', data: porDistrito.map(([, v]) => v.pdf), backgroundColor: '#a855f7', borderRadius: 5 },
     ],
   }
@@ -280,7 +280,7 @@ export default function PanelCapacitaciones() {
                   </td>
                   <td className="px-4 py-2.5 text-slate-600">{p.distrito_asignado ?? p.distrito_vota ?? '—'}</td>
                   <td className="px-4 py-2.5">
-                    <ProgresoBar value={p.videos_vistos ?? 0} total={2} color="#0ea5e9" />
+                    <ProgresoBar value={p.videos_vistos ?? 0} total={1} color="#0ea5e9" />
                   </td>
                   <td className="px-4 py-2.5">
                     <ProgresoBar value={Math.min(p.pdfs_vistos ?? 0, 1)} total={1} color="#a855f7" />

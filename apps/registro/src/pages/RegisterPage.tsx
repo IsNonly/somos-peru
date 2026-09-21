@@ -127,7 +127,7 @@ function PantallaExito({ done }: { done: { token: string; nombres: string; dni: 
   }, [])
 
   const pasos = [
-    'Ver el video de capacitación completo, 2 veces',
+    'Ver el video de capacitación completo',
     'Leer la Cartilla del Personero (mín. 1 min)',
     'Aprobar la evaluación (4 de 5 preguntas)',
   ]

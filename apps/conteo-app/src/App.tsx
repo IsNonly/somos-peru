@@ -75,7 +75,7 @@ export default function App() {
     const requiereCapacitacion =
       !rol || /personero/i.test(rol) || ROLES_LOCAL.includes(rol)
     const pasos: Pasos = {
-      videos:   (perfil?.videos_vistos ?? 0) >= 2,
+      videos:   (perfil?.videos_vistos ?? 0) >= 1,
       cartilla: (perfil?.pdfs_vistos ?? 0) >= 1,
       quiz:     perfil?.quiz_estado === 'Aprobado',
     }

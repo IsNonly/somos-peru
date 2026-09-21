@@ -13,7 +13,7 @@ export default function GateCapacitacion({ perfil, pasos }: {
 }) {
   const nombre = perfil?.nombre_completo?.split(' ')?.[0] ?? ''
   const items = [
-    { ok: pasos.videos,   label: 'Ver el video de capacitación (2 veces)' },
+    { ok: pasos.videos,   label: 'Ver el video de capacitación' },
     { ok: pasos.cartilla, label: 'Leer la Cartilla del Personero' },
     { ok: pasos.quiz,     label: 'Aprobar la evaluación (4/5)' },
   ]

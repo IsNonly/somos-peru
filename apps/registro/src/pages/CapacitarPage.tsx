@@ -16,7 +16,7 @@ const PDF_URL = '/manuals/Cartilla_Personero_ERM_2026.pdf'
 const PDF_TIEMPO_MIN = 60 // segundos requeridos de lectura
 
 const VIDEO_URL = '/videos/Capacitacion_Personero_ERM_2026.mp4'
-const VIDEO_VECES = 2 // veces que hay que ver el video completo
+const VIDEO_VECES = 1 // veces que hay que ver el video completo
 
 const FECHA_LIMITE = '03/10/2026 a las 11:59 p. m.'
 
@@ -387,7 +387,7 @@ export default function CapacitarPage() {
                     </div>
                     {!doneVideo && (
                       <p className="text-[11px] text-slate-400 mt-2">
-                        Debes ver el video completo {VIDEO_VECES} veces sin adelantarlo. Llevas {videosVistos} de {VIDEO_VECES}.
+                        Debes ver el video completo sin adelantarlo.
                       </p>
                     )}
                   </div>
