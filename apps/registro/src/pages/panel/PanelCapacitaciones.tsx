@@ -8,7 +8,7 @@ import {
 import {
   Search, Download, Users, GraduationCap, PlayCircle, BookOpenCheck, ClipboardCheck,
   MessageCircle, PieChart, BarChart3, CheckCircle2, Pencil, Lock, Save, Trash2,
-  User, Phone, ShieldCheck, MapPin, Building2, Hash, Sparkles,
+  User, Phone, ShieldCheck, MapPin, Building2, Hash, Sparkles, Filter,
 } from 'lucide-react'
 import { supabase, AMBITO_DEPARTAMENTO } from '../../lib/supabase'
 import {
@@ -53,6 +53,7 @@ export default function PanelCapacitaciones() {
   const d = usePanelData()
   const [q, setQ] = useState('')
   const [fDist, setFDist] = useState('')
+  const [fRol, setFRol] = useState('')
   const [chip, setChip] = useState<'todos' | Estado>('todos')
   const [editPerfil, setEditPerfil] = useState<Perfil | null>(null)
 
@@ -127,12 +128,13 @@ export default function PanelCapacitaciones() {
       if (s && !(
         p.nombre_completo?.toLowerCase().includes(s) ||
         (p.dni ?? '').includes(s) ||
-        (p.distrito_asignado ?? '').toLowerCase().includes(s))) return false
+        (p.local_asignado ?? '').toLowerCase().includes(s))) return false
       if (fDist && p.distrito_asignado !== fDist && p.distrito_vota !== fDist) return false
+      if (fRol && rolNorm(p.rol) !== fRol) return false
       if (chip !== 'todos' && estado !== chip) return false
       return true
     }).sort((a, b) => (a.estado === b.estado ? 0 : a.estado === 'noiniciado' ? -1 : b.estado === 'noiniciado' ? 1 : a.estado === 'proceso' ? -1 : 1))
-  }, [conEstado, q, fDist, chip])
+  }, [conEstado, q, fDist, fRol, chip])
 
   const exportar = () => {
     const rows = filtrados.map(({ p }) => ({
@@ -204,31 +206,46 @@ export default function PanelCapacitaciones() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[220px]">
             <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre, DNI, distrito…"
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar personero por Nombre, DNI, Local…"
               className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-sky-500" />
           </div>
+          <select value={chip} onChange={e => setChip(e.target.value as 'todos' | Estado)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none">
+            <option value="todos">Todos los Estados</option>
+            <option value="completo">Completo</option>
+            <option value="proceso">En proceso</option>
+            <option value="noiniciado">Sin iniciar</option>
+          </select>
           <select value={fDist} onChange={e => setFDist(e.target.value)}
             className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[12rem]">
-            <option value="">📍 Todos los distritos</option>
+            <option value="">📍 Todos los Distritos</option>
             {distritos.map(dist => <option key={dist} value={dist}>{dist}</option>)}
           </select>
+          <select value={fRol} onChange={e => setFRol(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[14rem]">
+            <option value="">🛡️ Todos los Roles</option>
+            <option value={ROL_MESA}>{ROL_MESA}</option>
+            <option value={ROL_LOCAL}>{ROL_LOCAL}</option>
+          </select>
           <button onClick={exportar}
-            className="text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 flex items-center gap-1.5">
+            className="text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 flex items-center gap-1.5 flex-shrink-0">
             <Download size={13} /> Descargar Excel
           </button>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-1.5 text-xs">
-            <ChipBtn active={chip === 'todos'} onClick={() => setChip('todos')} label="Todos" n={conEstado.length} />
-            <ChipBtn active={chip === 'completo'} onClick={() => setChip('completo')} label="Completo" n={kpis.completo} />
-            <ChipBtn active={chip === 'proceso'} onClick={() => setChip('proceso')} label="En proceso" n={cohorte.length - kpis.completo - kpis.noiniciado} />
-            <ChipBtn active={chip === 'noiniciado'} onClick={() => setChip('noiniciado')} label="Sin iniciar" n={kpis.noiniciado} />
-          </div>
-          {!puedeModificar && (
-            <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
-              <Lock size={11} /> Modo solo lectura — tu rol no puede modificar registros
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="bg-sky-50 text-sky-700 font-bold rounded-full px-3 py-1 flex items-center gap-1.5">
+            <Filter size={12} /> {filtrados.length.toLocaleString('es-PE')} personeros encontrados
+          </span>
+          <div className="flex items-center gap-3">
+            {!puedeModificar && (
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <Lock size={11} /> Modo solo lectura — tu rol no puede modificar registros
+              </span>
+            )}
+            <span className="text-slate-400">
+              Total capacitaciones: <strong className="text-slate-700">{conEstado.length.toLocaleString('es-PE')}</strong>
             </span>
-          )}
+          </div>
         </div>
       </section>
 
@@ -335,16 +352,6 @@ function Leyenda({ color, label, n }: { color: string; label: string; n: number 
       </span>
       <span className="font-bold text-slate-800">{n}</span>
     </div>
-  )
-}
-
-function ChipBtn({ active, onClick, label, n }: { active: boolean; onClick: () => void; label: string; n: number }) {
-  return (
-    <button onClick={onClick}
-      className={`rounded-lg px-2.5 py-1.5 font-bold border transition-colors flex items-center gap-1.5 ${
-        active ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
-      {label} <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-white/25' : 'bg-slate-100 text-slate-600'}`}>{n}</span>
-    </button>
   )
 }
 
