@@ -4,7 +4,7 @@ import type { Rol } from '../lib/supabase'
 import {
   User, Phone, CreditCard, MapPin, Building2, Check,
   LogIn, Shield, CheckCircle2, ChevronDown, X, Send, Edit3,
-  Layers, Landmark, Map as MapIcon
+  Map as MapIcon
 } from 'lucide-react'
 
 type FormState = {
@@ -17,6 +17,7 @@ type FormState = {
   distritoAsignado: string
   localesAsignados: string[]
   localAsignado: string
+  tieneExperiencia: boolean
 }
 
 type ProvinciaRow = { departamento: string; provincia: string }
@@ -68,6 +69,10 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
                 <div>
                   <p className="text-xs text-slate-400">Distrito Asignado</p>
                   <p className="font-semibold text-slate-800">{form.distritoAsignado || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">¿Experiencia Previa?</p>
+                  <p className="font-semibold text-slate-800">{form.tieneExperiencia ? 'Sí' : 'No'}</p>
                 </div>
               </div>
               {esColegioMultiple && (
@@ -221,6 +226,21 @@ function SelectWrap({ icon, children }: { icon: React.ReactNode; children: React
   )
 }
 
+function ToggleBtn({ yes, onChange }: { yes: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <button type="button" onClick={() => onChange(true)}
+        className={`py-4 rounded-2xl border text-sm font-bold transition-all ${yes ? 'bg-[#00a3e8] border-[#00a3e8] text-white shadow-md shadow-sky-500/20' : 'bg-white border-slate-200 text-slate-700 hover:border-sky-300'}`}>
+        Sí
+      </button>
+      <button type="button" onClick={() => onChange(false)}
+        className={`py-4 rounded-2xl border text-sm font-bold transition-all ${!yes ? 'bg-[#00a3e8] border-[#00a3e8] text-white shadow-md shadow-sky-500/20' : 'bg-white border-slate-200 text-slate-700 hover:border-sky-300'}`}>
+        No
+      </button>
+    </div>
+  )
+}
+
 function GeoSelect({ label, icon, value, onChange, options, disabled, placeholder }: {
   label: string; icon: React.ReactNode; value: string; onChange: (v: string) => void
   options: string[]; disabled?: boolean; placeholder: string
@@ -266,6 +286,7 @@ export default function RegisterPage() {
     distritoAsignado: '',
     localesAsignados: [],
     localAsignado: '',
+    tieneExperiencia: false,
   })
 
   const set = (k: keyof FormState, v: any) => setForm(p => ({ ...p, [k]: v }))
@@ -375,6 +396,7 @@ export default function RegisterPage() {
         provincia_asignado: form.provinciaAsignado || null,
         distrito_asignado: form.distritoAsignado || null,
         local_asignado: localGuardado || null,
+        tiene_experiencia: form.tieneExperiencia,
         token_verificacion: token,
         clave_acceso: clave,
         credencial_estado: 'Pendiente',
@@ -447,8 +469,6 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {([
-                { id: 'Coordinador Regional', icon: Landmark, title: 'Coordinador Regional' },
-                { id: 'Coordinador Provincial', icon: Layers, title: 'Coordinador Provincial' },
                 { id: 'Coordinador Distrital', icon: MapPin, title: 'Coordinador Distrital' },
                 { id: 'Personero de Centro de Votación', icon: Building2, title: 'Personero de Centro de Votación' },
                 { id: 'Personero de Mesa', icon: Shield, title: 'Personero de Mesa' },
@@ -558,6 +578,15 @@ export default function RegisterPage() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* SECCIÓN 3 */}
+          <div className="border border-sky-200/80 bg-white rounded-2xl p-5 shadow-sm space-y-4">
+            <SectionHeader num="3" title="Experiencia" />
+            <div>
+              <FieldLabel>¿Tiene Experiencia como Personero? <Req /></FieldLabel>
+              <ToggleBtn yes={form.tieneExperiencia} onChange={v => set('tieneExperiencia', v)} />
+            </div>
           </div>
 
           {error && (
