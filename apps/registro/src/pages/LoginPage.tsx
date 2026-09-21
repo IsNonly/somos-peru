@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { Lock, LogIn, UserPlus, User } from 'lucide-react'
 
 export default function LoginPage() {
-  const [dni, setDni] = useState('')
+  const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -13,13 +13,20 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const cleanDni = dni.trim().replace(/\D/g, '')
+    const rawUsuario = usuario.trim()
     const cleanPassword = password.trim()
-    
-    if (cleanDni.length < 8) {
-      setError('El DNI debe tener 8 dígitos.')
-      setLoading(false)
-      return
+    const esDni = /^\d{8}$/.test(rawUsuario)
+
+    let cleanDni = rawUsuario
+    if (!esDni) {
+      // No es un DNI: se busca el DNI a partir del nombre completo ingresado.
+      const { data: dniEncontrado } = await supabase.rpc('dni_por_nombre', { p_nombre: rawUsuario })
+      if (!dniEncontrado) {
+        setError('No se encontró ningún usuario con ese nombre. Verifique el nombre completo o ingrese su DNI.')
+        setLoading(false)
+        return
+      }
+      cleanDni = dniEncontrado
     }
 
     const email = `${cleanDni}@somosperu.com`
@@ -42,7 +49,7 @@ export default function LoginPage() {
 
     // 3. Fallback adicional por si es la clave generada
     if (err) {
-      setError('Credenciales incorrectas. Verifique su DNI y Contraseña.')
+      setError('Credenciales incorrectas. Verifique su Usuario y Contraseña.')
     }
     setLoading(false)
   }
@@ -76,11 +83,10 @@ export default function LoginPage() {
               </div>
               <input
                 type="text"
-                value={dni}
-                onChange={e => setDni(e.target.value.replace(/\D/g, ''))}
-                maxLength={8}
+                value={usuario}
+                onChange={e => setUsuario(e.target.value)}
                 required
-                placeholder="Ejemplo: 95128549"
+                placeholder="Ejemplo: 95128549 o Juan Carlos Pérez Torres"
                 className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:border-[#00a3e8] focus:ring-1 focus:ring-[#00a3e8] transition-all"
               />
             </div>
