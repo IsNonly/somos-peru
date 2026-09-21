@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase, AMBITO_DEPARTAMENTO } from './supabase'
 
 export const norm = (t: string | null | undefined) =>
@@ -99,15 +99,21 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
   })
 
   const [reloadKey, setReloadKey] = useState(0)
+  const lastLoadRef = useRef(0)
 
   // Si el navegador deja la pestaña en segundo plano mientras una consulta está en
   // vuelo, el fetch puede quedar colgado para siempre (no resuelve ni rechaza) y el
   // panel se queda pegado en "Cargando panel…" sin forma de recuperarse salvo F5.
-  // Al volver a la pestaña se relanza la consulta: la vieja queda huérfana (su propio
-  // `vivo` la corta con los `if (!vivo) return`) y la nueva sí completa normalmente.
+  // Al volver a la pestaña se relanza la consulta (la vieja queda huérfana, su propio
+  // `vivo` la corta con los `if (!vivo) return`) — pero solo si pasó un rato desde la
+  // última carga, para no repetir la consulta (y el parpadeo de "Cargando panel…") en
+  // cada cambio rápido de pestaña.
+  const UMBRAL_RECARGA_MS = 60_000
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible') setReloadKey(k => k + 1)
+      if (document.visibilityState === 'visible' && Date.now() - lastLoadRef.current > UMBRAL_RECARGA_MS) {
+        setReloadKey(k => k + 1)
+      }
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
@@ -115,6 +121,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
 
   useEffect(() => {
     let vivo = true
+    lastLoadRef.current = Date.now()
     setD(prev => ({ ...prev, loading: true }))
     ;(async () => {
       const colegios = await traerTodo<Colegio>((f, t) => {
