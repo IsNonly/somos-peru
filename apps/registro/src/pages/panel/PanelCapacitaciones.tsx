@@ -58,7 +58,8 @@ export default function PanelCapacitaciones() {
   const [editPerfil, setEditPerfil] = useState<Perfil | null>(null)
 
   const cohorte = useMemo(
-    () => d.perfiles.filter(p => rolNorm(p.rol) === ROL_MESA || rolNorm(p.rol) === ROL_LOCAL),
+    () => d.perfiles.filter(p =>
+      rolNorm(p.rol) === ROL_MESA || rolNorm(p.rol) === ROL_LOCAL || rolNorm(p.rol) === ROL_COORD_DIST),
     [d.perfiles],
   )
 
@@ -154,10 +155,10 @@ export default function PanelCapacitaciones() {
     <div className="space-y-4 w-full">
       <section>
         <p className="text-sm font-extrabold text-slate-900 mb-2 flex items-center gap-2">
-          <GraduationCap size={15} /> Progreso de Capacitaciones · Personeros de Mesa y de Local
+          <GraduationCap size={15} /> Progreso de Capacitaciones · Personeros de Mesa, de Local y Coordinador Distrital
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <Kpi color="#3b82f6" icon={Users} value={kpis.total} label="Sujetos a Capacitación" sub="Mesa + Local de Votación" />
+          <Kpi color="#3b82f6" icon={Users} value={kpis.total} label="Sujetos a Capacitación" sub="Mesa + Local + Coord. Distrital" />
           <Kpi color="#0ea5e9" icon={PlayCircle} value={`${kpis.videoPct}%`} label="Video Completo" sub={`${kpis.videoOk} de ${kpis.total}`} />
           <Kpi color="#a855f7" icon={BookOpenCheck} value={`${kpis.pdfPct}%`} label="Cartilla Leída" sub={`${kpis.pdfOk} de ${kpis.total}`} />
           <Kpi color="#f59e0b" icon={ClipboardCheck} value={`${kpis.quizPct}%`} label="Cuestionario Aprobado" sub={`${kpis.quizOk} de ${kpis.total}`} />
@@ -226,6 +227,7 @@ export default function PanelCapacitaciones() {
             <option value="">🛡️ Todos los Roles</option>
             <option value={ROL_MESA}>{ROL_MESA}</option>
             <option value={ROL_LOCAL}>{ROL_LOCAL}</option>
+            <option value={ROL_COORD_DIST}>{ROL_COORD_DIST}</option>
           </select>
           <button onClick={exportar}
             className="text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 flex items-center gap-1.5 flex-shrink-0">
