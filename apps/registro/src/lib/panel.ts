@@ -100,6 +100,19 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
 
   const [reloadKey, setReloadKey] = useState(0)
 
+  // Si el navegador deja la pestaña en segundo plano mientras una consulta está en
+  // vuelo, el fetch puede quedar colgado para siempre (no resuelve ni rechaza) y el
+  // panel se queda pegado en "Cargando panel…" sin forma de recuperarse salvo F5.
+  // Al volver a la pestaña se relanza la consulta: la vieja queda huérfana (su propio
+  // `vivo` la corta con los `if (!vivo) return`) y la nueva sí completa normalmente.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setReloadKey(k => k + 1)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
   useEffect(() => {
     let vivo = true
     setD(prev => ({ ...prev, loading: true }))
