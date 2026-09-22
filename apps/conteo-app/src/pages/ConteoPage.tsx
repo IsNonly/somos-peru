@@ -202,18 +202,39 @@ function ConteoPageInner() {
           .limit(1)
           .single()
 
+        let distancia: number | null = null
         if (colegio?.latitude && colegio?.longitude) {
-          const dist = Math.round(haversineM(lat, lon, colegio.latitude, colegio.longitude))
-          if (dist <= 50) {
+          distancia = Math.round(haversineM(lat, lon, colegio.latitude, colegio.longitude))
+          if (distancia <= 50) {
             setGpsStatus('ok')
-            setGpsMsg(`Ubicación verificada — ${dist}m del ${colegio.nombre}`)
+            setGpsMsg(`Ubicación verificada — ${distancia}m del ${colegio.nombre}`)
           } else {
             setGpsStatus('warn')
-            setGpsMsg(`Fuera de rango: ${dist}m del colegio (máx 50m). Puedes continuar pero se registrará.`)
+            setGpsMsg(`Fuera de rango: ${distancia}m del colegio (máx 50m). Puedes continuar pero se registrará.`)
           }
         } else {
           setGpsStatus('ok')
           setGpsMsg('Ubicación GPS registrada')
+        }
+
+        // Guarda/actualiza la asistencia de "LLEGADA" — esto es lo que lee el
+        // panel de monitoreo de coordinadores (antes solo quedaba en el
+        // estado local de React y nunca llegaba a la base de datos).
+        if (userId) {
+          const payload = {
+            user_id: userId,
+            distrito: perfil?.distrito_asignado ?? perfil?.distrito_vota ?? null,
+            colegio_nombre: perfil?.local_asignado ?? perfil?.local_votacion ?? null,
+            mesa_numero: perfil?.mesa_asignada ?? (mesa || null),
+            latitude: lat,
+            longitude: lon,
+            distancia_m: distancia,
+            tipo: 'LLEGADA',
+          }
+          const { data: existente } = await supabase.from('asistencias')
+            .select('id').eq('user_id', userId).eq('tipo', 'LLEGADA').maybeSingle()
+          if (existente) await supabase.from('asistencias').update(payload).eq('id', existente.id)
+          else await supabase.from('asistencias').insert(payload)
         }
       },
       () => {
@@ -222,7 +243,7 @@ function ConteoPageInner() {
       },
       { enableHighAccuracy: true, timeout: 12000 }
     )
-  }, [perfil])
+  }, [perfil, userId, mesa])
 
   // ── Foto de instalación de mesa (evidencia previa al escrutinio) ───────
   const tomarFotoInstalacion = async (e: React.ChangeEvent<HTMLInputElement>) => {
