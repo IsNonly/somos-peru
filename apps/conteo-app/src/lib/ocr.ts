@@ -105,7 +105,13 @@ async function ocrTesseract(
   imageBase64: string
 ): Promise<{ partido: string; provincial: number; distrital: number }[]> {
   const { createWorker } = await import('tesseract.js')
-  const worker = await createWorker({ langPath: 'https://tessdata.projectnaptha.com/4.0.0', language: 'spa' } as any)
+  const worker = await createWorker({ langPath: 'https://tessdata.projectnaptha.com/4.0.0' } as any)
+  // tesseract.js v4 no auto-inicializa el idioma a partir de la opción `language`
+  // de createWorker (se ignora en silencio): sin este paso, recognize() falla
+  // porque el motor nunca cargó el modelo — createWorker no lanza error, pero
+  // internamente el puntero al motor queda nulo.
+  await worker.loadLanguage('spa')
+  await worker.initialize('spa')
   const dataUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`
   const { data: { text } } = await worker.recognize(dataUrl)
   await worker.terminate()
