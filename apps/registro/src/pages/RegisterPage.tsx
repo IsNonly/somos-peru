@@ -28,6 +28,7 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
   const esCoordProvincial = form.rol === 'Coordinador Provincial'
   const esCoordDistrital = form.rol === 'Coordinador Distrital'
   const esColegioMultiple = esCoordProvincial || esCoordDistrital
+  const esPersonero = form.rol === 'Personero de Mesa' || form.rol === 'Personero de Centro de Votación'
   const localMostrado = esColegioMultiple ? form.localesAsignados.join(', ') : form.localAsignado
 
   return (
@@ -75,10 +76,10 @@ function ModalRevision({ form, onClose, onConfirm, loading }: {
                   <p className="font-semibold text-slate-800">{form.tieneExperiencia ? 'Sí' : 'No'}</p>
                 </div>
               </div>
-              {esColegioMultiple && (
+              {(esColegioMultiple || esPersonero) && (
                 <div>
                   <p className="text-xs text-slate-400">
-                    {esCoordProvincial ? 'Colegios / Locales de la Provincia' : 'Colegios a Cargo'}
+                    {esCoordProvincial ? 'Colegios / Locales de la Provincia' : esCoordDistrital ? 'Colegios a Cargo' : 'Local de Votación Asignado'}
                   </p>
                   <p className="font-semibold text-slate-800">{localMostrado || '—'}</p>
                 </div>
@@ -490,6 +491,22 @@ export default function RegisterPage() {
             {esPersonero && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 {cascadaAsignado('Distrito Asignado')}
+                <div>
+                  <FieldLabel>Local de Votación Asignado <Req /></FieldLabel>
+                  <SelectWrap icon={<Building2 size={18} />}>
+                    {colegiosAsignado.length > 0 ? (
+                      <select value={form.localAsignado} onChange={e => set('localAsignado', e.target.value)} className={selectCls}>
+                        <option value="">Seleccione el local ({colegiosAsignado.length})</option>
+                        {colegiosAsignado.map(c => <option key={c.nombre} value={c.nombre}>{c.nombre}</option>)}
+                      </select>
+                    ) : (
+                      <input type="text" value={form.localAsignado} disabled={!form.distritoAsignado}
+                        onChange={e => set('localAsignado', e.target.value)}
+                        placeholder={cargandoAsignado ? 'Cargando...' : form.distritoAsignado ? 'Escriba el local...' : 'Primero seleccione un distrito'}
+                        className={`${inputCls} disabled:bg-slate-50`} />
+                    )}
+                  </SelectWrap>
+                </div>
               </div>
             )}
 
