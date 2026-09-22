@@ -47,7 +47,7 @@ export default function PanelCapacitaciones() {
   const { rol: actorRol, nombreCompleto: actorNombre, dni: actorDni } = useOutletContext<{ rol: string; nombreCompleto: string; dni: string }>()
   const actorNorm = rolNorm(actorRol)
   const esSuperadmin = actorNorm === 'Administrador General'
-  const puedeModificar = esSuperadmin || actorNorm === ROL_ZONAL
+  const puedeModificar = esSuperadmin || actorNorm === ROL_ZONAL || actorNorm === ROL_COORD_DIST
   const editadoPor = actorNombre ? `${actorNombre} (DNI ${actorDni})` : `DNI ${actorDni}`
 
   const d = usePanelData()
