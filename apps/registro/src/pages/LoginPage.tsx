@@ -68,7 +68,7 @@ export default function LoginPage() {
             Elecciones Regionales y<br />Municipales 2026
           </h1>
           <p className="text-[11px] font-bold text-[#00a3e8] uppercase tracking-widest mt-1 border-b-2 border-[#e53e3e] pb-1">
-            Plataforma de Capacitación y Seguimiento
+            Sistema De Registro y Capacitación
           </p>
         </div>
 
