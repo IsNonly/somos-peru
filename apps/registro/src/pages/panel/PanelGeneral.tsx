@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { supabase, AMBITO_DEPARTAMENTO, AMBITO_DISTRITOS } from '../../lib/supabase'
 import {
-  usePanelData, rolNorm, type CentroFila, type ZonaGrupo,
+  usePanelData, rolNorm, norm, type CentroFila, type ZonaGrupo,
   ROL_MESA, ROL_LOCAL, ROL_COORD_DIST, ROL_ZONAL,
 } from '../../lib/panel'
 import {
@@ -14,6 +14,7 @@ import {
 interface PanelCtx {
   rol: string
   ambito: { departamento: string; provincia: string; distrito: string }
+  local: string
   ambitoListo: boolean
 }
 
@@ -21,10 +22,11 @@ const ROLES = [ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST, 'Administrador Ge
 const wa = (tel?: string | null) => tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}` : undefined
 
 export default function PanelGeneral() {
-  const { rol, ambito: miAmbito, ambitoListo } = useOutletContext<PanelCtx>()
+  const { rol, ambito: miAmbito, local: miLocal, ambitoListo } = useOutletContext<PanelCtx>()
   const esProvincial = rolNorm(rol) === ROL_ZONAL
   const esDistrital = rolNorm(rol) === ROL_COORD_DIST
   const esAdmin = rolNorm(rol) === 'Administrador General'
+  const esPCV = rolNorm(rol) === ROL_LOCAL
 
   const [tab, setTab] = useState<'centros' | 'padron'>('centros')
   const [q, setQ] = useState('')
@@ -63,11 +65,11 @@ export default function PanelGeneral() {
   // o el filtro manual de distrito (aplica también a Admin, para que el
   // selector de distrito acote también la Jerarquía Distrital y los KPIs).
   const distritosEfectivos = useMemo<string[] | null>(() => {
-    if (esDistrital) return miAmbito.distrito ? [miAmbito.distrito] : []
+    if (esDistrital || esPCV) return miAmbito.distrito ? [miAmbito.distrito] : []
     if (esProvincial) return distritosProvincia
     if (fDist) return [fDist]
     return null
-  }, [esDistrital, esProvincial, miAmbito.distrito, distritosProvincia, fDist])
+  }, [esDistrital, esPCV, esProvincial, miAmbito.distrito, distritosProvincia, fDist])
 
   const bloqueado = (campo: 'depto' | 'prov' | 'dist') => {
     if (esDistrital) return true
@@ -166,6 +168,27 @@ export default function PanelGeneral() {
   }
 
   if (!ambitoListo || d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>
+
+  // Personero de Centro de Votación: solo ve la tarjeta de SU propio local
+  // (mismo componente que ven los coordinadores, pero acotado a un único centro).
+  if (esPCV) {
+    const centroPropio = d.centros.find(c => norm(c.nombre) === norm(miLocal)) ?? null
+    return (
+      <div className="max-w-md mx-auto w-full space-y-4">
+        <p className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+          <Building2 size={15} /> Mi Centro de Votación
+        </p>
+        {centroPropio ? (
+          <Card c={centroPropio} onClick={() => setSel(centroPropio)} />
+        ) : (
+          <p className="text-sm text-slate-400 py-10 text-center">
+            No encontramos un centro de votación asignado a tu perfil. Verifica con tu coordinador que tu "Local de Votación Asignado" esté correctamente registrado.
+          </p>
+        )}
+        {sel && <CentroModal c={sel} onClose={() => setSel(null)} />}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4 w-full">

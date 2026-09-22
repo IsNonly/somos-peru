@@ -14,6 +14,7 @@ import PanelGeneral from './pages/panel/PanelGeneral'
 import PanelCapacitaciones from './pages/panel/PanelCapacitaciones'
 import PanelTrayecto from './pages/panel/PanelTrayecto'
 import Layout from './components/Layout'
+import { rolNorm, ROL_LOCAL } from './lib/panel'
 import type { User } from '@supabase/supabase-js'
 
 export default function App() {
@@ -22,6 +23,9 @@ export default function App() {
   // "Coordinador Regional" también es esAdmin (entra a /panel y /admin), pero su
   // destino post-login es /admin (panel completo, acotado a su depto) en vez de /panel.
   const [esCoordRegional, setEsCoordRegional] = useState(false)
+  // Personero de Centro de Votación: además de /capacitate (obligatorio, igual que
+  // Personero de Mesa), puede entrar a /panel para ver SOLO su propio centro.
+  const [esPCV, setEsPCV] = useState(false)
   // Hasta que no se resuelva el rol del usuario logueado NO renderizamos las
   // rutas (si no, el redirect de /login se evalúa con esAdmin viejo y manda
   // al admin a /capacitate).
@@ -34,7 +38,7 @@ export default function App() {
     const resolver = async (u: User | null) => {
       setRolListo(false)
       setUser(u)
-      if (!u) { if (vivo) { setEsAdmin(false); setEsCoordRegional(false); setRolListo(true) } ; return }
+      if (!u) { if (vivo) { setEsAdmin(false); setEsCoordRegional(false); setEsPCV(false); setRolListo(true) } ; return }
       const dni = (u.email ?? '').split('@')[0]
       let { data } = await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()
       if (!data) {
@@ -45,6 +49,7 @@ export default function App() {
       const rol = data?.rol || ''
       setEsAdmin(rol.includes('Administrador') || rol.includes('Coordinador'))
       setEsCoordRegional(rol === 'Coordinador Regional')
+      setEsPCV(rolNorm(rol) === ROL_LOCAL)
       setRolListo(true)
     }
 
@@ -77,8 +82,8 @@ export default function App() {
         {/* Página de capacitación para personeros registrados */}
         <Route path="/capacitate" element={!rolListo ? Spinner : user ? <CapacitarPage /> : <Navigate to="/login" />} />
 
-        {/* Panel de coordinadores: solo Administrador / Coordinador */}
-        <Route path="/panel" element={!rolListo ? Spinner : !user ? <Navigate to="/login" /> : esAdmin ? <PanelLayout /> : <Navigate to="/capacitate" />}>
+        {/* Panel de coordinadores (completo) o Personero de Centro de Votación (solo su local) */}
+        <Route path="/panel" element={!rolListo ? Spinner : !user ? <Navigate to="/login" /> : (esAdmin || esPCV) ? <PanelLayout /> : <Navigate to="/capacitate" />}>
           <Route index element={<PanelGeneral />} />
           <Route path="capacitaciones" element={<PanelCapacitaciones />} />
           <Route path="trayecto" element={<PanelTrayecto />} />
