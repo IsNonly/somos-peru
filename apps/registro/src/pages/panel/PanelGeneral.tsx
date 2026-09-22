@@ -208,7 +208,7 @@ export default function PanelGeneral() {
             No encontramos un centro de votación asignado a tu perfil. Verifica con tu coordinador que tu "Local de Votación Asignado" esté correctamente registrado.
           </p>
         )}
-        {sel && <CentroModal c={sel} puedeEditar={esDistrital} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
+        {sel && <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
       </div>
     )
   }
@@ -315,7 +315,7 @@ export default function PanelGeneral() {
 
       {tab === 'padron' && <TablaPadron perfiles={perfilesFiltrados} />}
 
-      {sel && <CentroModal c={sel} puedeEditar={esDistrital} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
+      {sel && <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
     </div>
   )
 }
