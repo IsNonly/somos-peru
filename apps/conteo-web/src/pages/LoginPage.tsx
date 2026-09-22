@@ -23,11 +23,23 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    
-    let userEmail = email.trim()
-    if (!userEmail.includes('@')) {
-      userEmail = `${userEmail}@somosperu.com`
+
+    const rawUsuario = email.trim()
+    const esDni = /^\d{8}$/.test(rawUsuario)
+
+    let dni = rawUsuario
+    if (!esDni && !rawUsuario.includes('@')) {
+      // No es un DNI: se busca el DNI a partir del nombre completo ingresado.
+      const { data: dniEncontrado } = await supabase.rpc('dni_por_nombre', { p_nombre: rawUsuario })
+      if (!dniEncontrado) {
+        setError('No se encontró ningún usuario con ese nombre. Verifique el nombre completo o ingrese su DNI.')
+        setLoading(false)
+        return
+      }
+      dni = dniEncontrado
     }
+
+    const userEmail = dni.includes('@') ? dni : `${dni}@somosperu.com`
 
     const { error: err } = await supabase.auth.signInWithPassword({
       email: userEmail,
@@ -35,13 +47,7 @@ export default function LoginPage() {
     })
 
     if (err) {
-      const { error: err2 } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: pass,
-      })
-      if (err2) {
-        setError('Credenciales incorrectas. Verifique su usuario y contraseña.')
-      }
+      setError('Credenciales incorrectas. Verifique su usuario y contraseña.')
     }
     setLoading(false)
   }
