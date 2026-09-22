@@ -23,6 +23,10 @@ export default function App() {
   // "Coordinador Regional" también es esAdmin (entra a /panel y /admin), pero su
   // destino post-login es /admin (panel completo, acotado a su depto) en vez de /panel.
   const [esCoordRegional, setEsCoordRegional] = useState(false)
+  // Personero de Centro de Votación: entra directo a /panel (sin capacitación
+  // obligatoria) pero ve SOLO su propio centro de votación ahí — no /admin,
+  // que lista todos los personeros del ámbito.
+  const [esPCV, setEsPCV] = useState(false)
   // Hasta que no se resuelva el rol del usuario logueado NO renderizamos las
   // rutas (si no, el redirect de /login se evalúa con esAdmin viejo y manda
   // al admin a /capacitate).
@@ -35,7 +39,7 @@ export default function App() {
     const resolver = async (u: User | null) => {
       setRolListo(false)
       setUser(u)
-      if (!u) { if (vivo) { setEsAdmin(false); setEsCoordRegional(false); setRolListo(true) } ; return }
+      if (!u) { if (vivo) { setEsAdmin(false); setEsCoordRegional(false); setEsPCV(false); setRolListo(true) } ; return }
       const dni = (u.email ?? '').split('@')[0]
       let { data } = await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()
       if (!data) {
@@ -44,10 +48,9 @@ export default function App() {
       }
       if (!vivo) return
       const rol = data?.rol || ''
-      // Personero de Centro de Votación: tratado igual que un Coordinador en todo
-      // el sistema (panel completo acá, sin capacitación obligatoria en ninguna app).
-      setEsAdmin(rol.includes('Administrador') || rol.includes('Coordinador') || rolNorm(rol) === ROL_LOCAL)
+      setEsAdmin(rol.includes('Administrador') || rol.includes('Coordinador'))
       setEsCoordRegional(rol === 'Coordinador Regional')
+      setEsPCV(rolNorm(rol) === ROL_LOCAL)
       setRolListo(true)
     }
 
@@ -75,19 +78,19 @@ export default function App() {
         {/* Rutas públicas */}
         <Route path="/" element={<RegisterPage />} />
         <Route path="/registro" element={<RegisterPage />} />
-        <Route path="/login" element={!rolListo ? Spinner : !user ? <LoginPage /> : <Navigate to={esCoordRegional ? '/admin' : esAdmin ? '/panel' : '/capacitate'} />} />
+        <Route path="/login" element={!rolListo ? Spinner : !user ? <LoginPage /> : <Navigate to={esCoordRegional ? '/admin' : (esAdmin || esPCV) ? '/panel' : '/capacitate'} />} />
 
         {/* Página de capacitación para personeros registrados */}
         <Route path="/capacitate" element={!rolListo ? Spinner : user ? <CapacitarPage /> : <Navigate to="/login" />} />
 
-        {/* Panel de coordinadores: Administrador / Coordinador / Personero de Centro de Votación */}
-        <Route path="/panel" element={!rolListo ? Spinner : !user ? <Navigate to="/login" /> : esAdmin ? <PanelLayout /> : <Navigate to="/capacitate" />}>
+        {/* Panel de coordinadores (completo) o Personero de Centro de Votación (solo su local) */}
+        <Route path="/panel" element={!rolListo ? Spinner : !user ? <Navigate to="/login" /> : (esAdmin || esPCV) ? <PanelLayout /> : <Navigate to="/capacitate" />}>
           <Route index element={<PanelGeneral />} />
           <Route path="capacitaciones" element={<PanelCapacitaciones />} />
           <Route path="trayecto" element={<PanelTrayecto />} />
         </Route>
 
-        {/* Panel admin clásico: Administrador / Coordinador / Personero de Centro de Votación */}
+        {/* Panel admin clásico: solo Administrador / Coordinador */}
         <Route path="/admin" element={!rolListo ? Spinner : !user ? <Navigate to="/login" /> : esAdmin ? <Layout /> : <Navigate to="/capacitate" />}>
           <Route index element={<Navigate to="/admin/dashboard" />} />
           <Route path="dashboard"    element={<DashboardPage />} />

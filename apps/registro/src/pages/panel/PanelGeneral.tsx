@@ -3,25 +3,44 @@ import { useOutletContext } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { supabase, AMBITO_DEPARTAMENTO, AMBITO_DISTRITOS } from '../../lib/supabase'
 import {
-  usePanelData, rolNorm, type CentroFila, type ZonaGrupo,
+  usePanelData, rolNorm, norm, type CentroFila, type ZonaGrupo, type Persona,
   ROL_MESA, ROL_LOCAL, ROL_COORD_DIST, ROL_ZONAL,
 } from '../../lib/panel'
 import {
   Search, Download, Building2, LayoutGrid, ShieldCheck, MapPin, Users, Phone,
-  AlertTriangle, MessageCircle, GraduationCap,
+  AlertTriangle, MessageCircle, GraduationCap, Pencil,
 } from 'lucide-react'
+import EditarPersoneroModal, { type CambiosPersonero } from '../../components/EditarPersoneroModal'
 
 interface PanelCtx {
   rol: string
   ambito: { departamento: string; provincia: string; distrito: string }
+  local: string
   ambitoListo: boolean
 }
 
 const ROLES = [ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST, 'Administrador General']
 const wa = (tel?: string | null) => tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}` : undefined
 
+// Aplica los cambios guardados en el modal de edición al Persona que corresponda
+// (PCV o un personero de mesa) dentro de un CentroFila, para reflejarlo al instante.
+function aplicarCambiosPersona(c: CentroFila, id: string, cambios: CambiosPersonero): CentroFila {
+  const aplicar = (p: Persona): Persona => p.id !== id ? p : {
+    ...p,
+    nombre: cambios.nombre_completo,
+    celular: cambios.celular,
+    correo: cambios.correo,
+    mesa_asignada: cambios.mesa_asignada !== undefined ? cambios.mesa_asignada : p.mesa_asignada,
+  }
+  return {
+    ...c,
+    pcv: c.pcv ? aplicar(c.pcv) : c.pcv,
+    personeros: c.personeros.map(aplicar),
+  }
+}
+
 export default function PanelGeneral() {
-  const { rol, ambito: miAmbito, ambitoListo } = useOutletContext<PanelCtx>()
+  const { rol, ambito: miAmbito, local: miLocal, ambitoListo } = useOutletContext<PanelCtx>()
   const esProvincial = rolNorm(rol) === ROL_ZONAL
   const esDistrital = rolNorm(rol) === ROL_COORD_DIST
   const esAdmin = rolNorm(rol) === 'Administrador General'
@@ -166,7 +185,33 @@ export default function PanelGeneral() {
     XLSX.writeFile(wb, `SomosPeru_${AMBITO_DEPARTAMENTO}_Centros_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
+  const onPersoneroActualizado = (id: string, cambios: CambiosPersonero) => {
+    setSel(prev => prev ? aplicarCambiosPersona(prev, id, cambios) : prev)
+    d.refetch()
+  }
+
   if (!ambitoListo || d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>
+
+  // Personero de Centro de Votación: solo ve la tarjeta de SU propio local
+  // (mismo componente que ven los coordinadores, pero acotado a un único centro).
+  if (esPCV) {
+    const centroPropio = d.centros.find(c => norm(c.nombre) === norm(miLocal)) ?? null
+    return (
+      <div className="max-w-md mx-auto w-full space-y-4">
+        <p className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+          <Building2 size={15} /> Mi Centro de Votación
+        </p>
+        {centroPropio ? (
+          <Card c={centroPropio} onClick={() => setSel(centroPropio)} />
+        ) : (
+          <p className="text-sm text-slate-400 py-10 text-center">
+            No encontramos un centro de votación asignado a tu perfil. Verifica con tu coordinador que tu "Local de Votación Asignado" esté correctamente registrado.
+          </p>
+        )}
+        {sel && <CentroModal c={sel} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4 w-full">
@@ -270,13 +315,16 @@ export default function PanelGeneral() {
 
       {tab === 'padron' && <TablaPadron perfiles={perfilesFiltrados} />}
 
-      {sel && <CentroModal c={sel} onClose={() => setSel(null)} />}
+      {sel && <CentroModal c={sel} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
     </div>
   )
 }
 
-function CentroModal({ c, onClose }: { c: CentroFila; onClose: () => void }) {
+function CentroModal({ c, onClose, onActualizado }: {
+  c: CentroFila; onClose: () => void; onActualizado: (id: string, cambios: CambiosPersonero) => void
+}) {
   const [t, setT] = useState<'personeros' | 'zona'>('personeros')
+  const [editando, setEditando] = useState<{ p: Persona; esMesa: boolean } | null>(null)
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-lg mt-16 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -318,10 +366,14 @@ function CentroModal({ c, onClose }: { c: CentroFila; onClose: () => void }) {
                       <p className="font-bold text-slate-800 text-sm">{c.pcv.nombre}</p>
                       <p className="text-xs text-slate-500">DNI: {c.pcv.dni ?? '—'}</p>
                     </div>
-                    {c.pcv.celular && (
-                      <a href={wa(c.pcv.celular)} target="_blank" rel="noreferrer"
-                        className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {c.pcv.celular}</a>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {c.pcv.celular && (
+                        <a href={wa(c.pcv.celular)} target="_blank" rel="noreferrer"
+                          className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {c.pcv.celular}</a>
+                      )}
+                      <button onClick={() => setEditando({ p: c.pcv!, esMesa: false })} title="Editar"
+                        className="text-slate-400 hover:text-sky-600"><Pencil size={13} /></button>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1.5">
@@ -337,18 +389,22 @@ function CentroModal({ c, onClose }: { c: CentroFila; onClose: () => void }) {
                 <p className="text-sm text-slate-400">Ningún personero de mesa inscrito en este centro todavía.</p>
               ) : (
                 <div className="space-y-2">
-                  {c.personeros.map((p, i) => (
-                    <div key={i} className="flex items-center justify-between border border-slate-200 rounded-xl px-3 py-2"
+                  {c.personeros.map(p => (
+                    <div key={p.id} className="flex items-center justify-between border border-slate-200 rounded-xl px-3 py-2"
                       style={{ borderLeft: '4px solid #16a34a' }}>
                       <div>
                         <p className="font-bold text-slate-800 text-sm">{p.nombre}</p>
                         <p className="text-xs text-slate-500">
-                          <span className="text-emerald-600 font-semibold">Personero de Mesa</span> · DNI: {p.dni ?? '—'}
+                          <span className="text-emerald-600 font-semibold">Personero de Mesa</span> · DNI: {p.dni ?? '—'} · Mesa: {p.mesa_asignada ?? '—'}
                         </p>
                       </div>
-                      {p.celular
-                        ? <a href={wa(p.celular)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {p.celular}</a>
-                        : <span className="text-emerald-500">✓</span>}
+                      <div className="flex items-center gap-2">
+                        {p.celular && (
+                          <a href={wa(p.celular)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {p.celular}</a>
+                        )}
+                        <button onClick={() => setEditando({ p, esMesa: true })} title="Editar"
+                          className="text-slate-400 hover:text-sky-600"><Pencil size={13} /></button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -387,6 +443,14 @@ function CentroModal({ c, onClose }: { c: CentroFila; onClose: () => void }) {
           )}
         </div>
       </div>
+      {editando && (
+        <EditarPersoneroModal
+          perfil={{ id: editando.p.id, nombre: editando.p.nombre, celular: editando.p.celular, correo: editando.p.correo, mesa_asignada: editando.p.mesa_asignada }}
+          esMesa={editando.esMesa}
+          onClose={() => setEditando(null)}
+          onSaved={(id, cambios) => { onActualizado(id, cambios); setEditando(null) }}
+        />
+      )}
     </div>
   )
 }

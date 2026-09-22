@@ -38,7 +38,7 @@ export interface Colegio {
   direccion: string | null; total_mesas: number | null; electores: number | null
 }
 export interface Perfil {
-  id: string; nombre_completo: string; dni: string | null; celular: string | null; rol: string
+  id: string; nombre_completo: string; dni: string | null; celular: string | null; correo: string | null; rol: string
   distrito_asignado: string | null; distrito_vota: string | null
   local_asignado: string | null; local_votacion: string | null
   mesa_asignada: string | null
@@ -48,7 +48,10 @@ export interface Perfil {
   modificado_por: string | null; modificado_at: string | null
 }
 
-export interface Persona { nombre: string; dni: string | null; celular: string | null }
+export interface Persona {
+  id: string; nombre: string; dni: string | null; celular: string | null
+  correo: string | null; mesa_asignada: string | null
+}
 export interface CentroFila extends Colegio {
   pcv: Persona | null
   zonal: (Persona & { distrito: string | null; nColegios: number; lista: string[] }) | null
@@ -136,7 +139,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
 
       const perfilesRaw = await traerTodo<Perfil>((f, t) => {
         let pq = supabase.from('profiles')
-          .select('id, nombre_completo, dni, celular, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, credencial_estado, quiz_estado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos, modificado_por, modificado_at')
+          .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, credencial_estado, quiz_estado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos, modificado_por, modificado_at')
           .order('nombre_completo').range(f, t)
         if (distritos) pq = pq.in('distrito_asignado', distritos)
         return pq
@@ -171,10 +174,10 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
         const k = claveLocal(p.distrito_asignado || p.distrito_vota, p.local_asignado || p.local_votacion)
         if (k.endsWith('||')) continue
         if (rolNorm(p.rol) === ROL_LOCAL) {
-          if (!pcvMap.has(k)) pcvMap.set(k, { nombre: p.nombre_completo, dni: p.dni, celular: p.celular })
+          if (!pcvMap.has(k)) pcvMap.set(k, { id: p.id, nombre: p.nombre_completo, dni: p.dni, celular: p.celular, correo: p.correo, mesa_asignada: p.mesa_asignada })
         } else if (rolNorm(p.rol) === ROL_MESA) {
           const arr = persListMap.get(k) ?? []
-          arr.push({ nombre: p.nombre_completo, dni: p.dni, celular: p.celular })
+          arr.push({ id: p.id, nombre: p.nombre_completo, dni: p.dni, celular: p.celular, correo: p.correo, mesa_asignada: p.mesa_asignada })
           persListMap.set(k, arr)
         }
       }
@@ -190,7 +193,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
         for (const nom of lista) {
           const k = claveLocal(z.distrito_asignado || z.distrito_vota, nom)
           if (!k.endsWith('||') && !zonalMap.has(k))
-            zonalMap.set(k, { nombre: z.nombre_completo, dni: z.dni, celular: z.celular, distrito: z.distrito_asignado, nColegios: lista.length, lista })
+            zonalMap.set(k, { id: z.id, nombre: z.nombre_completo, dni: z.dni, celular: z.celular, correo: z.correo, mesa_asignada: z.mesa_asignada, distrito: z.distrito_asignado, nColegios: lista.length, lista })
         }
       }
 
@@ -216,7 +219,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
         if (c.zonal && c.zonal.nColegios > 1) {
           const key = c.zonal.nombre + '|' + (c.zonal.dni ?? '')
           if (!grupos.has(key)) grupos.set(key, {
-            zonal: { nombre: c.zonal.nombre, dni: c.zonal.dni, celular: c.zonal.celular },
+            zonal: { id: c.zonal.id, nombre: c.zonal.nombre, dni: c.zonal.dni, celular: c.zonal.celular, correo: c.zonal.correo, mesa_asignada: c.zonal.mesa_asignada },
             distrito: c.zonal.distrito, centros: [],
           })
           grupos.get(key)!.centros.push(c)

@@ -2,6 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { LayoutGrid, GraduationCap, Navigation, ChevronLeft, LogOut, Menu, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { rolNorm, ROL_LOCAL } from '../../lib/panel'
 
 const NAV = [
   { to: '/panel', end: true, icon: LayoutGrid, label: 'Panel General' },
@@ -18,7 +19,7 @@ function Reloj() {
   return <span className="font-mono">{t}</span>
 }
 
-function SidebarContent({ open, onNavigate }: { open: boolean; onNavigate?: () => void }) {
+function SidebarContent({ open, nav, onNavigate }: { open: boolean; nav: typeof NAV; onNavigate?: () => void }) {
   return (
     <>
       <div className="flex items-center gap-2.5 px-4 py-4 border-b border-slate-100">
@@ -32,7 +33,7 @@ function SidebarContent({ open, onNavigate }: { open: boolean; onNavigate?: () =
       </div>
       <nav className="flex-1 p-2.5 space-y-1">
         {open && <p className="px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Panel de control</p>}
-        {NAV.map(({ to, end, icon: Icon, label }) => (
+        {nav.map(({ to, end, icon: Icon, label }) => (
           <NavLink key={to} to={to} end={end} onClick={onNavigate}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-colors ${
@@ -54,6 +55,7 @@ export default function PanelLayout() {
   const [nombreCompleto, setNombreCompleto] = useState('')
   const [dni, setDni] = useState('')
   const [ambito, setAmbito] = useState({ departamento: '', provincia: '', distrito: '' })
+  const [local, setLocal] = useState('')
   const [ambitoListo, setAmbitoListo] = useState(false)
 
   useEffect(() => {
@@ -62,7 +64,7 @@ export default function PanelLayout() {
       if (!user) { setAmbitoListo(true); return }
       const miDni = (user.email ?? '').split('@')[0]
       const { data } = await supabase.from('profiles')
-        .select('nombre_completo, rol, departamento_asignado, provincia_asignado, distrito_asignado')
+        .select('nombre_completo, rol, departamento_asignado, provincia_asignado, distrito_asignado, local_asignado, local_votacion')
         .eq('dni', miDni).maybeSingle()
       if (data?.nombre_completo) { setNombre(data.nombre_completo.split(' ').slice(0, 2).join(' ')); setNombreCompleto(data.nombre_completo) }
       if (data?.rol) setRol(data.rol)
@@ -71,6 +73,7 @@ export default function PanelLayout() {
         provincia: (data?.provincia_asignado ?? '').trim(),
         distrito: (data?.distrito_asignado ?? '').trim(),
       })
+      setLocal(((data?.local_asignado || data?.local_votacion) ?? '').trim())
       setDni(miDni)
       setAmbitoListo(true)
     })()
@@ -78,11 +81,17 @@ export default function PanelLayout() {
 
   const salir = async () => { await supabase.auth.signOut(); nav('/login') }
 
+  // Personero de Centro de Votación: solo ve "Panel General" (acotado a su propio
+  // local ahí mismo); Capacitaciones/Trayecto muestran datos de todo el distrito
+  // y son para coordinadores, no para este rol.
+  const esPCV = rolNorm(rol) === ROL_LOCAL
+  const navItems = esPCV ? NAV.slice(0, 1) : NAV
+
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-800">
       {/* Sidebar de escritorio */}
       <aside className={`hidden lg:flex ${open ? 'w-56' : 'w-16'} flex-shrink-0 bg-white border-r border-slate-200 flex-col transition-all`}>
-        <SidebarContent open={open} />
+        <SidebarContent open={open} nav={navItems} />
         <div className="p-3 border-t border-slate-100">
           <button onClick={() => setOpen(o => !o)}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:bg-slate-100">
@@ -102,7 +111,7 @@ export default function PanelLayout() {
             <X size={18} />
           </button>
         </div>
-        <SidebarContent open onNavigate={() => setMobileOpen(false)} />
+        <SidebarContent open nav={navItems} onNavigate={() => setMobileOpen(false)} />
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -130,7 +139,7 @@ export default function PanelLayout() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
-          <Outlet context={{ rol, nombreCompleto, dni, ambito, ambitoListo }} />
+          <Outlet context={{ rol, nombreCompleto, dni, ambito, local, ambitoListo }} />
         </main>
       </div>
     </div>
