@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export interface PersoneroEditable {
@@ -8,26 +8,32 @@ export interface PersoneroEditable {
   celular: string | null
   correo: string | null
   mesa_asignada: string | null
+  local_asignado: string | null
 }
 
 export interface CambiosPersonero {
   nombre_completo: string
   celular: string | null
   correo: string | null
+  local_asignado: string | null
   mesa_asignada?: string | null
 }
 
-export default function EditarPersoneroModal({ perfil, esMesa, onClose, onSaved }: {
+export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, onClose, onSaved, onEliminado }: {
   perfil: PersoneroEditable
   esMesa: boolean
+  puedeEliminar: boolean
   onClose: () => void
   onSaved: (id: string, cambios: CambiosPersonero) => void
+  onEliminado: (id: string) => void
 }) {
   const [nombre, setNombre] = useState(perfil.nombre ?? '')
   const [celular, setCelular] = useState(perfil.celular ?? '')
   const [correo, setCorreo] = useState(perfil.correo ?? '')
+  const [local, setLocal] = useState(perfil.local_asignado ?? '')
   const [mesa, setMesa] = useState(perfil.mesa_asignada ?? '')
   const [guardando, setGuardando] = useState(false)
+  const [eliminando, setEliminando] = useState(false)
   const [error, setError] = useState('')
 
   const guardar = async () => {
@@ -36,12 +42,22 @@ export default function EditarPersoneroModal({ perfil, esMesa, onClose, onSaved 
       nombre_completo: nombre.trim(),
       celular: celular.trim() || null,
       correo: correo.trim() || null,
+      local_asignado: local.trim() || null,
     }
     if (esMesa) cambios.mesa_asignada = mesa.trim() || null
     const { error: err } = await supabase.from('profiles').update(cambios).eq('id', perfil.id)
     setGuardando(false)
     if (err) { setError(err.message); return }
     onSaved(perfil.id, cambios)
+  }
+
+  const eliminar = async () => {
+    if (!window.confirm(`¿Eliminar definitivamente a ${perfil.nombre || 'este personero'}? Esta acción no se puede deshacer — úsala solo si de verdad no va a participar.`)) return
+    setEliminando(true); setError('')
+    const { error: err } = await supabase.from('profiles').delete().eq('id', perfil.id)
+    setEliminando(false)
+    if (err) { setError(err.message); return }
+    onEliminado(perfil.id)
   }
 
   return (
@@ -54,16 +70,30 @@ export default function EditarPersoneroModal({ perfil, esMesa, onClose, onSaved 
         <Campo label="Nombre completo" value={nombre} onChange={setNombre} />
         <Campo label="Celular" value={celular} onChange={setCelular} />
         <Campo label="Correo" value={correo} onChange={setCorreo} />
+        <Campo label="Local de Votación Asignado" value={local} onChange={setLocal} />
         {esMesa && <Campo label="Mesa asignada" value={mesa} onChange={setMesa} />}
+        {local.trim() !== (perfil.local_asignado ?? '').trim() && (
+          <p className="text-[11px] text-amber-600">
+            Al cambiar el local, este personero se moverá a la tarjeta de su nuevo centro de votación.
+          </p>
+        )}
         {error && <p className="text-xs text-rose-500">{error}</p>}
-        <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} className="text-xs font-semibold text-slate-600 border border-slate-300 rounded-md px-3 py-1.5">
-            Cancelar
-          </button>
-          <button onClick={guardar} disabled={guardando}
-            className="text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50 rounded-md px-3 py-1.5">
-            {guardando ? 'Guardando…' : 'Guardar cambios'}
-          </button>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          {puedeEliminar ? (
+            <button onClick={eliminar} disabled={eliminando || guardando}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 disabled:opacity-50 px-1">
+              <Trash2 size={13} /> {eliminando ? 'Eliminando…' : 'Eliminar personero'}
+            </button>
+          ) : <span />}
+          <div className="flex gap-2">
+            <button onClick={onClose} className="text-xs font-semibold text-slate-600 border border-slate-300 rounded-md px-3 py-1.5">
+              Cancelar
+            </button>
+            <button onClick={guardar} disabled={guardando || eliminando}
+              className="text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-50 rounded-md px-3 py-1.5">
+              {guardando ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

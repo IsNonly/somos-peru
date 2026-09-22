@@ -50,7 +50,7 @@ export interface Perfil {
 
 export interface Persona {
   id: string; nombre: string; dni: string | null; celular: string | null
-  correo: string | null; mesa_asignada: string | null
+  correo: string | null; mesa_asignada: string | null; local_asignado: string | null
 }
 export interface CentroFila extends Colegio {
   pcv: Persona | null
@@ -174,10 +174,10 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
         const k = claveLocal(p.distrito_asignado || p.distrito_vota, p.local_asignado || p.local_votacion)
         if (k.endsWith('||')) continue
         if (rolNorm(p.rol) === ROL_LOCAL) {
-          if (!pcvMap.has(k)) pcvMap.set(k, { id: p.id, nombre: p.nombre_completo, dni: p.dni, celular: p.celular, correo: p.correo, mesa_asignada: p.mesa_asignada })
+          if (!pcvMap.has(k)) pcvMap.set(k, { id: p.id, nombre: p.nombre_completo, dni: p.dni, celular: p.celular, correo: p.correo, mesa_asignada: p.mesa_asignada, local_asignado: p.local_asignado })
         } else if (rolNorm(p.rol) === ROL_MESA) {
           const arr = persListMap.get(k) ?? []
-          arr.push({ id: p.id, nombre: p.nombre_completo, dni: p.dni, celular: p.celular, correo: p.correo, mesa_asignada: p.mesa_asignada })
+          arr.push({ id: p.id, nombre: p.nombre_completo, dni: p.dni, celular: p.celular, correo: p.correo, mesa_asignada: p.mesa_asignada, local_asignado: p.local_asignado })
           persListMap.set(k, arr)
         }
       }
@@ -193,7 +193,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
         for (const nom of lista) {
           const k = claveLocal(z.distrito_asignado || z.distrito_vota, nom)
           if (!k.endsWith('||') && !zonalMap.has(k))
-            zonalMap.set(k, { id: z.id, nombre: z.nombre_completo, dni: z.dni, celular: z.celular, correo: z.correo, mesa_asignada: z.mesa_asignada, distrito: z.distrito_asignado, nColegios: lista.length, lista })
+            zonalMap.set(k, { id: z.id, nombre: z.nombre_completo, dni: z.dni, celular: z.celular, correo: z.correo, mesa_asignada: z.mesa_asignada, local_asignado: z.local_asignado, distrito: z.distrito_asignado, nColegios: lista.length, lista })
         }
       }
 
@@ -219,7 +219,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
         if (c.zonal && c.zonal.nColegios > 1) {
           const key = c.zonal.nombre + '|' + (c.zonal.dni ?? '')
           if (!grupos.has(key)) grupos.set(key, {
-            zonal: { id: c.zonal.id, nombre: c.zonal.nombre, dni: c.zonal.dni, celular: c.zonal.celular, correo: c.zonal.correo, mesa_asignada: c.zonal.mesa_asignada },
+            zonal: { id: c.zonal.id, nombre: c.zonal.nombre, dni: c.zonal.dni, celular: c.zonal.celular, correo: c.zonal.correo, mesa_asignada: c.zonal.mesa_asignada, local_asignado: c.zonal.local_asignado },
             distrito: c.zonal.distrito, centros: [],
           })
           grupos.get(key)!.centros.push(c)

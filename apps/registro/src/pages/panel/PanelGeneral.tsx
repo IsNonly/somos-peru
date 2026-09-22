@@ -30,12 +30,25 @@ function aplicarCambiosPersona(c: CentroFila, id: string, cambios: CambiosPerson
     nombre: cambios.nombre_completo,
     celular: cambios.celular,
     correo: cambios.correo,
+    local_asignado: cambios.local_asignado,
     mesa_asignada: cambios.mesa_asignada !== undefined ? cambios.mesa_asignada : p.mesa_asignada,
   }
   return {
     ...c,
     pcv: c.pcv ? aplicar(c.pcv) : c.pcv,
     personeros: c.personeros.map(aplicar),
+  }
+}
+
+// Quita a la persona eliminada de la tarjeta de centro que está abierta, al instante.
+function quitarPersona(c: CentroFila, id: string): CentroFila {
+  const personeros = c.personeros.filter(p => p.id !== id)
+  return {
+    ...c,
+    pcv: c.pcv?.id === id ? null : c.pcv,
+    personeros,
+    nPersoneros: personeros.length,
+    cobertura: c.total_mesas ? Math.round((personeros.length / c.total_mesas) * 100) : 0,
   }
 }
 
@@ -190,6 +203,11 @@ export default function PanelGeneral() {
     d.refetch()
   }
 
+  const onPersoneroEliminado = (id: string) => {
+    setSel(prev => prev ? quitarPersona(prev, id) : prev)
+    d.refetch()
+  }
+
   if (!ambitoListo || d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>
 
   // Personero de Centro de Votación: solo ve la tarjeta de SU propio local
@@ -208,7 +226,10 @@ export default function PanelGeneral() {
             No encontramos un centro de votación asignado a tu perfil. Verifica con tu coordinador que tu "Local de Votación Asignado" esté correctamente registrado.
           </p>
         )}
-        {sel && <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
+        {sel && (
+          <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital} puedeEliminar={esAdmin}
+            onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} onEliminado={onPersoneroEliminado} />
+        )}
       </div>
     )
   }
@@ -315,13 +336,18 @@ export default function PanelGeneral() {
 
       {tab === 'padron' && <TablaPadron perfiles={perfilesFiltrados} />}
 
-      {sel && <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
+      {sel && (
+        <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital} puedeEliminar={esAdmin}
+          onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} onEliminado={onPersoneroEliminado} />
+      )}
     </div>
   )
 }
 
-function CentroModal({ c, puedeEditar, onClose, onActualizado }: {
-  c: CentroFila; puedeEditar: boolean; onClose: () => void; onActualizado: (id: string, cambios: CambiosPersonero) => void
+function CentroModal({ c, puedeEditar, puedeEliminar, onClose, onActualizado, onEliminado }: {
+  c: CentroFila; puedeEditar: boolean; puedeEliminar: boolean; onClose: () => void
+  onActualizado: (id: string, cambios: CambiosPersonero) => void
+  onEliminado: (id: string) => void
 }) {
   const [t, setT] = useState<'personeros' | 'zona'>('personeros')
   const [editando, setEditando] = useState<{ p: Persona; esMesa: boolean } | null>(null)
@@ -449,10 +475,20 @@ function CentroModal({ c, puedeEditar, onClose, onActualizado }: {
       </div>
       {editando && (
         <EditarPersoneroModal
-          perfil={{ id: editando.p.id, nombre: editando.p.nombre, celular: editando.p.celular, correo: editando.p.correo, mesa_asignada: editando.p.mesa_asignada }}
+          perfil={{
+            id: editando.p.id, nombre: editando.p.nombre, celular: editando.p.celular, correo: editando.p.correo,
+            mesa_asignada: editando.p.mesa_asignada, local_asignado: editando.p.local_asignado,
+          }}
           esMesa={editando.esMesa}
+          puedeEliminar={puedeEliminar}
           onClose={() => setEditando(null)}
-          onSaved={(id, cambios) => { onActualizado(id, cambios); setEditando(null) }}
+          onSaved={(id, cambios) => {
+            const seMovio = norm(cambios.local_asignado ?? '') !== norm(editando.p.local_asignado ?? '')
+            onActualizado(id, cambios)
+            setEditando(null)
+            if (seMovio) onClose()
+          }}
+          onEliminado={id => { onEliminado(id); setEditando(null) }}
         />
       )}
     </div>
