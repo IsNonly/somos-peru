@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase, generarToken, generarClave4, AMBITO_DEPARTAMENTO, AMBITO_PROVINCIAS } from '../lib/supabase'
+import { supabase, generarToken, generarClave4, AMBITO_DEPARTAMENTO, AMBITO_PROVINCIAS, AMBITO_DISTRITOS } from '../lib/supabase'
 import type { Rol } from '../lib/supabase'
 import {
   User, Phone, CreditCard, MapPin, Building2, Check,
@@ -283,8 +283,11 @@ export default function RegisterPage() {
     celular: '',
     rol: 'Personero de Mesa',
     departamentoAsignado: AMBITO_DEPARTAMENTO,
-    provinciaAsignado: '',
-    distritoAsignado: '',
+    // Personero de Mesa/Centro de Votación: la provincia y el distrito ya están
+    // fijos para esta instancia (solo se maneja uno), así que se prellenan directo
+    // en vez de pedírselos — ver el onClick de los botones de rol más abajo.
+    provinciaAsignado: AMBITO_PROVINCIAS[0] ?? '',
+    distritoAsignado: AMBITO_DISTRITOS[0] ?? '',
     localesAsignados: [],
     localAsignado: '',
     tieneExperiencia: false,
@@ -478,7 +481,18 @@ export default function RegisterPage() {
                 const sel = form.rol === item.id
                 return (
                   <button key={item.id} type="button"
-                    onClick={() => setForm(p => ({ ...p, rol: item.id as Rol, provinciaAsignado: '', distritoAsignado: '', localAsignado: '', localesAsignados: [] }))}
+                    onClick={() => {
+                      // Personero de Mesa/Centro de Votación: provincia y distrito ya están
+                      // fijos (un solo ámbito por instancia), no se le piden. Coordinadores sí
+                      // los eligen (pueden abarcar más de un distrito/colegio).
+                      const esPersoneroNuevo = item.id === 'Personero de Mesa' || item.id === 'Personero de Centro de Votación'
+                      setForm(p => ({
+                        ...p, rol: item.id as Rol,
+                        provinciaAsignado: esPersoneroNuevo ? (AMBITO_PROVINCIAS[0] ?? '') : '',
+                        distritoAsignado: esPersoneroNuevo ? (AMBITO_DISTRITOS[0] ?? '') : '',
+                        localAsignado: '', localesAsignados: [],
+                      }))
+                    }}
                     className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${sel ? 'bg-[#00a3e8] border-[#00a3e8] text-white shadow-md shadow-sky-500/20' : 'bg-white border-slate-200 text-slate-700 hover:border-sky-300'}`}>
                     <div className={sel ? 'text-white' : 'text-slate-500'}><Icon size={20} /></div>
                     <span className="text-xs font-bold leading-tight">{item.title}</span>
@@ -487,26 +501,24 @@ export default function RegisterPage() {
               })}
             </div>
 
-            {/* Personero de Mesa / Centro de Votación */}
+            {/* Personero de Mesa / Centro de Votación: provincia y distrito ya están
+                fijos para esta instancia, así que solo elige su local de votación. */}
             {esPersonero && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                {cascadaAsignado('Distrito Asignado')}
-                <div>
-                  <FieldLabel>Local de Votación Asignado <Req /></FieldLabel>
-                  <SelectWrap icon={<Building2 size={18} />}>
-                    {colegiosAsignado.length > 0 ? (
-                      <select value={form.localAsignado} onChange={e => set('localAsignado', e.target.value)} className={selectCls}>
-                        <option value="">Seleccione el local ({colegiosAsignado.length})</option>
-                        {colegiosAsignado.map(c => <option key={c.nombre} value={c.nombre}>{c.nombre}</option>)}
-                      </select>
-                    ) : (
-                      <input type="text" value={form.localAsignado} disabled={!form.distritoAsignado}
-                        onChange={e => set('localAsignado', e.target.value)}
-                        placeholder={cargandoAsignado ? 'Cargando...' : form.distritoAsignado ? 'Escriba el local...' : 'Primero seleccione un distrito'}
-                        className={`${inputCls} disabled:bg-slate-50`} />
-                    )}
-                  </SelectWrap>
-                </div>
+              <div className="pt-2">
+                <FieldLabel>Local de Votación Asignado <Req /></FieldLabel>
+                <SelectWrap icon={<Building2 size={18} />}>
+                  {colegiosAsignado.length > 0 ? (
+                    <select value={form.localAsignado} onChange={e => set('localAsignado', e.target.value)} className={selectCls}>
+                      <option value="">Seleccione el local ({colegiosAsignado.length})</option>
+                      {colegiosAsignado.map(c => <option key={c.nombre} value={c.nombre}>{c.nombre}</option>)}
+                    </select>
+                  ) : (
+                    <input type="text" value={form.localAsignado}
+                      onChange={e => set('localAsignado', e.target.value)}
+                      placeholder={cargandoAsignado ? 'Cargando...' : 'Escriba el local...'}
+                      className={`${inputCls} disabled:bg-slate-50`} />
+                  )}
+                </SelectWrap>
               </div>
             )}
 
