@@ -162,11 +162,13 @@ function ConteoPageInner() {
       if (p?.mesa_asignada) setMesa(p.mesa_asignada)
       if (p?.acta_transmitida) setFase('enviado')
 
-      // Si ya se tomó la foto de instalación antes, recuperarla
+      // Si ya se tomó la foto de instalación o se guardaron electores hábiles
+      // antes (ej. se cerró el navegador a medio llenar), recuperarlos.
       if (p?.mesa_asignada) {
         const { data: acta } = await supabase.from('actas')
-          .select('foto_instalacion_url').eq('mesa_numero', p.mesa_asignada).maybeSingle()
+          .select('foto_instalacion_url, electores_habiles').eq('mesa_numero', p.mesa_asignada).maybeSingle()
         if (acta?.foto_instalacion_url) setFotoInstalacion(acta.foto_instalacion_url)
+        if (acta?.electores_habiles != null) setElectoresHabiles(String(acta.electores_habiles))
       }
     }
     init()
@@ -245,6 +247,30 @@ function ConteoPageInner() {
     )
   }, [perfil, userId, mesa])
 
+  // Campos base que identifican el acta de esta mesa, repetidos en cada
+  // guardado parcial (foto de instalación, electores hábiles, envío final).
+  const datosBaseActa = useCallback(() => ({
+    colegio_nombre: perfil?.local_asignado ?? perfil?.local_votacion ?? null,
+    departamento:   cand?.ambito.departamento ?? perfil?.departamento_asignado ?? perfil?.departamento_vota ?? null,
+    provincia:      cand?.ambito.provincia    ?? perfil?.provincia_asignado    ?? perfil?.provincia_vota    ?? null,
+    distrito:       cand?.ambito.distrito     ?? perfil?.distrito_asignado     ?? perfil?.distrito_vota     ?? null,
+    personero_id:   userId || null,
+    personero_dni:  perfil?.dni ?? null,
+  }), [perfil, cand, userId])
+
+  // Guarda "Electores hábiles" apenas el campo pierde el foco, para no
+  // perderlo si el celular falla o se cierra el navegador antes de transmitir
+  // (antes solo se guardaba junto con el acta al final del escrutinio).
+  const guardarElectores = async () => {
+    if (mesa.length !== 6) return
+    const num = electoresHabiles.trim() ? parseInt(electoresHabiles.replace(/\D/g, ''), 10) : null
+    await supabase.from('actas').upsert({
+      mesa_numero: mesa.trim(),
+      ...datosBaseActa(),
+      electores_habiles: Number.isFinite(num as number) ? num : null,
+    }, { onConflict: 'mesa_numero' })
+  }
+
   // ── Foto de instalación de mesa (evidencia previa al escrutinio) ───────
   const tomarFotoInstalacion = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -262,18 +288,9 @@ function ConteoPageInner() {
         const url = await subirImagenActa(mesa.trim(), dataUrl, mime)
         if (!url) { setError('No se pudo subir la foto. Inténtalo de nuevo.'); setSubiendoInstalacion(false); return }
 
-        const dep  = cand?.ambito.departamento ?? perfil?.departamento_asignado ?? perfil?.departamento_vota ?? null
-        const prov = cand?.ambito.provincia    ?? perfil?.provincia_asignado    ?? perfil?.provincia_vota    ?? null
-        const dist = cand?.ambito.distrito     ?? perfil?.distrito_asignado     ?? perfil?.distrito_vota     ?? null
-
         await supabase.from('actas').upsert({
           mesa_numero:          mesa.trim(),
-          colegio_nombre:       perfil?.local_asignado ?? perfil?.local_votacion ?? null,
-          departamento:         dep,
-          provincia:            prov,
-          distrito:             dist,
-          personero_id:         userId || null,
-          personero_dni:        perfil?.dni ?? null,
+          ...datosBaseActa(),
           foto_instalacion_url: url,
           instalada_at:         new Date().toISOString(),
         }, { onConflict: 'mesa_numero' })
@@ -367,21 +384,15 @@ function ConteoPageInner() {
         imagenUrl = await subirImagenActa(mesa, imgSrc, imgMime)
       }
 
-      const dep  = cand?.ambito.departamento ?? perfil?.departamento_asignado ?? perfil?.departamento_vota ?? null
-      const prov = cand?.ambito.provincia    ?? perfil?.provincia_asignado    ?? perfil?.provincia_vota    ?? null
-      const dist = cand?.ambito.distrito     ?? perfil?.distrito_asignado     ?? perfil?.distrito_vota     ?? null
+      const base = datosBaseActa()
+      const { departamento: dep, provincia: prov, distrito: dist } = base
       const electores = electoresHabiles.trim() ? parseInt(electoresHabiles.replace(/\D/g, ''), 10) : null
 
       // Crear/actualizar acta
       const { data: acta, error: actaErr } = await supabase.from('actas').upsert({
         mesa_numero:       mesa.trim(),
-        colegio_nombre:    perfil?.local_asignado ?? perfil?.local_votacion ?? null,
-        departamento:      dep,
-        provincia:         prov,
-        distrito:          dist,
+        ...base,
         electores_habiles: Number.isFinite(electores as number) ? electores : null,
-        personero_id:      userId || null,
-        personero_dni:     perfil?.dni ?? null,
         imagen_url:        imagenUrl,
         metodo:            modo,
         ocr_raw:           ocrMetodo ? { metodo: ocrMetodo } : null,
@@ -546,6 +557,7 @@ function ConteoPageInner() {
             <span className="text-sky-400 text-xs font-semibold flex-shrink-0">Electores hábiles:</span>
             <input value={electoresHabiles} inputMode="numeric"
               onChange={e => setElectoresHabiles(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onBlur={guardarElectores}
               placeholder="Ej. 300"
               className="w-24 bg-[#0b0f1d] border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs placeholder-white/25 outline-none focus:border-sky-500/50 tabular-nums" />
           </div>
