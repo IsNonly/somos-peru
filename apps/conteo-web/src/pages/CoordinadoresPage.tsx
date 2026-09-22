@@ -19,8 +19,10 @@ interface Perfil {
 }
 interface Colegio { nombre: string; distrito: string; total_mesas: number }
 
+// Nombre viejo del rol; los perfiles ya importados pueden seguir teniéndolo.
+const ROLES_PCV = ['Personero de Centro de Votación', 'Personero de Local de Votación']
 const esCoordinador = (rol: string) =>
-  /coordinador/i.test(rol) || rol === 'Personero de Centro de Votación' || rol === 'Personero de Local de Votación'
+  /coordinador/i.test(rol) || ROLES_PCV.includes(rol)
 
 export default function CoordinadoresPage() {
   const { distritosEfectivos, f, ambitoLabel, loading: scopeLoading } = useFiltros()
@@ -164,7 +166,7 @@ export default function CoordinadoresPage() {
                   <span className="bg-emerald-50 text-emerald-600 text-center rounded py-1 text-[11px] font-bold">{c.asist} ASIST.</span>
                   <span className="bg-rose-50 text-rose-500 text-center rounded py-1 text-[11px] font-bold">{c.falt} FALT.</span>
                 </div>
-                {c.perfil.rol === 'Personero de Centro de Votación' && (
+                {ROLES_PCV.includes(c.perfil.rol) && (
                   <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100 mt-1">
                     <button onClick={() => setEditando(c.perfil)} title="Editar datos"
                       className="flex-1 flex items-center justify-center gap-1 p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-sky-600 hover:border-sky-300 text-[11px] font-semibold">
