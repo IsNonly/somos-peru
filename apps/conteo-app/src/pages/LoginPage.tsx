@@ -14,14 +14,29 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const cleanDni = dni.trim()
+    const nombreClean = nombre.trim()
+    const claveIngresada = dni.trim()
+
+    let cleanDni = claveIngresada
+    if (nombreClean) {
+      // Se ingresó un nombre: resolver el DNI a partir de él (la clave/contraseña
+      // se sigue tomando del segundo campo, tal como la escribió el usuario).
+      const { data: dniEncontrado } = await supabase.rpc('dni_por_nombre', { p_nombre: nombreClean })
+      if (!dniEncontrado) {
+        setError('No se encontró ningún usuario con ese nombre. Verifique el nombre completo.')
+        setLoading(false)
+        return
+      }
+      cleanDni = dniEncontrado
+    }
+
     const email = cleanDni.includes('@') ? cleanDni : `${cleanDni}@somosperu.com`
     const dniDigits = cleanDni.replace(/\D/g, '')
 
     // 1) Probar con lo ingresado como contraseña (normalmente el DNI)
     let { error: err } = await supabase.auth.signInWithPassword({
       email,
-      password: cleanDni,
+      password: claveIngresada,
     })
 
     // 2) Si falla y lo ingresado parece el DNI, probar con la clave_acceso
@@ -29,7 +44,7 @@ export default function LoginPage() {
     //    con RLS solo es visible para usuarios ya autenticados).
     if (err && dniDigits.length >= 6) {
       const { data: clave } = await supabase.rpc('clave_acceso_por_dni', { p_dni: dniDigits })
-      if (clave && clave !== cleanDni) {
+      if (clave && clave !== claveIngresada) {
         const { error: errFallback } = await supabase.auth.signInWithPassword({ email, password: clave })
         err = errFallback
       }
