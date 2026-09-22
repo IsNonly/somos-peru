@@ -208,7 +208,7 @@ export default function PanelGeneral() {
             No encontramos un centro de votación asignado a tu perfil. Verifica con tu coordinador que tu "Local de Votación Asignado" esté correctamente registrado.
           </p>
         )}
-        {sel && <CentroModal c={sel} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
+        {sel && <CentroModal c={sel} puedeEditar={esDistrital} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
       </div>
     )
   }
@@ -315,13 +315,13 @@ export default function PanelGeneral() {
 
       {tab === 'padron' && <TablaPadron perfiles={perfilesFiltrados} />}
 
-      {sel && <CentroModal c={sel} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
+      {sel && <CentroModal c={sel} puedeEditar={esDistrital} onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} />}
     </div>
   )
 }
 
-function CentroModal({ c, onClose, onActualizado }: {
-  c: CentroFila; onClose: () => void; onActualizado: (id: string, cambios: CambiosPersonero) => void
+function CentroModal({ c, puedeEditar, onClose, onActualizado }: {
+  c: CentroFila; puedeEditar: boolean; onClose: () => void; onActualizado: (id: string, cambios: CambiosPersonero) => void
 }) {
   const [t, setT] = useState<'personeros' | 'zona'>('personeros')
   const [editando, setEditando] = useState<{ p: Persona; esMesa: boolean } | null>(null)
@@ -371,8 +371,10 @@ function CentroModal({ c, onClose, onActualizado }: {
                         <a href={wa(c.pcv.celular)} target="_blank" rel="noreferrer"
                           className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {c.pcv.celular}</a>
                       )}
-                      <button onClick={() => setEditando({ p: c.pcv!, esMesa: false })} title="Editar"
-                        className="text-slate-400 hover:text-sky-600"><Pencil size={13} /></button>
+                      {puedeEditar && (
+                        <button onClick={() => setEditando({ p: c.pcv!, esMesa: false })} title="Editar"
+                          className="text-slate-400 hover:text-sky-600"><Pencil size={13} /></button>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -402,8 +404,10 @@ function CentroModal({ c, onClose, onActualizado }: {
                         {p.celular && (
                           <a href={wa(p.celular)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {p.celular}</a>
                         )}
-                        <button onClick={() => setEditando({ p, esMesa: true })} title="Editar"
-                          className="text-slate-400 hover:text-sky-600"><Pencil size={13} /></button>
+                        {puedeEditar && (
+                          <button onClick={() => setEditando({ p, esMesa: true })} title="Editar"
+                            className="text-slate-400 hover:text-sky-600"><Pencil size={13} /></button>
+                        )}
                       </div>
                     </div>
                   ))}
