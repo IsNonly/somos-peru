@@ -70,10 +70,11 @@ export default function App() {
   // ── Gate: debe haber completado TODOS los pasos de la capacitación ────────
   if (user) {
     const rol: string = perfil?.rol ?? ''
-    // Se exige a personeros (de mesa y de local). Coordinador Provincial /
-    // de Distritos / Administrador entran sin capacitación. Sin perfil -> se exige.
+    // Se exige solo a Personero de Mesa. Personero de Centro de Votación se
+    // trata igual que un coordinador: entra sin capacitación obligatoria.
+    // Sin perfil -> se exige (por seguridad, ante un rol aún no resuelto).
     const requiereCapacitacion =
-      !rol || /personero/i.test(rol) || ROLES_LOCAL.includes(rol)
+      !rol || (/personero/i.test(rol) && !ROLES_LOCAL.includes(rol))
     const pasos: Pasos = {
       videos:   (perfil?.videos_vistos ?? 0) >= 1,
       cartilla: (perfil?.pdfs_vistos ?? 0) >= 1,
