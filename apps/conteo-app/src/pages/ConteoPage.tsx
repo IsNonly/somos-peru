@@ -758,6 +758,25 @@ function ConteoPageInner() {
         </div>
       )}
 
+      {/* Votos especiales: blanco/nulo/impugnado desglosados por nivel */}
+      {bloques.length > 0 && (
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${bloques.length}, minmax(0, 1fr))` }}>
+          {bloques.map(b => (
+            <div key={b.nivel} className="bg-[#131a2e] border border-white/8 rounded-2xl p-3 space-y-2">
+              <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold text-center truncate">{b.nivel}</p>
+              <div className="grid grid-cols-3 gap-1.5 text-center">
+                {VOTOS_ESPECIALES.map(v => (
+                  <div key={v.id}>
+                    <p className="text-[9px] font-bold truncate" style={{ color: v.color }}>{v.nombre.replace('Votos ', '')}</p>
+                    <p className="text-white text-sm font-extrabold tabular-nums">{votos[b.nivel][v.id] || 0}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {error && (
         <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
           <AlertTriangle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
@@ -850,11 +869,25 @@ function SeccionVotos({ bloque, total, votos, onDelta }: {
           <p className="text-white text-xl font-black tabular-nums leading-none mt-0.5">{total}</p>
         </div>
       </div>
-      {/* Filas */}
+      {/* Filas de candidatos */}
       <div className="divide-y divide-white/[0.06] max-h-[60vh] overflow-y-auto">
-        {[...bloque.candidatos, ...VOTOS_ESPECIALES].map(c => (
+        {bloque.candidatos.map(c => (
           <FilaCandidato key={c.id} candidato={c} accent={accent} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
         ))}
+      </div>
+
+      {/* Votos especiales (blanco/nulo/impugnado): sección aparte y siempre
+          visible (no dentro del scroll), acotada a ESTE nivel — cada bloque
+          (Provincial/Distrital) lleva su propio conteo independiente. */}
+      <div className="border-t-2 border-white/10 bg-black/20 pt-1">
+        <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold px-4 pt-2 pb-1">
+          Votos Especiales · {bloque.titulo}
+        </p>
+        <div className="divide-y divide-white/[0.06]">
+          {VOTOS_ESPECIALES.map(c => (
+            <FilaCandidato key={c.id} candidato={c} accent={accent} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
+          ))}
+        </div>
       </div>
     </div>
   )
