@@ -306,11 +306,15 @@ export default function RegisterPage() {
 
   const provinciasAsignado = provincias.filter(p => p.departamento === form.departamentoAsignado).map(p => p.provincia)
 
-  const cascadaAsignado = (distLabel: string) => (
+  // soloDistrito: la provincia ya está fija (un solo ámbito por instancia) y no se
+  // muestra su select — usado por Coordinador Distrital.
+  const cascadaAsignado = (distLabel: string, soloDistrito = false) => (
     <>
-      <GeoSelect label="Provincia" icon={<MapIcon size={18} />}
-        value={form.provinciaAsignado} onChange={setProvAsig}
-        options={provinciasAsignado} placeholder="Seleccione Provincia" />
+      {!soloDistrito && (
+        <GeoSelect label="Provincia" icon={<MapIcon size={18} />}
+          value={form.provinciaAsignado} onChange={setProvAsig}
+          options={provinciasAsignado} placeholder="Seleccione Provincia" />
+      )}
       <GeoSelect label={distLabel} icon={<MapPin size={18} />}
         value={form.distritoAsignado} onChange={setDistAsig}
         options={distritosAsignado} disabled={!form.provinciaAsignado}
@@ -483,12 +487,15 @@ export default function RegisterPage() {
                   <button key={item.id} type="button"
                     onClick={() => {
                       // Personero de Mesa/Centro de Votación: provincia y distrito ya están
-                      // fijos (un solo ámbito por instancia), no se le piden. Coordinadores sí
-                      // los eligen (pueden abarcar más de un distrito/colegio).
+                      // fijos (un solo ámbito por instancia), no se le piden.
+                      // Coordinador Distrital: la provincia también está fija (Lima), pero
+                      // el distrito sí lo elige (puede ser coordinador de cualquiera).
+                      // Coordinador Provincial: elige ambos (puede abarcar más de una zona).
                       const esPersoneroNuevo = item.id === 'Personero de Mesa' || item.id === 'Personero de Centro de Votación'
+                      const provinciaFija = esPersoneroNuevo || item.id === 'Coordinador Distrital'
                       setForm(p => ({
                         ...p, rol: item.id as Rol,
-                        provinciaAsignado: esPersoneroNuevo ? (AMBITO_PROVINCIAS[0] ?? '') : '',
+                        provinciaAsignado: provinciaFija ? (AMBITO_PROVINCIAS[0] ?? '') : '',
                         distritoAsignado: esPersoneroNuevo ? (AMBITO_DISTRITOS[0] ?? '') : '',
                         localAsignado: '', localesAsignados: [],
                       }))
@@ -561,11 +568,12 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Coordinador Distrital: distrito + colegios a cargo (excluye los ya tomados por otro Coord. Distrital) */}
+            {/* Coordinador Distrital: la provincia ya está fija (Lima), solo elige el
+                distrito + colegios a cargo (excluye los ya tomados por otro Coord. Distrital) */}
             {esCoordDistrital && (
               <div className="space-y-4 pt-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {cascadaAsignado('Distrito del que es Coordinador')}
+                <div>
+                  {cascadaAsignado('Distrito del que es Coordinador', true)}
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
