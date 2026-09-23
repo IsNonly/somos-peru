@@ -103,6 +103,13 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
 
   const [reloadKey, setReloadKey] = useState(0)
   const lastLoadRef = useRef(0)
+  // Solo la PRIMERA carga muestra el spinner de "Cargando panel…" (bloquea toda
+  // la pantalla). Las recargas posteriores (por volver a la pestaña, o por
+  // cambiar de filtro) mantienen los datos viejos visibles mientras llegan los
+  // nuevos — si no, cada recarga en segundo plano "reiniciaba" la vista
+  // (perdía el scroll, parpadeaba a la pantalla de carga) aunque el usuario no
+  // hubiera hecho nada.
+  const yaCargoAlgunaVezRef = useRef(false)
 
   // Si el navegador deja la pestaña en segundo plano mientras una consulta está en
   // vuelo, el fetch puede quedar colgado para siempre (no resuelve ni rechaza) y el
@@ -125,7 +132,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
   useEffect(() => {
     let vivo = true
     lastLoadRef.current = Date.now()
-    setD(prev => ({ ...prev, loading: true }))
+    if (!yaCargoAlgunaVezRef.current) setD(prev => ({ ...prev, loading: true }))
     ;(async () => {
       const colegios = await traerTodo<Colegio>((f, t) => {
         let cq = supabase.from('colegios')
@@ -240,6 +247,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
           zonales: zonales.length,
         },
       })
+      yaCargoAlgunaVezRef.current = true
     })()
     return () => { vivo = false }
   }, [dep, prov, distritos, reloadKey])

@@ -102,24 +102,27 @@ export default function PanelCapacitaciones() {
     }],
   }
 
-  const porDistrito = useMemo(() => {
+  // Agrupado por COLEGIO (no por distrito): esta instancia opera un solo
+  // distrito, así que "por distrito" siempre daba una sola barra — por
+  // colegio sí distingue de verdad dónde falta avanzar.
+  const porColegio = useMemo(() => {
     const map = new Map<string, { total: number; video: number; pdf: number }>()
     for (const p of cohorte) {
-      const dist = p.distrito_asignado || p.distrito_vota || 'Sin distrito'
-      const e = map.get(dist) ?? { total: 0, video: 0, pdf: 0 }
+      const local = p.local_asignado || p.local_votacion || 'Sin local asignado'
+      const e = map.get(local) ?? { total: 0, video: 0, pdf: 0 }
       e.total++
       if ((p.videos_vistos ?? 0) >= 1) e.video++
       if ((p.pdfs_vistos ?? 0) >= 1) e.pdf++
-      map.set(dist, e)
+      map.set(local, e)
     }
     return [...map.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 10)
   }, [cohorte])
 
   const barData = {
-    labels: porDistrito.map(([dist]) => dist),
+    labels: porColegio.map(([local]) => local),
     datasets: [
-      { label: 'Video completo (1/1)', data: porDistrito.map(([, v]) => v.video), backgroundColor: '#0ea5e9', borderRadius: 5 },
-      { label: 'Cartilla leída', data: porDistrito.map(([, v]) => v.pdf), backgroundColor: '#a855f7', borderRadius: 5 },
+      { label: 'Video completo (1/1)', data: porColegio.map(([, v]) => v.video), backgroundColor: '#0ea5e9', borderRadius: 5 },
+      { label: 'Cartilla leída', data: porColegio.map(([, v]) => v.pdf), backgroundColor: '#a855f7', borderRadius: 5 },
     ],
   }
 
@@ -189,15 +192,18 @@ export default function PanelCapacitaciones() {
 
         <section className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-4">
           <p className="text-sm font-extrabold text-slate-900 mb-3 flex items-center gap-2">
-            <BarChart3 size={15} /> Video vs. Cartilla por Distrito (top 10)
+            <BarChart3 size={15} /> Video vs. Cartilla por Colegio (top 10)
           </p>
-          {porDistrito.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-10">Sin datos por distrito.</p>
+          {porColegio.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-10">Sin datos por colegio.</p>
           ) : (
             <Bar data={barData} options={{
               responsive: true,
               plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
-              scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+              scales: {
+                x: { ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 45, autoSkip: false } },
+                y: { beginAtZero: true, ticks: { stepSize: 1 } },
+              },
             }} />
           )}
         </section>
@@ -257,7 +263,7 @@ export default function PanelCapacitaciones() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-                {['#', 'Personero / DNI', 'Rol', 'Distrito Asignado', 'Progreso Video', 'Progreso PDF', 'Estado Credencial', 'WhatsApp Recordatorio', 'Acciones'].map(h => (
+                {['#', 'Personero / DNI', 'Rol', 'Distrito Asignado', 'Local / Colegio', 'Progreso Video', 'Progreso PDF', 'Estado Credencial', 'WhatsApp Recordatorio', 'Acciones'].map(h => (
                   <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -279,6 +285,7 @@ export default function PanelCapacitaciones() {
                     <span className="text-[11px] font-bold bg-sky-50 text-sky-700 rounded-full px-2.5 py-1">{rolNorm(p.rol)}</span>
                   </td>
                   <td className="px-4 py-2.5 text-slate-600">{p.distrito_asignado ?? p.distrito_vota ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-slate-600 max-w-[220px] truncate">{p.local_asignado ?? p.local_votacion ?? '—'}</td>
                   <td className="px-4 py-2.5">
                     <ProgresoBar value={p.videos_vistos ?? 0} total={1} color="#0ea5e9" />
                   </td>
@@ -321,6 +328,7 @@ export default function PanelCapacitaciones() {
         <ModalEditar
           perfil={editPerfil}
           actorEsSuperadmin={esSuperadmin}
+          puedeEliminar={puedeModificar}
           editadoPor={editadoPor}
           colegios={d.colegios}
           distritosOpts={distritosModal}
@@ -391,8 +399,8 @@ function Campo({ label, icon: Icon, children }: { label: string; icon: any; chil
   )
 }
 
-function ModalEditar({ perfil, actorEsSuperadmin, editadoPor, colegios, distritosOpts, onClose, onSaved }: {
-  perfil: Perfil; actorEsSuperadmin: boolean; editadoPor: string; colegios: Colegio[]; distritosOpts: string[]
+function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, colegios, distritosOpts, onClose, onSaved }: {
+  perfil: Perfil; actorEsSuperadmin: boolean; puedeEliminar: boolean; editadoPor: string; colegios: Colegio[]; distritosOpts: string[]
   onClose: () => void; onSaved: () => void
 }) {
   const [nombre, setNombre] = useState(perfil.nombre_completo ?? '')
@@ -502,7 +510,7 @@ function ModalEditar({ perfil, actorEsSuperadmin, editadoPor, colegios, distrito
         </div>
 
         <div className="flex gap-2 p-4 border-t border-slate-100">
-          {actorEsSuperadmin && (
+          {puedeEliminar && (
             <button onClick={eliminar} disabled={eliminando}
               className="flex-1 flex items-center justify-center gap-1.5 text-sm font-bold rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 px-4 py-2.5 disabled:opacity-50">
               <Trash2 size={14} /> {eliminando ? 'Eliminando…' : 'Eliminar Personero'}
