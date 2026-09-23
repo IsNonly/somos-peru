@@ -41,11 +41,22 @@ export default function App() {
   }
 
   useEffect(() => {
+    // Supabase dispara onAuthStateChange también en cada refresco silencioso
+    // de token (p.ej. al volver a una pestaña en segundo plano), no solo en
+    // login/logout. Sin este control se repetía la consulta del perfil y se
+    // reescribía el estado del mismo usuario en cada refresco.
+    let userIdAnterior: string | null = null
+
     supabase.auth.getSession().then(({ data }) => {
-      checkRole(data.session?.user ?? null)
+      const u = data.session?.user ?? null
+      userIdAnterior = u?.id ?? null
+      checkRole(u)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => {
-      checkRole(s?.user ?? null)
+      const u = s?.user ?? null
+      const cambio = (u?.id ?? null) !== userIdAnterior
+      userIdAnterior = u?.id ?? null
+      if (cambio) checkRole(u)
     })
     return () => subscription.unsubscribe()
   }, [])

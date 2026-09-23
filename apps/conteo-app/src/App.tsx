@@ -29,15 +29,29 @@ export default function App() {
   const [perfilLoading, setPerfilLoading] = useState(false)
 
   useEffect(() => {
+    // Supabase dispara onAuthStateChange no solo en login/logout, sino
+    // también en cada refresco silencioso de token (típicamente al volver a
+    // una pestaña en segundo plano). Como el efecto de abajo que carga el
+    // perfil depende de `user`, actualizarlo en cada refresco reactivaba ese
+    // efecto y tapaba la pantalla con el spinner -perdiendo un conteo en
+    // progreso- aunque siguiera siendo el mismo usuario. Por eso solo
+    // tocamos `user` cuando el id realmente cambia.
+    let userIdAnterior: string | null = null
+
     supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null)
+      const u = data.session?.user ?? null
+      userIdAnterior = u?.id ?? null
+      setUser(u)
       setLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
-      setUser(s?.user ?? null)
+      const u = s?.user ?? null
+      const cambio = (u?.id ?? null) !== userIdAnterior
+      userIdAnterior = u?.id ?? null
       if (event === 'SIGNED_OUT') {
         try { sessionStorage.removeItem('conteo_intro_ok') } catch { /* modo privado */ }
       }
+      if (cambio) setUser(u)
     })
     return () => subscription.unsubscribe()
   }, [])
