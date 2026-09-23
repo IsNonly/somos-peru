@@ -34,12 +34,21 @@ export default function App() {
 
   useEffect(() => {
     let vivo = true
+    // Supabase dispara onAuthStateChange no solo en login/logout, sino también
+    // en cada refresco silencioso de token (típicamente al volver a una
+    // pestaña que estuvo en segundo plano). Sin este control, cada uno de esos
+    // refrescos reseteaba rolListo -> toda la app (panel, admin, capacítate)
+    // se veía "reiniciar" al spinner aunque siguiera siendo el mismo usuario.
+    let userIdAnterior: string | null = null
 
     // El perfil se busca por DNI: en cuentas importadas profiles.id != auth.users.id.
-    const resolver = async (u: User | null) => {
-      setRolListo(false)
+    const resolver = async (u: User | null, esCambioDeUsuario: boolean) => {
+      if (esCambioDeUsuario) setRolListo(false)
       setUser(u)
       if (!u) { if (vivo) { setEsAdmin(false); setEsCoordRegional(false); setEsPCV(false); setRolListo(true) } ; return }
+      // Mismo usuario que antes (solo se refrescó el token): el rol ya está
+      // resuelto, no hace falta volver a consultarlo ni bloquear la pantalla.
+      if (!esCambioDeUsuario) return
       const dni = (u.email ?? '').split('@')[0]
       let { data } = await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()
       if (!data) {
@@ -54,8 +63,17 @@ export default function App() {
       setRolListo(true)
     }
 
-    supabase.auth.getSession().then(({ data }) => resolver(data.session?.user ?? null))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => resolver(s?.user ?? null))
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user ?? null
+      userIdAnterior = u?.id ?? null
+      resolver(u, true)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => {
+      const u = s?.user ?? null
+      const cambio = (u?.id ?? null) !== userIdAnterior
+      userIdAnterior = u?.id ?? null
+      resolver(u, cambio)
+    })
     return () => { vivo = false; subscription.unsubscribe() }
   }, [])
 
