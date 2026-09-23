@@ -116,18 +116,26 @@ async function ocrTesseract(
   const { data: { text } } = await worker.recognize(dataUrl)
   await worker.terminate()
 
-  // Parsear números del texto crudo — heurística para actas
+  // Parsear números del texto crudo — heurística para actas.
+  // El conteo de votos SIEMPRE es el último número de la fila (va después
+  // del nombre del partido); un posible número de orden de la organización
+  // política (1, 2, 3…) puede venir ANTES del nombre y no debe confundirse
+  // con los votos — por eso se toma desde el final, no desde el inicio.
+  // Actas de un solo nivel (ej. solo "Municipal Provincial"): 2 números por
+  // fila → [orden, votos]. Actas combinadas (Provincial + Distrital en la
+  // misma tabla): 3 números → [orden, votos provincial, votos distrital].
   const lines  = text.split('\n').map(l => l.trim()).filter(Boolean)
   const result: { partido: string; provincial: number; distrital: number }[] = []
 
   lines.forEach(line => {
     const nums = line.match(/\d+/g)
-    if (nums && nums.length >= 1) {
-      const prov = parseInt(nums[0])
-      const dist = nums.length >= 2 ? parseInt(nums[1]) : 0
-      if (prov > 0 && prov < 600) {
-        result.push({ partido: line.replace(/\d+/g, '').trim() || `Partido ${result.length + 1}`, provincial: prov, distrital: dist })
-      }
+    if (!nums || !nums.length) return
+    const valores = nums.map(n => parseInt(n, 10))
+    const votos = valores[valores.length - 1]
+    const provincial = valores.length >= 3 ? valores[valores.length - 2] : votos
+    const distrital = votos
+    if (votos > 0 && votos < 600) {
+      result.push({ partido: line.replace(/\d+/g, '').trim() || `Partido ${result.length + 1}`, provincial, distrital })
     }
   })
 
