@@ -131,6 +131,7 @@ function ConteoPageInner() {
   const [imgMime, setImgMime]         = useState('image/jpeg')
   const [ocrLoading, setOcrLoading]   = useState(false)
   const [ocrMetodo, setOcrMetodo]     = useState<'GEMINI' | 'TESSERACT' | null>(null)
+  const [ocrSinMatch, setOcrSinMatch] = useState(false)
   const [gpsStatus, setGpsStatus]     = useState<'idle' | 'loading' | 'ok' | 'warn' | 'fail'>('idle')
   const [gpsMsg, setGpsMsg]           = useState('')
   const [gpsCoords, setGpsCoords]     = useState<{ lat: number; lon: number } | null>(null)
@@ -318,26 +319,34 @@ function ConteoPageInner() {
 
       if (modo === 'IMAGEN') {
         setOcrLoading(true)
+        setOcrSinMatch(false)
         try {
           const base64 = dataUrl.split(',')[1]
           const resultado = await procesarActa(base64, mime, geminiKey)
           setOcrMetodo(resultado.metodo)
 
-          if (resultado.votos.length > 0) {
-            // Mapear resultados OCR a los candidatos de cada bloque cargado.
-            // El OCR devuelve {partido, provincial, distrital}: 'provincial' se
-            // usa para el bloque PROVINCIAL y 'distrital' para el DISTRITAL.
-            const nuevos: VotosPorNivel = { REGIONAL: {}, PROVINCIAL: {}, DISTRITAL: {} }
-            for (const b of bloques) {
-              const lista = [...b.candidatos, ...VOTOS_ESPECIALES]
-              resultado.votos.forEach(v => {
-                const c = matchCandidato(lista, v.partido)
-                if (!c) return
-                const n = b.nivel === 'DISTRITAL' ? v.distrital : v.provincial
-                if (n > 0) nuevos[b.nivel][c.id] = n
-              })
-            }
+          // Mapear resultados OCR a los candidatos de cada bloque cargado.
+          // El OCR devuelve {partido, provincial, distrital}: 'provincial' se
+          // usa para el bloque PROVINCIAL y 'distrital' para el DISTRITAL.
+          const nuevos: VotosPorNivel = { REGIONAL: {}, PROVINCIAL: {}, DISTRITAL: {} }
+          for (const b of bloques) {
+            const lista = [...b.candidatos, ...VOTOS_ESPECIALES]
+            resultado.votos.forEach(v => {
+              const c = matchCandidato(lista, v.partido)
+              if (!c) return
+              const n = b.nivel === 'DISTRITAL' ? v.distrital : v.provincial
+              if (n > 0) nuevos[b.nivel][c.id] = n
+            })
+          }
+          // El texto reconocido puede no coincidir con ningún candidato real
+          // (típico del fallback Tesseract con actas de mala calidad): en ese
+          // caso NO hay que decir "votos reconocidos" -sería falso-, sino
+          // avisar que hay que llenarlo a mano.
+          const totalMapeado = Object.values(nuevos).reduce((s, o) => s + Object.keys(o).length, 0)
+          if (totalMapeado > 0) {
             setVotos(nuevos)
+          } else {
+            setOcrSinMatch(true)
           }
         } catch {
           setError('No se pudo procesar el acta automáticamente. Ingresa los votos manualmente.')
@@ -669,9 +678,15 @@ function ConteoPageInner() {
             </p>
           )}
           {ocrMetodo && !ocrLoading && (
-            <p className={`flex items-center gap-1.5 text-xs font-medium ${ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
-              <CheckCircle size={13} /> Votos reconocidos ({ocrMetodo}) — revísalos abajo.
-            </p>
+            ocrSinMatch ? (
+              <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
+                <AlertTriangle size={13} /> No se pudo reconocer automáticamente ningún partido en la foto. Ingresa los votos manualmente abajo.
+              </p>
+            ) : (
+              <p className={`flex items-center gap-1.5 text-xs font-medium ${ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
+                <CheckCircle size={13} /> Votos reconocidos ({ocrMetodo}) — revísalos abajo.
+              </p>
+            )
           )}
           <button onClick={() => setShowKeyInput(!showKeyInput)}
             className="w-full flex items-center justify-between text-white/50 text-xs pt-1">
