@@ -166,12 +166,18 @@ export default function CoordinadoresPage() {
                   <span className="bg-emerald-50 text-emerald-600 text-center rounded py-1 text-[11px] font-bold">{c.asist} ASIST.</span>
                   <span className="bg-rose-50 text-rose-500 text-center rounded py-1 text-[11px] font-bold">{c.falt} FALT.</span>
                 </div>
-                {ROLES_PCV.includes(c.perfil.rol) && (
+                {(ROLES_PCV.includes(c.perfil.rol) || esCoordinador(c.perfil.rol)) && (
                   <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100 mt-1">
-                    <button onClick={() => setEditando(c.perfil)} title="Editar datos"
-                      className="flex-1 flex items-center justify-center gap-1 p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-sky-600 hover:border-sky-300 text-[11px] font-semibold">
-                      <Pencil size={13} /> Editar
-                    </button>
+                    {ROLES_PCV.includes(c.perfil.rol) && (
+                      <button onClick={() => setEditando(c.perfil)} title="Editar datos"
+                        className="flex-1 flex items-center justify-center gap-1 p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-sky-600 hover:border-sky-300 text-[11px] font-semibold">
+                        <Pencil size={13} /> Editar
+                      </button>
+                    )}
+                    {/* El chequeo real de quién puede resetear a quién vive en el RPC
+                        (supabase/reset_clave_coordinadores.sql), no acá: el botón se
+                        muestra siempre que el rol lo permita en general, y el servidor
+                        rechaza si el que llama no tiene permiso sobre ESTE objetivo. */}
                     <button onClick={() => onRestablecer(c.perfil)} title="Restablecer contraseña a su DNI"
                       className="flex-1 flex items-center justify-center gap-1 p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-amber-600 hover:border-amber-300 text-[11px] font-semibold">
                       <KeyRound size={13} /> Clave
