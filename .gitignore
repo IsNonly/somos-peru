@@ -24,3 +24,4 @@ CALI.xlsx
 
 .vercel
 .env*
+supabase/.temp/

@@ -15,6 +15,7 @@ import {
   usePanelData, rolNorm, ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST,
   type Perfil, type Colegio,
 } from '../../lib/panel'
+import { eliminarPersoneroCompleto } from '../../lib/personeros'
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -441,9 +442,9 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
   const eliminar = async () => {
     if (!window.confirm(`¿Eliminar definitivamente a ${perfil.nombre_completo}? Esta acción no se puede deshacer.`)) return
     setEliminando(true)
-    const { error } = await supabase.from('profiles').delete().eq('id', perfil.id)
+    const { error } = await eliminarPersoneroCompleto(perfil.id)
     setEliminando(false)
-    if (error) { alert('No se pudo eliminar: ' + error.message); return }
+    if (error) { alert('No se pudo eliminar: ' + error); return }
     onSaved()
     onClose()
   }

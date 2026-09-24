@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { eliminarPersoneroCompleto } from '../lib/personeros'
 
 export interface PersoneroEditable {
   id: string
@@ -54,9 +55,9 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, on
   const eliminar = async () => {
     if (!window.confirm(`¿Eliminar definitivamente a ${perfil.nombre || 'este personero'}? Esta acción no se puede deshacer — úsala solo si de verdad no va a participar.`)) return
     setEliminando(true); setError('')
-    const { error: err } = await supabase.from('profiles').delete().eq('id', perfil.id)
+    const { error: err } = await eliminarPersoneroCompleto(perfil.id)
     setEliminando(false)
-    if (err) { setError(err.message); return }
+    if (err) { setError(err); return }
     onEliminado(perfil.id)
   }
 
