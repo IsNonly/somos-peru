@@ -28,13 +28,46 @@ function slugPartido(partido: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-// Busca el candidato cuyo nombre o partido más se parece al texto reconocido por OCR
+const normTxt = (s: string) =>
+  s.normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
+    .toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+
+const bigramas = (s: string) => {
+  const set = new Set<string>()
+  for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2))
+  return set
+}
+
+// Similitud de Dice sobre bigramas de caracteres: tolera el ruido típico del
+// OCR (letras cambiadas, palabras pegadas) mucho mejor que comparar substrings
+// exactos, sin depender de que las palabras queden en el mismo orden.
+const similitud = (a: string, b: string) => {
+  const A = bigramas(a), B = bigramas(b)
+  if (!A.size || !B.size) return 0
+  let inter = 0
+  for (const bg of A) if (B.has(bg)) inter++
+  return (2 * inter) / (A.size + B.size)
+}
+
+// Umbral mínimo para aceptar una coincidencia: por debajo de esto el texto que
+// leyó el OCR está demasiado distorsionado como para confiar en qué partido es
+// -mejor no contarlo (queda en 0, se llena a mano) que asignarlo al equivocado.
+const UMBRAL_COINCIDENCIA = 0.4
+
+// Busca, entre TODOS los candidatos, el que más se parece al texto reconocido
+// por OCR (no el primero que "casi" calza) y solo lo acepta si supera el umbral.
 function matchCandidato(lista: Candidato[], texto: string): Candidato | undefined {
-  const t = texto.toLowerCase()
-  return lista.find(c =>
-    t.includes(c.partido.toLowerCase().slice(0, 6)) || c.partido.toLowerCase().includes(t.slice(0, 6)) ||
-    (!!c.nombre && (t.includes(c.nombre.toLowerCase().slice(0, 6)) || c.nombre.toLowerCase().includes(t.slice(0, 6))))
-  )
+  const t = normTxt(texto)
+  if (!t) return undefined
+  let mejor: Candidato | undefined
+  let mejorScore = 0
+  for (const c of lista) {
+    for (const nombre of [c.partido, c.nombre].filter(Boolean) as string[]) {
+      const score = similitud(t, normTxt(nombre))
+      if (score > mejorScore) { mejorScore = score; mejor = c }
+    }
+  }
+  return mejorScore >= UMBRAL_COINCIDENCIA ? mejor : undefined
 }
 
 // Carga la clave Gemini guardada en Supabase (tabla app_config, por auth user id)
