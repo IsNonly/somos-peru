@@ -192,7 +192,10 @@ function ConteoPageInner() {
       setUserId(p?.id ?? user.id)   // el id real del perfil, para escrituras
       setAuthId(user.id)
       setPerfil(p)
-      setGeminiKey(key)
+      // Si el personero no configuró su propia clave, cae a la clave compartida
+      // de la instancia (VITE_GEMINI_API_KEY) para que el OCR con IA funcione
+      // sin que cada uno tenga que pegarla a mano.
+      setGeminiKey(key || (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) || '')
       if (p?.mesa_asignada) setMesa(p.mesa_asignada)
       if (p?.acta_transmitida) setFase('enviado')
 

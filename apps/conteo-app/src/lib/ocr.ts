@@ -71,7 +71,10 @@ async function ocrGemini(
   mimeType: string,
   apiKey: string
 ): Promise<{ partido: string; provincial: number; distrital: number }[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
+  // 'gemini-1.5-flash' fue retirado del catálogo de modelos; 'gemini-flash-latest'
+  // apunta siempre al Flash estable más reciente, sin necesidad de actualizar
+  // este nombre a mano cada vez que Google libera una versión nueva.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`
 
   const res = await fetch(url, {
     method: 'POST',
