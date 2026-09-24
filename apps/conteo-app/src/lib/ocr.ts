@@ -69,12 +69,10 @@ export async function preprocesarImagen(base64: string): Promise<string> {
 async function ocrGemini(
   imageBase64: string,
   mimeType: string,
-  apiKey: string
+  apiKey: string,
+  modelo: string
 ): Promise<{ partido: string; provincial: number; distrital: number }[]> {
-  // 'gemini-1.5-flash' fue retirado del catálogo de modelos; 'gemini-flash-latest'
-  // apunta siempre al Flash estable más reciente, sin necesidad de actualizar
-  // este nombre a mano cada vez que Google libera una versión nueva.
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`
 
   const res = await fetch(url, {
     method: 'POST',
@@ -162,15 +160,21 @@ export async function procesarActa(
   // 1. Preprocesar con OpenCV si está disponible
   const imagenProcesada = await preprocesarImagen(imageBase64.split(',')[1] ?? imageBase64)
 
-  // 2. Intentar Gemini primero
+  // 2. Intentar Gemini primero. 'flash-lite' va antes que el 'flash' grande:
+  // en la práctica el grande devuelve 503 "alta demanda" con mucha frecuencia
+  // -probado con actas reales-, mientras que el lite respondió siempre y leyó
+  // el acta perfecto (19/19 partidos + blanco/nulo/impugnado). Si el lite
+  // falla igual, se reintenta una vez con el grande antes de caer a Tesseract.
   let geminiError: string | undefined
   if (geminiKey?.trim()) {
-    try {
-      const votos = await ocrGemini(imagenProcesada, mimeType, geminiKey.trim())
-      return { votos, metodo: 'GEMINI' }
-    } catch (e) {
-      geminiError = e instanceof Error ? e.message : String(e)
-      console.warn('Gemini OCR falló, usando Tesseract:', e)
+    for (const modelo of ['gemini-flash-lite-latest', 'gemini-flash-latest']) {
+      try {
+        const votos = await ocrGemini(imagenProcesada, mimeType, geminiKey.trim(), modelo)
+        return { votos, metodo: 'GEMINI' }
+      } catch (e) {
+        geminiError = e instanceof Error ? e.message : String(e)
+        console.warn(`Gemini OCR (${modelo}) falló:`, e)
+      }
     }
   }
 
