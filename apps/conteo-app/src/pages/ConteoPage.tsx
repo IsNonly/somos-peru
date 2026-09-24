@@ -145,6 +145,26 @@ function IntroModal() {
 
 type VotosPorNivel = Record<NivelCandidatura, Record<string, number>>
 const VOTOS_VACIOS: VotosPorNivel = { REGIONAL: {}, PROVINCIAL: {}, DISTRITAL: {} }
+const NIVELES: NivelCandidatura[] = ['REGIONAL', 'PROVINCIAL', 'DISTRITAL']
+
+// ONPE emite un acta FÍSICA SEPARADA por cada nivel (Gobernador Regional,
+// Alcaldía Provincial, Alcaldía Distrital) -no siempre viene todo en una sola
+// hoja combinada-, así que cada nivel necesita su propia foto y su propio
+// resultado de OCR en vez de una sola foto global para toda la mesa.
+interface FotoNivelState {
+  imgSrc: string | null
+  imgMime: string
+  ocrLoading: boolean
+  ocrMetodo: 'GEMINI' | 'TESSERACT' | null
+  ocrSinMatch: boolean
+  ocrGeminiError: string
+}
+const FOTO_NIVEL_VACIA: FotoNivelState = {
+  imgSrc: null, imgMime: 'image/jpeg', ocrLoading: false, ocrMetodo: null, ocrSinMatch: false, ocrGeminiError: '',
+}
+const FOTOS_VACIAS: Record<NivelCandidatura, FotoNivelState> = {
+  REGIONAL: { ...FOTO_NIVEL_VACIA }, PROVINCIAL: { ...FOTO_NIVEL_VACIA }, DISTRITAL: { ...FOTO_NIVEL_VACIA },
+}
 
 function ConteoPageInner() {
   const [perfil, setPerfil]           = useState<any>(null)
@@ -160,12 +180,7 @@ function ConteoPageInner() {
   const [cand, setCand]               = useState<Candidaturas | null>(null)
   const [candLoading, setCandLoading] = useState(true)
   const [votos, setVotos]             = useState<VotosPorNivel>(VOTOS_VACIOS)
-  const [imgSrc, setImgSrc]           = useState<string | null>(null)
-  const [imgMime, setImgMime]         = useState('image/jpeg')
-  const [ocrLoading, setOcrLoading]   = useState(false)
-  const [ocrMetodo, setOcrMetodo]     = useState<'GEMINI' | 'TESSERACT' | null>(null)
-  const [ocrSinMatch, setOcrSinMatch] = useState(false)
-  const [ocrGeminiError, setOcrGeminiError] = useState('')
+  const [fotos, setFotos]             = useState<Record<NivelCandidatura, FotoNivelState>>(FOTOS_VACIAS)
   const [gpsStatus, setGpsStatus]     = useState<'idle' | 'loading' | 'ok' | 'warn' | 'fail'>('idle')
   const [gpsMsg, setGpsMsg]           = useState('')
   const [gpsCoords, setGpsCoords]     = useState<{ lat: number; lon: number } | null>(null)
@@ -173,7 +188,10 @@ function ConteoPageInner() {
   const [error, setError]             = useState('')
   const [geminiKey, setGeminiKey]     = useState('')
   const [showKeyInput, setShowKeyInput] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRefs = useRef<Record<NivelCandidatura, HTMLInputElement | null>>({ REGIONAL: null, PROVINCIAL: null, DISTRITAL: null })
+
+  const setFotoNivel = (nivel: NivelCandidatura, patch: Partial<FotoNivelState>) =>
+    setFotos(prev => ({ ...prev, [nivel]: { ...prev[nivel], ...patch } }))
 
   // Foto de instalación de mesa (evidencia previa al escrutinio)
   const [fotoInstalacion, setFotoInstalacion]   = useState<string | null>(null)
@@ -342,56 +360,50 @@ function ConteoPageInner() {
     reader.readAsDataURL(file)
   }
 
-  // ── Manejar foto ────────────────────────────────────────────────────────
-  const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── Manejar foto (una por nivel: Regional / Provincial / Distrital) ───────
+  const handleFoto = async (nivel: NivelCandidatura, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const mime = file.type || 'image/jpeg'
-    setImgMime(mime)
 
     const reader = new FileReader()
     reader.onload = async ev => {
       const dataUrl = ev.target?.result as string
-      setImgSrc(dataUrl)
+      setFotoNivel(nivel, { imgSrc: dataUrl, imgMime: mime, ocrLoading: true, ocrSinMatch: false, ocrGeminiError: '' })
 
-      if (modo === 'IMAGEN') {
-        setOcrLoading(true)
-        setOcrSinMatch(false)
-        setOcrGeminiError('')
-        try {
-          const base64 = dataUrl.split(',')[1]
-          const resultado = await procesarActa(base64, mime, geminiKey)
-          setOcrMetodo(resultado.metodo)
-          setOcrGeminiError(resultado.geminiError ?? '')
+      try {
+        const base64 = dataUrl.split(',')[1]
+        const resultado = await procesarActa(base64, mime, geminiKey)
 
-          // Mapear resultados OCR a los candidatos de cada bloque cargado.
-          // El OCR devuelve {partido, provincial, distrital}: 'provincial' se
-          // usa para el bloque PROVINCIAL y 'distrital' para el DISTRITAL.
-          const nuevos: VotosPorNivel = { REGIONAL: {}, PROVINCIAL: {}, DISTRITAL: {} }
-          for (const b of bloques) {
-            const lista = [...b.candidatos, ...VOTOS_ESPECIALES]
-            resultado.votos.forEach(v => {
-              const c = matchCandidato(lista, v.partido)
-              if (!c) return
-              const n = b.nivel === 'DISTRITAL' ? v.distrital : v.provincial
-              if (n > 0) nuevos[b.nivel][c.id] = n
-            })
-          }
-          // El texto reconocido puede no coincidir con ningún candidato real
-          // (típico del fallback Tesseract con actas de mala calidad): en ese
-          // caso NO hay que decir "votos reconocidos" -sería falso-, sino
-          // avisar que hay que llenarlo a mano.
-          const totalMapeado = Object.values(nuevos).reduce((s, o) => s + Object.keys(o).length, 0)
-          if (totalMapeado > 0) {
-            setVotos(nuevos)
-          } else {
-            setOcrSinMatch(true)
-          }
-        } catch {
-          setError('No se pudo procesar el acta automáticamente. Ingresa los votos manualmente.')
+        // Mapear resultados OCR a los candidatos de ESTE nivel únicamente.
+        // Cada foto es de un solo nivel (acta física separada por ONPE), así
+        // que basta con tomar el valor que trajo el OCR en cualquiera de los
+        // 2 campos -algunas actas de un solo nivel igual traen ambos iguales,
+        // otras solo llenan uno- sin mezclarlo con los otros niveles.
+        const b = bloques.find(x => x.nivel === nivel)
+        const lista = b ? [...b.candidatos, ...VOTOS_ESPECIALES] : []
+        const nuevosNivel: Record<string, number> = {}
+        resultado.votos.forEach(v => {
+          const c = matchCandidato(lista, v.partido)
+          if (!c) return
+          const n = v.distrital > 0 ? v.distrital : v.provincial
+          if (n > 0) nuevosNivel[c.id] = n
+        })
+
+        // El texto reconocido puede no coincidir con ningún candidato real
+        // (típico del fallback Tesseract con actas de mala calidad): en ese
+        // caso NO hay que decir "votos reconocidos" -sería falso-, sino
+        // avisar que hay que llenarlo a mano.
+        if (Object.keys(nuevosNivel).length > 0) {
+          setVotos(prev => ({ ...prev, [nivel]: nuevosNivel }))
+          setFotoNivel(nivel, { ocrMetodo: resultado.metodo, ocrGeminiError: resultado.geminiError ?? '' })
+        } else {
+          setFotoNivel(nivel, { ocrMetodo: resultado.metodo, ocrSinMatch: true, ocrGeminiError: resultado.geminiError ?? '' })
         }
-        setOcrLoading(false)
+      } catch {
+        setError('No se pudo procesar el acta automáticamente. Ingresa los votos manualmente.')
       }
+      setFotoNivel(nivel, { ocrLoading: false })
     }
     reader.readAsDataURL(file)
     e.target.value = ''
@@ -425,12 +437,21 @@ function ConteoPageInner() {
         setEnviando(false); return
       }
 
-      // Subir imagen si hay foto
-      let imagenUrl: string | null = null
-      if (imgSrc) {
+      // Subir las fotos del acta -una por nivel- si las hay
+      const imagenesUrl: Partial<Record<NivelCandidatura, string>> = {}
+      for (const nivel of NIVELES) {
+        const f = fotos[nivel]
+        if (!f.imgSrc) continue
         setError('')
-        imagenUrl = await subirImagenActa(mesa, imgSrc, imgMime)
+        const url = await subirImagenActa(`${mesa}_${nivel}`, f.imgSrc, f.imgMime)
+        if (url) imagenesUrl[nivel] = url
       }
+      // 'imagen_url' se mantiene con la primera foto para lo que ya lea ese
+      // campo; 'imagenes_url' trae el detalle completo por nivel.
+      const imagenUrl = Object.values(imagenesUrl)[0] ?? null
+      const ocrRaw = Object.fromEntries(
+        NIVELES.filter(n => fotos[n].ocrMetodo).map(n => [n, fotos[n].ocrMetodo])
+      )
 
       const base = datosBaseActa()
       const { departamento: dep, provincia: prov, distrito: dist } = base
@@ -442,8 +463,9 @@ function ConteoPageInner() {
         ...base,
         electores_habiles: Number.isFinite(electores as number) ? electores : null,
         imagen_url:        imagenUrl,
+        imagenes_url:      Object.keys(imagenesUrl).length ? imagenesUrl : null,
         metodo:            modo,
-        ocr_raw:           ocrMetodo ? { metodo: ocrMetodo } : null,
+        ocr_raw:           Object.keys(ocrRaw).length ? ocrRaw : null,
         estado:            'TRANSMITIDA',
         bloqueada:         true,
         latitude:          gpsCoords?.lat ?? null,
@@ -697,63 +719,85 @@ function ConteoPageInner() {
         </div>
       </div>
 
-      {/* Modo IMAGEN: foto del acta + OCR */}
+      {/* Modo IMAGEN: una foto + OCR por cada nivel (ONPE emite un acta física
+          separada por nivel -Regional / Provincial / Distrital-, no siempre
+          viene todo combinado en una sola hoja) */}
       {modo === 'IMAGEN' && (
-        <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
-          <div onClick={() => inputRef.current?.click()}
-            className="border-2 border-dashed border-white/15 rounded-2xl p-8 text-center cursor-pointer hover:border-sky-500/50 transition-all">
-            <Camera size={32} className="mx-auto text-white/25 mb-2" />
-            <p className="text-white/50 text-sm">Toca para abrir la cámara / subir foto del acta</p>
-            <p className="text-white/25 text-xs mt-1">Se procesa con IA automáticamente</p>
-          </div>
-          {imgSrc && (
-            <div className="rounded-xl overflow-hidden border border-white/10">
-              <img src={imgSrc} alt="Acta" className="w-full object-contain max-h-48" />
-            </div>
-          )}
-          {ocrLoading && (
-            <p className="flex items-center gap-2 text-sky-300 text-xs">
-              <Loader size={14} className="animate-spin" /> Procesando acta con IA…
+        <div className="space-y-3">
+          {bloques.length > 1 && (
+            <p className="text-white/40 text-[11px] px-1">
+              Sube una foto por cada acta: {bloques.map(b => b.titulo).join(' · ')}.
             </p>
           )}
-          {ocrMetodo && !ocrLoading && (
-            ocrSinMatch ? (
-              <div className="space-y-1">
-                <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
-                  <AlertTriangle size={13} /> No se pudo reconocer automáticamente ningún partido en la foto. Ingresa los votos manualmente abajo.
-                </p>
-                {ocrGeminiError && (
-                  <p className="text-[11px] text-white/40 pl-[19px]">
-                    Gemini no respondió ({ocrGeminiError}) — se intentó con el respaldo (Tesseract).
+          {bloques.map(b => {
+            const f = fotos[b.nivel]
+            return (
+              <div key={b.nivel} className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
+                {bloques.length > 1 && (
+                  <p className="text-white/70 text-xs font-bold">{b.titulo}</p>
+                )}
+                <div onClick={() => inputRefs.current[b.nivel]?.click()}
+                  className="border-2 border-dashed border-white/15 rounded-2xl p-8 text-center cursor-pointer hover:border-sky-500/50 transition-all">
+                  <Camera size={32} className="mx-auto text-white/25 mb-2" />
+                  <p className="text-white/50 text-sm">
+                    {f.imgSrc ? 'Toca para reemplazar la foto' : 'Toca para abrir la cámara / subir foto del acta'}
+                  </p>
+                  <p className="text-white/25 text-xs mt-1">Se procesa con IA automáticamente</p>
+                </div>
+                {f.imgSrc && (
+                  <div className="rounded-xl overflow-hidden border border-white/10">
+                    <img src={f.imgSrc} alt={`Acta ${b.titulo}`} className="w-full object-contain max-h-48" />
+                  </div>
+                )}
+                {f.ocrLoading && (
+                  <p className="flex items-center gap-2 text-sky-300 text-xs">
+                    <Loader size={14} className="animate-spin" /> Procesando acta con IA…
                   </p>
                 )}
+                {f.ocrMetodo && !f.ocrLoading && (
+                  f.ocrSinMatch ? (
+                    <div className="space-y-1">
+                      <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
+                        <AlertTriangle size={13} /> No se pudo reconocer automáticamente ningún partido en la foto. Ingresa los votos manualmente abajo.
+                      </p>
+                      {f.ocrGeminiError && (
+                        <p className="text-[11px] text-white/40 pl-[19px]">
+                          Gemini no respondió ({f.ocrGeminiError}) — se intentó con el respaldo (Tesseract).
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className={`flex items-center gap-1.5 text-xs font-medium ${f.ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
+                      <CheckCircle size={13} /> Votos reconocidos ({f.ocrMetodo}) — revísalos abajo.
+                    </p>
+                  )
+                )}
+                <input ref={el => { inputRefs.current[b.nivel] = el }} type="file" accept="image/*" capture="environment"
+                  className="hidden" onChange={e => handleFoto(b.nivel, e)} />
               </div>
-            ) : (
-              <p className={`flex items-center gap-1.5 text-xs font-medium ${ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
-                <CheckCircle size={13} /> Votos reconocidos ({ocrMetodo}) — revísalos abajo.
-              </p>
             )
-          )}
-          <button onClick={() => setShowKeyInput(!showKeyInput)}
-            className="w-full flex items-center justify-between text-white/50 text-xs pt-1">
-            <span className="flex items-center gap-1.5">
-              <Key size={12} className={geminiKey ? 'text-green-400' : 'text-white/30'} />
-              Clave OCR Gemini {geminiKey ? '(configurada)' : '(opcional)'}
-            </span>
-            {showKeyInput ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          </button>
-          {showKeyInput && (
-            <div className="space-y-2">
-              <input value={geminiKey} onChange={e => setGeminiKey(e.target.value)} placeholder="AIzaSy…"
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-mono outline-none focus:border-sky-500/50" />
-              <button onClick={guardarGeminiKey}
-                className="w-full py-2 bg-sky-500/15 border border-sky-500/30 text-sky-300 rounded-lg text-xs font-medium">
-                Guardar clave
-              </button>
-              <p className="text-white/25 text-xs">Sin clave usa Tesseract como fallback.</p>
-            </div>
-          )}
-          <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFoto} />
+          })}
+          <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
+            <button onClick={() => setShowKeyInput(!showKeyInput)}
+              className="w-full flex items-center justify-between text-white/50 text-xs">
+              <span className="flex items-center gap-1.5">
+                <Key size={12} className={geminiKey ? 'text-green-400' : 'text-white/30'} />
+                Clave OCR Gemini {geminiKey ? '(configurada)' : '(opcional)'}
+              </span>
+              {showKeyInput ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+            {showKeyInput && (
+              <div className="space-y-2">
+                <input value={geminiKey} onChange={e => setGeminiKey(e.target.value)} placeholder="AIzaSy…"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-mono outline-none focus:border-sky-500/50" />
+                <button onClick={guardarGeminiKey}
+                  className="w-full py-2 bg-sky-500/15 border border-sky-500/30 text-sky-300 rounded-lg text-xs font-medium">
+                  Guardar clave
+                </button>
+                <p className="text-white/25 text-xs">Sin clave usa Tesseract como fallback.</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -846,7 +890,7 @@ function ConteoPageInner() {
       )}
 
       {/* Transmitir */}
-      <button onClick={enviar} disabled={enviando || ocrLoading || mesa.length !== 6 || !mesaConfirmada || !bloques.length}
+      <button onClick={enviar} disabled={enviando || Object.values(fotos).some(f => f.ocrLoading) || mesa.length !== 6 || !mesaConfirmada || !bloques.length}
         className="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-500 hover:opacity-95 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 active:scale-[0.98]">
         {enviando
           ? <><Loader size={16} className="animate-spin" /> Transmitiendo…</>
