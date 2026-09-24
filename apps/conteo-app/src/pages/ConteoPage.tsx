@@ -165,6 +165,7 @@ function ConteoPageInner() {
   const [ocrLoading, setOcrLoading]   = useState(false)
   const [ocrMetodo, setOcrMetodo]     = useState<'GEMINI' | 'TESSERACT' | null>(null)
   const [ocrSinMatch, setOcrSinMatch] = useState(false)
+  const [ocrGeminiError, setOcrGeminiError] = useState('')
   const [gpsStatus, setGpsStatus]     = useState<'idle' | 'loading' | 'ok' | 'warn' | 'fail'>('idle')
   const [gpsMsg, setGpsMsg]           = useState('')
   const [gpsCoords, setGpsCoords]     = useState<{ lat: number; lon: number } | null>(null)
@@ -356,10 +357,12 @@ function ConteoPageInner() {
       if (modo === 'IMAGEN') {
         setOcrLoading(true)
         setOcrSinMatch(false)
+        setOcrGeminiError('')
         try {
           const base64 = dataUrl.split(',')[1]
           const resultado = await procesarActa(base64, mime, geminiKey)
           setOcrMetodo(resultado.metodo)
+          setOcrGeminiError(resultado.geminiError ?? '')
 
           // Mapear resultados OCR a los candidatos de cada bloque cargado.
           // El OCR devuelve {partido, provincial, distrital}: 'provincial' se
@@ -715,9 +718,16 @@ function ConteoPageInner() {
           )}
           {ocrMetodo && !ocrLoading && (
             ocrSinMatch ? (
-              <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
-                <AlertTriangle size={13} /> No se pudo reconocer automáticamente ningún partido en la foto. Ingresa los votos manualmente abajo.
-              </p>
+              <div className="space-y-1">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
+                  <AlertTriangle size={13} /> No se pudo reconocer automáticamente ningún partido en la foto. Ingresa los votos manualmente abajo.
+                </p>
+                {ocrGeminiError && (
+                  <p className="text-[11px] text-white/40 pl-[19px]">
+                    Gemini no respondió ({ocrGeminiError}) — se intentó con el respaldo (Tesseract).
+                  </p>
+                )}
+              </div>
             ) : (
               <p className={`flex items-center gap-1.5 text-xs font-medium ${ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
                 <CheckCircle size={13} /> Votos reconocidos ({ocrMetodo}) — revísalos abajo.

@@ -154,21 +154,27 @@ export async function procesarActa(
   votos: { partido: string; provincial: number; distrital: number }[]
   metodo: 'GEMINI' | 'TESSERACT'
   textoRaw?: string
+  // Si Gemini se intentó y falló (ej. "alta demanda"), queda el motivo acá
+  // aunque el resultado final haya salido de Tesseract -sin esto, el fallo de
+  // Gemini se perdía en un console.warn y parecía que nunca se intentó.
+  geminiError?: string
 }> {
   // 1. Preprocesar con OpenCV si está disponible
   const imagenProcesada = await preprocesarImagen(imageBase64.split(',')[1] ?? imageBase64)
 
   // 2. Intentar Gemini primero
+  let geminiError: string | undefined
   if (geminiKey?.trim()) {
     try {
       const votos = await ocrGemini(imagenProcesada, mimeType, geminiKey.trim())
       return { votos, metodo: 'GEMINI' }
     } catch (e) {
+      geminiError = e instanceof Error ? e.message : String(e)
       console.warn('Gemini OCR falló, usando Tesseract:', e)
     }
   }
 
   // 3. Fallback Tesseract
   const votos = await ocrTesseract(imagenProcesada)
-  return { votos, metodo: 'TESSERACT' }
+  return { votos, metodo: 'TESSERACT', geminiError }
 }
