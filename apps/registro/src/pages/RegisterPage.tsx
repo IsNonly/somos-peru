@@ -412,6 +412,7 @@ export default function RegisterPage() {
 
   const handleConfirmar = async () => {
     setLoading(true)
+    let authOk = false
     try {
       const cleanDni = form.dni.trim()
       const token = generarToken(cleanDni)
@@ -431,10 +432,11 @@ export default function RegisterPage() {
 
       const userId = authData.user?.id
       if (!userId) throw new Error('No se pudo generar el identificador de usuario.')
+      authOk = true
 
       const localGuardado = esColegioMultiple ? form.localesAsignados.join(' | ') : form.localAsignado
 
-      const { error: profileErr } = await supabase.from('profiles').upsert({
+      const perfilNuevo = {
         id: userId,
         nombre_completo: form.nombres,
         dni: cleanDni,
@@ -449,7 +451,20 @@ export default function RegisterPage() {
         token_verificacion: token,
         clave_acceso: clave,
         credencial_estado: 'Pendiente',
-      })
+      }
+
+      // La cuenta de Auth ya quedó creada en el paso anterior: si este segundo
+      // guardado falla por un corte de red momentáneo, la persona queda con una
+      // cuenta "fantasma" (existe en Auth pero no en profiles) y no puede volver a
+      // registrarse nunca más con ese DNI. Se reintenta un par de veces antes de
+      // darlo por perdido, para que un blip transitorio no la deje atascada.
+      let profileErr: any = null
+      for (let intento = 0; intento < 3; intento++) {
+        if (intento > 0) await new Promise(r => setTimeout(r, 600 * intento))
+        const { error: err } = await supabase.from('profiles').upsert(perfilNuevo)
+        profileErr = err
+        if (!err) break
+      }
       if (profileErr) throw profileErr
 
       setShowModal(false)
@@ -463,6 +478,13 @@ export default function RegisterPage() {
       if (/already registered|duplicate key|profiles_dni_key/i.test(msg)) {
         setDniDuplicado(true)
         setError(`Ya existe una cuenta registrada con el DNI ${form.dni.trim()}. Si es tuya, inicia sesión en vez de registrarte de nuevo.`)
+      } else if (authOk) {
+        // La cuenta de acceso ya se creó pero el perfil no se pudo guardar ni tras
+        // los reintentos -reintentar el registro completo va a chocar con "ya
+        // existe" (el correo ya está tomado), así que hay que avisar en vez de
+        // dejar que la persona lo intente de nuevo a ciegas.
+        setDniDuplicado(false)
+        setError('Tu cuenta se creó pero no se pudo guardar tu información a tiempo (fallo de conexión). No vuelvas a registrarte: escríbele a tu coordinador para que te habilite manualmente.')
       } else {
         setDniDuplicado(false)
         setError(msg || 'Error al procesar el registro.')
