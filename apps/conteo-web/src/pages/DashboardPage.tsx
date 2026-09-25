@@ -221,7 +221,7 @@ export default function DashboardPage() {
                 <th className="px-4 py-3 text-left whitespace-nowrap">Símbolo</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Partido / Tipo</th>
                 {niveles.map(n => (
-                  <th key={n} className="px-4 py-3 text-left whitespace-nowrap">Votos {NIVEL_LABEL[n].split(' ')[0]}</th>
+                  <th key={n} className="px-4 py-3 text-left whitespace-nowrap">Votos {NIVEL_LABEL[n]}</th>
                 ))}
                 <th className="px-4 py-3 text-left whitespace-nowrap">Total Votos</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">% Participación</th>
