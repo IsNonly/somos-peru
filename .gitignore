@@ -13,14 +13,14 @@ scripts/.instancias/
 .DS_Store
 .claude/
 
-# Media pesada suelta: no va al repo...
+# Media pesada suelta: no va al repo (el video/PDF de capacitación ahora se
+# sirven desde Supabase Storage, ver apps/registro/public/videos/README.md)
 *.mp4
 *.mov
 *.webm
 *.zip
+*.pdf
 CALI.xlsx
-# ...salvo el video de capacitación que sí necesita desplegarse
-!apps/registro/public/videos/*.mp4
 
 .vercel
 .env*

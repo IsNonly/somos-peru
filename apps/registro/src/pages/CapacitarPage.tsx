@@ -12,10 +12,16 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
 const fechaLarga = (d: Date) =>
   `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`
 
-const PDF_URL = '/manuals/Cartilla_Personero_ERM_2026.pdf'
+// Servidos desde Supabase Storage (no empaquetados en el build): un video de
+// ~46MB dentro de /public hacía que CADA deployment de Vercel volviera a
+// guardar esa copia completa -con los pushes acumulados de esta sesión eso
+// eran varios GB de "Deployment Storage" solo en este proyecto-. El archivo
+// es el mismo contenido nacional para las 3 instancias, así que basta con
+// una sola copia hospedada acá en vez de una por instancia.
+const PDF_URL = 'https://zjwjipknkjgoeyyamzvf.supabase.co/storage/v1/object/public/capacitacion/Cartilla_Personero_ERM_2026.pdf'
 const PDF_TIEMPO_MIN = 60 // segundos requeridos de lectura
 
-const VIDEO_URL = '/videos/Capacitacion_Personero_ERM_2026.mp4'
+const VIDEO_URL = 'https://zjwjipknkjgoeyyamzvf.supabase.co/storage/v1/object/public/capacitacion/Capacitacion_Personero_ERM_2026.mp4'
 const VIDEO_VECES = 1 // veces que hay que ver el video completo
 
 const FECHA_LIMITE = '03/10/2026 a las 11:59 p. m.'
