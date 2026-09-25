@@ -172,6 +172,15 @@ function ConteoPageInner() {
   const [authId, setAuthId]           = useState('')   // id de auth (para app_config)
   const [mesa, setMesa]               = useState('')
   const [mesaConfirmada, setMesaConfirmada] = useState(false)
+  // Validación contra el padrón oficial de mesas (tabla `mesas`, importada de ONPE):
+  // evita que se confirme un número de mesa inventado o mal tipeado -antes solo se
+  // exigían 6 dígitos, sin verificar que esa mesa exista de verdad-.
+  const [mesaValida, setMesaValida]   = useState<'idle' | 'checking' | 'ok' | 'no'>('idle')
+  const [mesaOficial, setMesaOficial] = useState<{ colegio_nombre: string; total_electores: number } | null>(null)
+  // Si esta instancia todavía no tiene cargado su padrón oficial de mesas (tabla
+  // `mesas` vacía), la validación no debe bloquear a nadie -solo se exige cuando
+  // hay una lista real contra la cual comparar-.
+  const [hayPadronMesas, setHayPadronMesas] = useState<boolean | null>(null)
   const [electoresHabiles, setElectoresHabiles] = useState('')
   const [modo, setModo]               = useState<Modo>('MANUAL')
   const [vista, setVista]             = useState<'landing' | 'conteo'>('landing')
@@ -302,6 +311,38 @@ function ConteoPageInner() {
       { enableHighAccuracy: true, timeout: 12000 }
     )
   }, [perfil, userId, mesa])
+
+  // ¿Esta instancia ya tiene cargado su padrón oficial de mesas? Se chequea una sola
+  // vez al montar -si está vacío (aún no se importó para este distrito), la
+  // validación de abajo no debe bloquear a nadie-.
+  useEffect(() => {
+    supabase.from('mesas').select('id', { count: 'exact', head: true })
+      .then(({ count }) => setHayPadronMesas((count ?? 0) > 0))
+  }, [])
+
+  // Verifica el número de mesa contra el padrón oficial (tabla `mesas`, importada de
+  // ONPE) apenas se completan los 6 dígitos -antes solo se exigía el largo, sin
+  // confirmar que la mesa exista de verdad-. Si "Electores hábiles" está vacío, se
+  // prellena con el dato oficial (el personero lo puede corregir si hace falta).
+  useEffect(() => {
+    if (mesa.length !== 6) { setMesaValida('idle'); setMesaOficial(null); return }
+    if (!hayPadronMesas) { setMesaValida('idle'); setMesaOficial(null); return }
+    let vivo = true
+    setMesaValida('checking')
+    supabase.from('mesas').select('colegio_nombre, total_electores').eq('numero', mesa).maybeSingle()
+      .then(({ data }) => {
+        if (!vivo) return
+        if (data) {
+          setMesaValida('ok')
+          setMesaOficial({ colegio_nombre: data.colegio_nombre, total_electores: data.total_electores })
+          setElectoresHabiles(prev => prev || (data.total_electores ? String(data.total_electores) : prev))
+        } else {
+          setMesaValida('no')
+          setMesaOficial(null)
+        }
+      })
+    return () => { vivo = false }
+  }, [mesa, hayPadronMesas])
 
   // Campos base que identifican el acta de esta mesa, repetidos en cada
   // guardado parcial (foto de instalación, electores hábiles, envío final).
@@ -593,6 +634,17 @@ function ConteoPageInner() {
             {mesa.length > 0 && mesa.length < 6 && (
               <p className="text-amber-400 text-[10px] mt-1">Faltan {6 - mesa.length} dígito{6 - mesa.length === 1 ? '' : 's'}.</p>
             )}
+            {mesa.length === 6 && hayPadronMesas && mesaValida === 'checking' && (
+              <p className="text-white/40 text-[10px] mt-1">Verificando mesa…</p>
+            )}
+            {mesa.length === 6 && mesaValida === 'ok' && mesaOficial && (
+              <p className="text-emerald-400 text-[10px] mt-1 flex items-center gap-1">
+                <CheckCircle size={11} /> Mesa verificada — {mesaOficial.colegio_nombre}
+              </p>
+            )}
+            {mesa.length === 6 && mesaValida === 'no' && (
+              <p className="text-red-400 text-[10px] mt-1">Esta mesa no existe en el padrón oficial. Revisa el número.</p>
+            )}
           </div>
           <div>
             <label className="text-white/40 text-[11px] font-semibold mb-1 block">Centro de votación:</label>
@@ -617,12 +669,20 @@ function ConteoPageInner() {
           </div>
         )}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <label className={`flex items-center gap-1.5 text-sm font-semibold ${mesa.length === 6 ? 'cursor-pointer' : 'cursor-not-allowed'} ${mesaConfirmada ? 'text-sky-400' : 'text-white/40'}`}>
-            <input type="checkbox" checked={mesaConfirmada} disabled={mesa.length !== 6}
-              onChange={e => setMesaConfirmada(e.target.checked && mesa.length === 6)}
-              className="accent-sky-500 w-4 h-4" />
-            Confirmar mesa
-          </label>
+          {(() => {
+            // Solo se exige que la mesa esté en el padrón oficial cuando esta
+            // instancia ya tiene uno cargado (tabla `mesas`) -si todavía no se
+            // importó para este distrito, se acepta con solo los 6 dígitos-.
+            const puedeConfirmar = mesa.length === 6 && (!hayPadronMesas || mesaValida === 'ok')
+            return (
+              <label className={`flex items-center gap-1.5 text-sm font-semibold ${puedeConfirmar ? 'cursor-pointer' : 'cursor-not-allowed'} ${mesaConfirmada ? 'text-sky-400' : 'text-white/40'}`}>
+                <input type="checkbox" checked={mesaConfirmada} disabled={!puedeConfirmar}
+                  onChange={e => setMesaConfirmada(e.target.checked && puedeConfirmar)}
+                  className="accent-sky-500 w-4 h-4" />
+                Confirmar mesa
+              </label>
+            )
+          })()}
           <div className="flex items-center gap-2">
             <span className="text-sky-400 text-xs font-semibold flex-shrink-0">Electores hábiles:</span>
             <input value={electoresHabiles} inputMode="numeric"
