@@ -263,6 +263,7 @@ function GeoSelect({ label, icon, value, onChange, options, disabled, placeholde
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [dniDuplicado, setDniDuplicado] = useState(false)
   const [done, setDone] = useState<{ token: string; nombres: string; dni: string; clave: string; esMesa: boolean } | null>(null)
   const [showModal, setShowModal] = useState(false)
 
@@ -366,6 +367,7 @@ export default function RegisterPage() {
     e.preventDefault()
     if (!form.nombres || !form.dni || !form.celular) { setError('Complete los datos personales obligatorios.'); return }
     setError('')
+    setDniDuplicado(false)
     setShowModal(true)
   }
 
@@ -415,7 +417,17 @@ export default function RegisterPage() {
       setDone({ token, nombres: form.nombres, dni: cleanDni, clave, esMesa })
     } catch (err: any) {
       setShowModal(false)
-      setError(err.message || 'Error al procesar el registro.')
+      const msg = String(err.message || '')
+      // Ya existe una cuenta con ese DNI (Auth: "User already registered" / Postgres:
+      // llave duplicada en profiles.dni) — el mensaje crudo de Supabase es en inglés y
+      // no le dice a la persona qué hacer, así que parece que "no la deja registrar".
+      if (/already registered|duplicate key|profiles_dni_key/i.test(msg)) {
+        setDniDuplicado(true)
+        setError(`Ya existe una cuenta registrada con el DNI ${form.dni.trim()}. Si es tuya, inicia sesión en vez de registrarte de nuevo.`)
+      } else {
+        setDniDuplicado(false)
+        setError(msg || 'Error al procesar el registro.')
+      }
     }
     setLoading(false)
   }
@@ -627,7 +639,15 @@ export default function RegisterPage() {
           </div>
 
           {error && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-medium">{error}</div>
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-medium space-y-2">
+              <p>{error}</p>
+              {dniDuplicado && (
+                <a href="/login"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors">
+                  <LogIn size={13} /> Ir a Iniciar Sesión
+                </a>
+              )}
+            </div>
           )}
 
           <button type="submit"
