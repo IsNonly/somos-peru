@@ -36,7 +36,7 @@ export default function PersoneroMonitorPage() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [fAsis, setFAsis] = useState<'todos' | 'con' | 'sin'>('todos')
-  const [fEnv, setFEnv] = useState<'todos' | 'completo' | 'parcial' | 'sin'>('todos')
+  const [fEnv, setFEnv] = useState<'todos' | 'enviado' | 'sin'>('todos')
   const [editando, setEditando] = useState<Perfil | null>(null)
 
   useEffect(() => {
@@ -86,28 +86,27 @@ export default function PersoneroMonitorPage() {
     if (fAsis === 'con') r = r.filter(p => p.asistencia_local_at)
     if (fAsis === 'sin') r = r.filter(p => !p.asistencia_local_at)
     if (fEnv !== 'todos') r = r.filter(p => {
-      const e = envioDe(p); const n = (e.manual ? 1 : 0) + (e.imagen ? 1 : 0)
-      return fEnv === 'completo' ? n === 2 : fEnv === 'parcial' ? n === 1 : n === 0
+      const enviado = envioDe(p).manual || envioDe(p).imagen
+      return fEnv === 'enviado' ? enviado : !enviado
     })
     return r
   }, [pers, f.colegio, q, fAsis, fEnv, envios])
 
   const stats = useMemo(() => {
     const asistio = pers.filter(p => p.asistencia_local_at).length
-    let completo = 0, parcial = 0, sinEnvio = 0
+    let enviado = 0, sinEnvio = 0
     const porDistrito: Record<string, number> = {}
     const porDistritoEnvio: Record<string, number> = {}
     for (const p of pers) {
       const d = p.distrito_asignado
       if (d && p.asistencia_local_at) porDistrito[d] = (porDistrito[d] ?? 0) + 1
       const e = envioDe(p)
-      const n = (e.manual ? 1 : 0) + (e.imagen ? 1 : 0)
-      if (n === 2) completo++
-      else if (n === 1) parcial++
+      // El personero elige UN solo método (Manual o Imagen, nunca los dos) al enviar
+      // su acta -no hay "envío parcial" real: con cualquiera de los dos ya terminó-.
+      if (e.manual || e.imagen) { enviado++; if (d) porDistritoEnvio[d] = (porDistritoEnvio[d] ?? 0) + 1 }
       else sinEnvio++
-      if (d && n > 0) porDistritoEnvio[d] = (porDistritoEnvio[d] ?? 0) + 1
     }
-    return { total: pers.length, asistio, completo, parcial, sinEnvio, porDistrito, porDistritoEnvio }
+    return { total: pers.length, asistio, enviado, sinEnvio, porDistrito, porDistritoEnvio }
   }, [pers, envios])
 
   const donutAsistencia = {
@@ -115,8 +114,8 @@ export default function PersoneroMonitorPage() {
     datasets: [{ data: [stats.asistio, Math.max(0, stats.total - stats.asistio)], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }],
   }
   const donutEnvios = {
-    labels: ['Completo (2/2)', 'Parcial (1/2)', 'Sin envío'],
-    datasets: [{ data: [stats.completo, stats.parcial, stats.sinEnvio], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }],
+    labels: ['Enviado', 'Sin envío'],
+    datasets: [{ data: [stats.enviado, stats.sinEnvio], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }],
   }
   const barData = (por: Record<string, number>, color: string) => {
     const labels = Object.keys(por)
@@ -170,7 +169,7 @@ export default function PersoneroMonitorPage() {
             ? <Bar data={barData(stats.porDistrito, '#10b981')} options={chartOpts} />
             : <SinRegistros />}
         </ChartCard>
-        <ChartCard icon={FileCheck} tint="#0ea5e9" titulo="Envío de Actas Global" sub="Completo, parcial o sin envío">
+        <ChartCard icon={FileCheck} tint="#0ea5e9" titulo="Envío de Actas Global" sub="Enviado (Manual o Imagen) o sin envío">
           <Doughnut data={donutEnvios} options={donutOpts} />
         </ChartCard>
         <ChartCard icon={FileCheck} tint="#0ea5e9" titulo="Envíos por Distrito" sub="Personeros con al menos un envío recibido">
@@ -202,16 +201,15 @@ export default function PersoneroMonitorPage() {
               acta, en vez de tener que escanear las 600+ filas de la tabla de abajo. */}
           <div className="flex flex-wrap gap-2 mt-3">
             <StatPill label="Todos" value={stats.total} tone="slate" active={fEnv === 'todos'} onClick={() => setFEnv('todos')} />
-            <StatPill label="Completo (2/2)" value={stats.completo} tone="emerald" active={fEnv === 'completo'} onClick={() => setFEnv('completo')} />
-            <StatPill label="Parcial (1/2)" value={stats.parcial} tone="amber" active={fEnv === 'parcial'} onClick={() => setFEnv('parcial')} />
-            <StatPill label="Sin envío (0/2)" value={stats.sinEnvio} tone="rose" active={fEnv === 'sin'} onClick={() => setFEnv('sin')} />
+            <StatPill label="Enviado" value={stats.enviado} tone="emerald" active={fEnv === 'enviado'} onClick={() => setFEnv('enviado')} />
+            <StatPill label="Sin envío" value={stats.sinEnvio} tone="rose" active={fEnv === 'sin'} onClick={() => setFEnv('sin')} />
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1020px] text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-                {['Personero', 'DNI / Celular', 'Distrito / Local', 'Mesa', 'Asistencia', 'Envío Manual 📝', 'Envío Imagen 🖼️', 'Estado Envíos', 'Contacto'].map(h => (
+                {['Personero', 'DNI / Celular', 'Distrito / Local', 'Mesa', 'Asistencia', 'Envío Manual 📝', 'Envío Imagen 🖼️', 'Acta Enviada', 'Contacto'].map(h => (
                   <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -224,7 +222,7 @@ export default function PersoneroMonitorPage() {
               ) : filtrados.slice(0, 600).map(p => {
                 const asistio = !!p.asistencia_local_at
                 const e = envioDe(p)
-                const n = (e.manual ? 1 : 0) + (e.imagen ? 1 : 0)
+                const enviado = e.manual || e.imagen
                 const tel = (p.celular ?? '').replace(/\D/g, '')
                 return (
                   <tr key={p.id} className="hover:bg-slate-50">
@@ -241,7 +239,7 @@ export default function PersoneroMonitorPage() {
                     <td className="px-4 py-2.5"><Badge ok={asistio} /></td>
                     <td className="px-4 py-2.5"><Badge ok={e.manual} okText="RECIBIDO" /></td>
                     <td className="px-4 py-2.5"><Badge ok={e.imagen} okText="RECIBIDO" /></td>
-                    <td className="px-4 py-2.5"><EstadoEnvios n={n} /></td>
+                    <td className="px-4 py-2.5"><Badge ok={enviado} okText="ENVIADO" /></td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1.5 whitespace-nowrap">
                         <button onClick={() => avisar(p)} disabled={!tel} title={tel ? 'Avisar por WhatsApp' : 'Sin celular'}
@@ -302,15 +300,6 @@ function StatPill({ label, value, tone, active, onClick }: {
       <span className="text-xs font-bold">{label}</span>
     </button>
   )
-}
-
-function EstadoEnvios({ n }: { n: number }) {
-  const cfg = n === 2
-    ? { cls: 'bg-emerald-500 text-white', txt: 'Completo (2/2)' }
-    : n === 1
-      ? { cls: 'bg-amber-100 text-amber-700', txt: 'Parcial (1/2)' }
-      : { cls: 'bg-rose-500 text-white', txt: 'Sin Envío (0/2)' }
-  return <span className={`inline-block whitespace-nowrap text-xs font-bold rounded-full px-2.5 py-1 ${cfg.cls}`}>{cfg.txt}</span>
 }
 
 function ChartCard({ icon: Icon, tint, titulo, sub, children }: {
