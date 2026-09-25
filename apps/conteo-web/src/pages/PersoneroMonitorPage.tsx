@@ -7,7 +7,7 @@ import { Doughnut, Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
 } from 'chart.js'
-import { UserCheck, Pencil, KeyRound, MessageCircle } from 'lucide-react'
+import { UserCheck, FileCheck, Pencil, KeyRound, MessageCircle } from 'lucide-react'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -94,19 +94,29 @@ export default function PersoneroMonitorPage() {
 
   const stats = useMemo(() => {
     const asistio = pers.filter(p => p.asistencia_local_at).length
-    const conEnvio = pers.filter(p => { const e = envioDe(p); return e.manual || e.imagen }).length
+    let completo = 0, parcial = 0, sinEnvio = 0
     const porDistrito: Record<string, number> = {}
+    const porDistritoEnvio: Record<string, number> = {}
     for (const p of pers) {
       const d = p.distrito_asignado
-      if (!d) continue
-      if (p.asistencia_local_at) porDistrito[d] = (porDistrito[d] ?? 0) + 1
+      if (d && p.asistencia_local_at) porDistrito[d] = (porDistrito[d] ?? 0) + 1
+      const e = envioDe(p)
+      const n = (e.manual ? 1 : 0) + (e.imagen ? 1 : 0)
+      if (n === 2) completo++
+      else if (n === 1) parcial++
+      else sinEnvio++
+      if (d && n > 0) porDistritoEnvio[d] = (porDistritoEnvio[d] ?? 0) + 1
     }
-    return { total: pers.length, asistio, conEnvio, porDistrito }
+    return { total: pers.length, asistio, completo, parcial, sinEnvio, porDistrito, porDistritoEnvio }
   }, [pers, envios])
 
   const donutAsistencia = {
     labels: ['Asistencia marcada', 'Sin marcar'],
     datasets: [{ data: [stats.asistio, Math.max(0, stats.total - stats.asistio)], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }],
+  }
+  const donutEnvios = {
+    labels: ['Completo (2/2)', 'Parcial (1/2)', 'Sin envío'],
+    datasets: [{ data: [stats.completo, stats.parcial, stats.sinEnvio], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }],
   }
   const barData = (por: Record<string, number>, color: string) => {
     const labels = Object.keys(por)
@@ -160,6 +170,14 @@ export default function PersoneroMonitorPage() {
             ? <Bar data={barData(stats.porDistrito, '#10b981')} options={chartOpts} />
             : <SinRegistros />}
         </ChartCard>
+        <ChartCard icon={FileCheck} tint="#0ea5e9" titulo="Envío de Actas Global" sub="Completo, parcial o sin envío">
+          <Doughnut data={donutEnvios} options={donutOpts} />
+        </ChartCard>
+        <ChartCard icon={FileCheck} tint="#0ea5e9" titulo="Envíos por Distrito" sub="Personeros con al menos un envío recibido">
+          {Object.keys(stats.porDistritoEnvio).length
+            ? <Bar data={barData(stats.porDistritoEnvio, '#0ea5e9')} options={chartOpts} />
+            : <SinRegistros />}
+        </ChartCard>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -178,14 +196,15 @@ export default function PersoneroMonitorPage() {
                 <option value="con">Con asistencia</option>
                 <option value="sin">Sin asistencia</option>
               </select>
-              <select value={fEnv} onChange={e => setFEnv(e.target.value as any)}
-                className="text-sm rounded-lg border border-slate-300 px-2 py-1.5 outline-none">
-                <option value="todos">Envíos: Todos</option>
-                <option value="completo">Completos (2/2)</option>
-                <option value="parcial">Parciales (1/2)</option>
-                <option value="sin">Sin envío (0/2)</option>
-              </select>
             </div>
+          </div>
+          {/* Contadores grandes y clicables: para ver de un vistazo quién ya envió su
+              acta, en vez de tener que escanear las 600+ filas de la tabla de abajo. */}
+          <div className="flex flex-wrap gap-2 mt-3">
+            <StatPill label="Todos" value={stats.total} tone="slate" active={fEnv === 'todos'} onClick={() => setFEnv('todos')} />
+            <StatPill label="Completo (2/2)" value={stats.completo} tone="emerald" active={fEnv === 'completo'} onClick={() => setFEnv('completo')} />
+            <StatPill label="Parcial (1/2)" value={stats.parcial} tone="amber" active={fEnv === 'parcial'} onClick={() => setFEnv('parcial')} />
+            <StatPill label="Sin envío (0/2)" value={stats.sinEnvio} tone="rose" active={fEnv === 'sin'} onClick={() => setFEnv('sin')} />
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -265,6 +284,24 @@ function Badge({ ok, okText = 'CONFIRMADO' }: { ok: boolean; okText?: string }) 
   return ok
     ? <span className="inline-block whitespace-nowrap text-xs font-bold bg-emerald-50 text-emerald-600 rounded-full px-2.5 py-1">{okText}</span>
     : <span className="inline-block whitespace-nowrap text-xs font-bold bg-amber-50 text-amber-600 rounded-full px-2.5 py-1">PENDIENTE</span>
+}
+
+function StatPill({ label, value, tone, active, onClick }: {
+  label: string; value: number; tone: 'slate' | 'emerald' | 'amber' | 'rose'; active: boolean; onClick: () => void
+}) {
+  const tones: Record<string, string> = {
+    slate:   active ? 'bg-slate-700 text-white border-slate-700'     : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-400',
+    emerald: active ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-400',
+    amber:   active ? 'bg-amber-500 text-white border-amber-500'     : 'bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-400',
+    rose:    active ? 'bg-rose-600 text-white border-rose-600'       : 'bg-rose-50 text-rose-700 border-rose-200 hover:border-rose-400',
+  }
+  return (
+    <button onClick={onClick}
+      className={`flex items-baseline gap-1.5 rounded-xl border px-3.5 py-2 transition-colors ${tones[tone]}`}>
+      <span className="text-lg font-black tabular-nums">{value}</span>
+      <span className="text-xs font-bold">{label}</span>
+    </button>
+  )
 }
 
 function EstadoEnvios({ n }: { n: number }) {
