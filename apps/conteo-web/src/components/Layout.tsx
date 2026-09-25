@@ -67,6 +67,7 @@ function BarraFiltros() {
 function Shell() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
+  const { ambitoLabel } = useFiltros()
   const logout = async () => { await supabase.auth.signOut(); navigate('/login') }
 
   return (
@@ -77,7 +78,7 @@ function Shell() {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-sky-700 flex items-center justify-center text-white font-black">✓</div>
           <div className="leading-tight">
             <p className="text-white font-extrabold text-base">Voto Real</p>
-            <p className="text-sky-400 text-[10px] font-bold tracking-widest">{AMBITO_DEPARTAMENTO.toUpperCase()}</p>
+            <p className="text-sky-400 text-[10px] font-bold tracking-widest">{ambitoLabel.toUpperCase()}</p>
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -104,7 +105,7 @@ function Shell() {
             <button onClick={() => setOpen(true)} className="xl:hidden p-1.5 rounded-md bg-slate-100"><Menu size={18} /></button>
             <span className="text-sky-600">{AMBITO_DEPARTAMENTO.toLowerCase()}</span>
             <span className="text-slate-300">/</span>
-            <span className="text-sky-600">{AMBITO_DEPARTAMENTO.toUpperCase()}</span>
+            <span className="text-sky-600">{ambitoLabel.toUpperCase()}</span>
           </div>
           <div className="flex items-center gap-2">
             <button className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-slate-600 border border-slate-300 rounded-md px-2.5 py-1.5">
