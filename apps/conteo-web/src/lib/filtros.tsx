@@ -164,10 +164,18 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
     return AMBITO_DISTRITOS
   }, [f.distrito, f.provincia, f.departamento, distritos, scope.esAdmin, scope.distritos])
 
+  // Ámbito por defecto del Administrador sin filtros: el/los distrito(s) que opera
+  // esta instancia (AMBITO_DISTRITOS), no el departamento contenedor -"Lima" es el
+  // departamento de las 3 instancias (VES/CDL/San Isidro) pero solo una es el distrito
+  // "Lima" (Cercado de Lima); mostrar el departamento ahí confundía a las otras 2-.
+  const ambitoDistritosLabel = AMBITO_DISTRITOS.length === 1
+    ? `Distrito de ${AMBITO_DISTRITOS[0]}`
+    : AMBITO_DISTRITOS.join(' / ')
+
   const ambitoLabel = useMemo(() => {
     if (f.distrito) return `Distrito de ${f.distrito}`
     if (f.provincia) return `Provincia de ${f.provincia}`
-    if (scope.esAdmin) return (f.departamento && f.departamento !== AMBITO_DEPARTAMENTO) ? f.departamento : AMBITO_DEPARTAMENTO
+    if (scope.esAdmin) return (f.departamento && f.departamento !== AMBITO_DEPARTAMENTO) ? f.departamento : ambitoDistritosLabel
     return scope.ambitoLabel
   }, [f.distrito, f.provincia, f.departamento, scope.esAdmin, scope.ambitoLabel])
 
