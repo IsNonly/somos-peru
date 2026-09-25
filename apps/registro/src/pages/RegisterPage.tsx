@@ -260,6 +260,45 @@ function GeoSelect({ label, icon, value, onChange, options, disabled, placeholde
   )
 }
 
+const normTexto = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+
+// Combobox con filtro de texto: reemplaza los <select> planos de colegios, que se
+// volvían inmanejables al escrolear entre decenas de locales de un distrito grande.
+function BuscadorColegios({ opciones, onElegir, placeholder }: {
+  opciones: string[]; onElegir: (nombre: string) => void; placeholder: string
+}) {
+  const [q, setQ] = useState('')
+  const [abierto, setAbierto] = useState(false)
+  const filtradas = q.trim() ? opciones.filter(o => normTexto(o).includes(normTexto(q))) : opciones
+
+  return (
+    <div className="relative">
+      <FieldWrap icon={<Building2 size={18} />}>
+        <input type="text" value={q}
+          onChange={e => { setQ(e.target.value); setAbierto(true) }}
+          onFocus={() => setAbierto(true)}
+          onBlur={() => setTimeout(() => setAbierto(false), 150)}
+          placeholder={placeholder}
+          className={inputCls} />
+      </FieldWrap>
+      {abierto && (
+        <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+          {filtradas.length > 0 ? filtradas.map(o => (
+            <button key={o} type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onElegir(o); setQ(''); setAbierto(false) }}
+              className="w-full text-left px-3.5 py-2 text-sm text-slate-700 hover:bg-sky-50 transition-colors">
+              {o}
+            </button>
+          )) : (
+            <p className="px-3.5 py-2.5 text-xs text-slate-400">Sin coincidencias para "{q}".</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -525,19 +564,29 @@ export default function RegisterPage() {
             {esPersonero && (
               <div className="pt-2">
                 <FieldLabel>Local de Votación Asignado <Req /></FieldLabel>
-                <SelectWrap icon={<Building2 size={18} />}>
-                  {colegiosAsignado.length > 0 ? (
-                    <select value={form.localAsignado} onChange={e => set('localAsignado', e.target.value)} className={selectCls}>
-                      <option value="">Seleccione el local ({colegiosAsignado.length})</option>
-                      {colegiosAsignado.map(c => <option key={c.nombre} value={c.nombre}>{c.nombre}</option>)}
-                    </select>
-                  ) : (
+                {colegiosAsignado.length > 0 ? (
+                  <>
+                    <BuscadorColegios
+                      opciones={colegiosAsignado.map(c => c.nombre)}
+                      onElegir={n => set('localAsignado', n)}
+                      placeholder={`Buscar entre ${colegiosAsignado.length} locales...`} />
+                    {form.localAsignado && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-100 text-sky-700 text-xs font-semibold rounded-full">
+                          {form.localAsignado}
+                          <button type="button" onClick={() => set('localAsignado', '')} className="hover:text-red-500"><X size={12} /></button>
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <FieldWrap icon={<Building2 size={18} />}>
                     <input type="text" value={form.localAsignado}
                       onChange={e => set('localAsignado', e.target.value)}
                       placeholder={cargandoAsignado ? 'Cargando...' : 'Escriba el local...'}
-                      className={`${inputCls} disabled:bg-slate-50`} />
-                  )}
-                </SelectWrap>
+                      className={inputCls} />
+                  </FieldWrap>
+                )}
               </div>
             )}
 
@@ -556,14 +605,10 @@ export default function RegisterPage() {
                   {!cargandoAsignado && !form.distritoAsignado && <p className="text-xs text-slate-400 py-2">Primero seleccione un distrito</p>}
                   {!cargandoAsignado && colegiosAsignado.length > 0 && (
                     <>
-                      <SelectWrap icon={<Building2 size={18} />}>
-                        <select className={selectCls} value="" onChange={e => { if (e.target.value) toggleColegio(e.target.value) }}>
-                          <option value="">Agregar colegio al listado...</option>
-                          {colegiosAsignado.filter(c => !c.checked).map(c => (
-                            <option key={c.nombre} value={c.nombre}>{c.nombre}</option>
-                          ))}
-                        </select>
-                      </SelectWrap>
+                      <BuscadorColegios
+                        opciones={colegiosAsignado.filter(c => !c.checked).map(c => c.nombre)}
+                        onElegir={toggleColegio}
+                        placeholder="Buscar y agregar colegio..." />
                       {form.localesAsignados.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mt-2">
                           {form.localesAsignados.map(n => (
@@ -599,14 +644,10 @@ export default function RegisterPage() {
                   )}
                   {!cargandoAsignado && colegiosAsignado.length > 0 && (
                     <>
-                      <SelectWrap icon={<Building2 size={18} />}>
-                        <select className={selectCls} value="" onChange={e => { if (e.target.value) toggleColegio(e.target.value) }}>
-                          <option value="">Agregar colegio al listado...</option>
-                          {colegiosAsignado.filter(c => !c.checked && !colegiosReservados.has(c.nombre)).map(c => (
-                            <option key={c.nombre} value={c.nombre}>{c.nombre}</option>
-                          ))}
-                        </select>
-                      </SelectWrap>
+                      <BuscadorColegios
+                        opciones={colegiosAsignado.filter(c => !c.checked && !colegiosReservados.has(c.nombre)).map(c => c.nombre)}
+                        onElegir={toggleColegio}
+                        placeholder="Buscar y agregar colegio..." />
                       {colegiosReservados.size > 0 && (
                         <p className="text-[11px] text-amber-600 mt-1.5">
                           {colegiosReservados.size} colegio{colegiosReservados.size === 1 ? '' : 's'} de este distrito ya tiene{colegiosReservados.size === 1 ? '' : 'n'} un Coordinador Distrital asignado y no aparece{colegiosReservados.size === 1 ? '' : 'n'} en la lista.
