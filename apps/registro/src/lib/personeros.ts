@@ -10,3 +10,14 @@ export async function eliminarPersoneroCompleto(id: string): Promise<{ error: st
   if (data?.error) return { error: data.error }
   return { error: null }
 }
+
+// Le pone una contraseña nueva a la cuenta de Auth de un personero (vía la
+// Edge Function 'cambiar-password-personero', que corre con permisos de
+// administrador en el servidor — el cliente con la clave anon no puede
+// cambiar la contraseña de una cuenta ajena).
+export async function cambiarPasswordPersonero(id: string, password: string): Promise<{ error: string | null }> {
+  const { data, error } = await supabase.functions.invoke('cambiar-password-personero', { body: { id, password } })
+  if (error) return { error: error.message }
+  if (data?.error) return { error: data.error }
+  return { error: null }
+}

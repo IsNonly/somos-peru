@@ -8,14 +8,14 @@ import {
 import {
   Search, Download, Users, GraduationCap, PlayCircle, BookOpenCheck, ClipboardCheck,
   MessageCircle, PieChart, BarChart3, CheckCircle2, Pencil, Lock, Save, Trash2,
-  User, Phone, ShieldCheck, MapPin, Building2, Hash, Sparkles, Filter,
+  User, Phone, ShieldCheck, MapPin, Building2, Hash, Sparkles, Filter, KeyRound,
 } from 'lucide-react'
 import { supabase, AMBITO_DEPARTAMENTO } from '../../lib/supabase'
 import {
   usePanelData, rolNorm, norm, ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST,
   type Perfil, type Colegio,
 } from '../../lib/panel'
-import { eliminarPersoneroCompleto } from '../../lib/personeros'
+import { eliminarPersoneroCompleto, cambiarPasswordPersonero } from '../../lib/personeros'
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -430,6 +430,11 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
   const [guardando, setGuardando] = useState(false)
   const [eliminando, setEliminando] = useState(false)
 
+  const [nuevaClave, setNuevaClave] = useState('')
+  const [mostrarClave, setMostrarClave] = useState(false)
+  const [cambiandoClave, setCambiandoClave] = useState(false)
+  const [claveOk, setClaveOk] = useState(false)
+
   const centrosDelDistrito = useMemo(
     () => [...new Set(colegios.filter(c => c.distrito === distrito).map(c => c.nombre))],
     [colegios, distrito],
@@ -453,6 +458,15 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
     if (error) { alert('No se pudo guardar: ' + error.message); return }
     onSaved()
     onClose()
+  }
+
+  const cambiarClave = async () => {
+    setCambiandoClave(true); setClaveOk(false)
+    const { error } = await cambiarPasswordPersonero(perfil.id, nuevaClave)
+    setCambiandoClave(false)
+    if (error) { alert('No se pudo cambiar la contraseña: ' + error); return }
+    setClaveOk(true)
+    setNuevaClave('')
   }
 
   const eliminar = async () => {
@@ -524,6 +538,28 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
           <p className="text-[11px] text-amber-700 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
             💡 Ingresa el número de mesa de 6 dígitos asignada al personero en este centro de votación.
           </p>
+          {puedeEliminar && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <KeyRound size={12} /> Cambiar Contraseña de Acceso
+              </span>
+              <div className="flex gap-2">
+                <input type={mostrarClave ? 'text' : 'password'} value={nuevaClave}
+                  onChange={e => { setNuevaClave(e.target.value); setClaveOk(false) }}
+                  placeholder="Nueva contraseña (mín. 6 caracteres)"
+                  className="flex-1 text-sm rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-500" />
+                <button type="button" onClick={() => setMostrarClave(v => !v)}
+                  className="text-[11px] font-semibold text-slate-500 border border-slate-300 rounded-lg px-2.5">
+                  {mostrarClave ? 'Ocultar' : 'Ver'}
+                </button>
+                <button type="button" onClick={cambiarClave} disabled={cambiandoClave || nuevaClave.trim().length < 6}
+                  className="text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 disabled:opacity-40 rounded-lg px-3 py-2 whitespace-nowrap">
+                  {cambiandoClave ? 'Cambiando…' : 'Cambiar'}
+                </button>
+              </div>
+              {claveOk && <p className="text-[11px] text-emerald-600">Contraseña actualizada. Avísale al personero su nueva clave.</p>}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2 p-4 border-t border-slate-100">

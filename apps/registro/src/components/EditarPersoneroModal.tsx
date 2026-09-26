@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { X, Trash2 } from 'lucide-react'
+import { X, Trash2, KeyRound } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { eliminarPersoneroCompleto } from '../lib/personeros'
+import { eliminarPersoneroCompleto, cambiarPasswordPersonero } from '../lib/personeros'
 
 interface MesaOpt { numero: string; colegio_nombre: string | null }
 const normTexto = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
@@ -45,6 +45,11 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
   const [guardando, setGuardando] = useState(false)
   const [eliminando, setEliminando] = useState(false)
   const [error, setError] = useState('')
+
+  const [nuevaClave, setNuevaClave] = useState('')
+  const [mostrarClave, setMostrarClave] = useState(false)
+  const [cambiandoClave, setCambiandoClave] = useState(false)
+  const [claveOk, setClaveOk] = useState(false)
 
   const [qLocal, setQLocal] = useState('')
   const [abiertoLocal, setAbiertoLocal] = useState(false)
@@ -90,6 +95,15 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
     setGuardando(false)
     if (err) { setError(err.message); return }
     onSaved(perfil.id, cambios)
+  }
+
+  const cambiarClave = async () => {
+    setCambiandoClave(true); setError(''); setClaveOk(false)
+    const { error: err } = await cambiarPasswordPersonero(perfil.id, nuevaClave)
+    setCambiandoClave(false)
+    if (err) { setError(err); return }
+    setClaveOk(true)
+    setNuevaClave('')
   }
 
   const eliminar = async () => {
@@ -177,6 +191,28 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
           <p className="text-[11px] text-amber-600">
             Al cambiar el local, este personero se moverá a la tarjeta de su nuevo centro de votación.
           </p>
+        )}
+        {puedeEliminar && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+            <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
+              <KeyRound size={12} /> Cambiar contraseña de acceso
+            </span>
+            <div className="flex gap-2">
+              <input type={mostrarClave ? 'text' : 'password'} value={nuevaClave}
+                onChange={e => { setNuevaClave(e.target.value); setClaveOk(false) }}
+                placeholder="Nueva contraseña (mín. 6 caracteres)"
+                className="flex-1 text-sm rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-500" />
+              <button type="button" onClick={() => setMostrarClave(v => !v)}
+                className="text-[11px] font-semibold text-slate-500 border border-slate-300 rounded-lg px-2.5">
+                {mostrarClave ? 'Ocultar' : 'Ver'}
+              </button>
+              <button type="button" onClick={cambiarClave} disabled={cambiandoClave || nuevaClave.trim().length < 6}
+                className="text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 disabled:opacity-40 rounded-lg px-3 py-2 whitespace-nowrap">
+                {cambiandoClave ? 'Cambiando…' : 'Cambiar'}
+              </button>
+            </div>
+            {claveOk && <p className="text-[11px] text-emerald-600">Contraseña actualizada. Avísale al personero su nueva clave.</p>}
+          </div>
         )}
         {error && <p className="text-xs text-rose-500">{error}</p>}
         <div className="flex items-center justify-between gap-2 pt-1">
