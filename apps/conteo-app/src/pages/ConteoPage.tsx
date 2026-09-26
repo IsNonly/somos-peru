@@ -1085,13 +1085,9 @@ function FilaCandidato({ candidato, accent, value, onDelta }: {
         ) : null}
       </div>
       <div className="flex-1 min-w-0">
-        {candidato.nombre ? (
-          <>
-            <p className="text-white text-xs font-bold leading-tight truncate">{candidato.nombre}</p>
-            <p className="text-white/40 text-[10px] leading-tight mt-0.5 truncate">{candidato.partido}</p>
-          </>
-        ) : (
-          <p className="text-white text-xs font-bold leading-tight truncate">{candidato.partido}</p>
+        <p className="text-white text-xs font-bold leading-tight truncate">{candidato.partido}</p>
+        {candidato.nombre && (
+          <p className="text-white/40 text-[10px] leading-tight mt-0.5 truncate">{candidato.nombre}</p>
         )}
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
