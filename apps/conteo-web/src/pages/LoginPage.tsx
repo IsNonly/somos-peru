@@ -41,9 +41,12 @@ export default function LoginPage() {
 
     const userEmail = dni.includes('@') ? dni : `${dni}@somosperu.com`
 
+    // La contraseña se guarda siempre en minúscula (ver cambiar-password-personero
+    // y el registro), así que aquí también se normaliza -no importa si la
+    // escriben en mayúscula, minúscula o mezclada-.
     const { error: err } = await supabase.auth.signInWithPassword({
       email: userEmail,
-      password: pass,
+      password: pass.trim().toLowerCase(),
     })
 
     if (err) {

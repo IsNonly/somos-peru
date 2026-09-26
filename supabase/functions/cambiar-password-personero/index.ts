@@ -77,7 +77,10 @@ Deno.serve(async req => {
 
   const body = await req.json().catch(() => ({}))
   const id = body?.id as string | undefined
-  const password = body?.password as string | undefined
+  // Se guarda siempre en minúscula: el login también normaliza a minúscula lo
+  // que la persona escribe, para que no le importe si tipea en mayúscula,
+  // minúscula o mezclada -menos fricción para gente con poca práctica-.
+  const password = (body?.password as string | undefined)?.trim().toLowerCase()
   if (!id) return json({ error: 'Falta el id del personero' }, 400)
   if (!password || password.length < 6) return json({ error: 'La contraseña debe tener al menos 6 caracteres' }, 400)
 

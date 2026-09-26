@@ -14,7 +14,10 @@ export default function LoginPage() {
     setError('')
 
     const rawUsuario = usuario.trim()
-    const cleanPassword = password.trim()
+    // La contraseña se guarda siempre en minúscula (ver cambiar-password-personero
+    // y el registro), así que aquí también se normaliza -no importa si el
+    // personero la escribe en mayúscula, minúscula o mezclada-.
+    const cleanPassword = password.trim().toLowerCase()
     const esDni = /^\d{8}$/.test(rawUsuario)
 
     let cleanDni = rawUsuario

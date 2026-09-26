@@ -557,6 +557,7 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
                   {cambiandoClave ? 'Cambiando…' : 'Cambiar'}
                 </button>
               </div>
+              <p className="text-[10px] text-slate-400">No distingue mayúsculas de minúsculas al iniciar sesión.</p>
               {claveOk && <p className="text-[11px] text-emerald-600">Contraseña actualizada. Avísale al personero su nueva clave.</p>}
             </div>
           )}
