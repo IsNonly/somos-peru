@@ -261,7 +261,6 @@ export default function CapacitarPage() {
   const cargoConstancia    = profile?.rol ?? 'Personero de Mesa'
   const distritoConstancia = profile?.distrito_asignado ?? profile?.distrito_vota ?? AMBITO_DEPARTAMENTO
   const fechaConstancia    = fechaLarga(fechaAprobacion ?? new Date())
-  const centro             = profile?.local_asignado ?? profile?.local_votacion ?? '—'
 
   // Constancia de Participación a pantalla completa
   if (verConstancia) return (
@@ -561,7 +560,6 @@ export default function CapacitarPage() {
                 <DatoFila label="DNI" value={profile?.dni ?? '—'} />
                 <DatoFila label="Rol" value={profile?.rol ?? '—'} />
                 <DatoFila label="Distrito" value={profile?.distrito_asignado ?? profile?.distrito_vota ?? '—'} />
-                <DatoFila label="Centro" value={centro} />
               </div>
             </div>
 
