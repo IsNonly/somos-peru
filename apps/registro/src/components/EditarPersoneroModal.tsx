@@ -23,10 +23,13 @@ export interface CambiosPersonero {
   mesa_asignada?: string | null
 }
 
-export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, onClose, onSaved, onEliminado }: {
+export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, soloMesa, onClose, onSaved, onEliminado }: {
   perfil: PersoneroEditable
   esMesa: boolean
   puedeEliminar: boolean
+  // El PCV solo puede asignar la mesa de sus propios personeros desde este modal —
+  // no puede tocar nombre/celular/correo/local ni eliminar a nadie.
+  soloMesa?: boolean
   onClose: () => void
   onSaved: (id: string, cambios: CambiosPersonero) => void
   onEliminado: (id: string) => void
@@ -66,6 +69,14 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, on
 
   const guardar = async () => {
     setGuardando(true); setError('')
+    if (soloMesa) {
+      const cambios: CambiosPersonero = { nombre_completo: perfil.nombre, celular: perfil.celular, correo: perfil.correo, local_asignado: perfil.local_asignado, mesa_asignada: mesa.trim() || null }
+      const { error: err } = await supabase.from('profiles').update({ mesa_asignada: cambios.mesa_asignada }).eq('id', perfil.id)
+      setGuardando(false)
+      if (err) { setError(err.message); return }
+      onSaved(perfil.id, cambios)
+      return
+    }
     const cambios: CambiosPersonero = {
       nombre_completo: nombre.trim(),
       celular: celular.trim() || null,
@@ -92,13 +103,22 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, on
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-extrabold text-slate-900">Editar personero</h3>
+          <h3 className="font-extrabold text-slate-900">{soloMesa ? 'Asignar mesa' : 'Editar personero'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
         </div>
-        <Campo label="Nombre completo" value={nombre} onChange={setNombre} />
-        <Campo label="Celular" value={celular} onChange={setCelular} />
-        <Campo label="Correo" value={correo} onChange={setCorreo} />
-        <Campo label="Local de Votación Asignado" value={local} onChange={setLocal} />
+        {soloMesa ? (
+          <div>
+            <p className="font-bold text-slate-800 text-sm">{perfil.nombre}</p>
+            <p className="text-xs text-slate-500">Personero de Mesa</p>
+          </div>
+        ) : (
+          <>
+            <Campo label="Nombre completo" value={nombre} onChange={setNombre} />
+            <Campo label="Celular" value={celular} onChange={setCelular} />
+            <Campo label="Correo" value={correo} onChange={setCorreo} />
+            <Campo label="Local de Votación Asignado" value={local} onChange={setLocal} />
+          </>
+        )}
         {esMesa && (
           hayPadronMesas ? (
             <label className="flex flex-col gap-1">
@@ -138,7 +158,7 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, on
         )}
         {error && <p className="text-xs text-rose-500">{error}</p>}
         <div className="flex items-center justify-between gap-2 pt-1">
-          {puedeEliminar ? (
+          {puedeEliminar && !soloMesa ? (
             <button onClick={eliminar} disabled={eliminando || guardando}
               className="flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 disabled:opacity-50 px-1">
               <Trash2 size={13} /> {eliminando ? 'Eliminando…' : 'Eliminar personero'}

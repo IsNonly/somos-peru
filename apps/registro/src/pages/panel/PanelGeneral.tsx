@@ -227,7 +227,8 @@ export default function PanelGeneral() {
           </p>
         )}
         {sel && (
-          <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital} puedeEliminar={esAdmin}
+          <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital || esPCV} puedeEliminar={esAdmin}
+            restringidoAMesa={esPCV}
             onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} onEliminado={onPersoneroEliminado} />
         )}
       </div>
@@ -344,8 +345,12 @@ export default function PanelGeneral() {
   )
 }
 
-function CentroModal({ c, puedeEditar, puedeEliminar, onClose, onActualizado, onEliminado }: {
-  c: CentroFila; puedeEditar: boolean; puedeEliminar: boolean; onClose: () => void
+function CentroModal({ c, puedeEditar, puedeEliminar, restringidoAMesa, onClose, onActualizado, onEliminado }: {
+  c: CentroFila; puedeEditar: boolean; puedeEliminar: boolean
+  // El PCV llega con puedeEditar=true pero solo para asignar la mesa de sus propios
+  // personeros de mesa — no puede editar su propia tarjeta de PCV ni otros campos.
+  restringidoAMesa?: boolean
+  onClose: () => void
   onActualizado: (id: string, cambios: CambiosPersonero) => void
   onEliminado: (id: string) => void
 }) {
@@ -397,7 +402,7 @@ function CentroModal({ c, puedeEditar, puedeEliminar, onClose, onActualizado, on
                         <a href={wa(c.pcv.celular)} target="_blank" rel="noreferrer"
                           className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {c.pcv.celular}</a>
                       )}
-                      {puedeEditar && (
+                      {puedeEditar && !restringidoAMesa && (
                         <button onClick={() => setEditando({ p: c.pcv!, esMesa: false })} title="Editar"
                           className="text-slate-400 hover:text-sky-600"><Pencil size={13} /></button>
                       )}
@@ -431,7 +436,7 @@ function CentroModal({ c, puedeEditar, puedeEliminar, onClose, onActualizado, on
                           <a href={wa(p.celular)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {p.celular}</a>
                         )}
                         {puedeEditar && (
-                          <button onClick={() => setEditando({ p, esMesa: true })} title="Editar"
+                          <button onClick={() => setEditando({ p, esMesa: true })} title={restringidoAMesa ? 'Asignar mesa' : 'Editar'}
                             className="text-slate-400 hover:text-sky-600"><Pencil size={13} /></button>
                         )}
                       </div>
@@ -481,6 +486,7 @@ function CentroModal({ c, puedeEditar, puedeEliminar, onClose, onActualizado, on
           }}
           esMesa={editando.esMesa}
           puedeEliminar={puedeEliminar}
+          soloMesa={restringidoAMesa}
           onClose={() => setEditando(null)}
           onSaved={(id, cambios) => {
             const seMovio = norm(cambios.local_asignado ?? '') !== norm(editando.p.local_asignado ?? '')
