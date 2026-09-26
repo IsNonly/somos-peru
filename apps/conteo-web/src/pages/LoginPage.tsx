@@ -24,7 +24,9 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const rawUsuario = email.trim()
+    // Se normaliza a minúscula -no importa si la persona escribe el DNI,
+    // nombre o correo en mayúscula, minúscula o mezclada-.
+    const rawUsuario = email.trim().toLowerCase()
     const esDni = /^\d{8}$/.test(rawUsuario)
 
     let dni = rawUsuario

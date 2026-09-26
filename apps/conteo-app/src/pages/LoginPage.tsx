@@ -14,11 +14,11 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const nombreClean = nombre.trim()
-    // La contraseña se guarda siempre en minúscula (ver cambiar-password-personero
-    // y el registro), así que aquí también se normaliza -no importa si la
-    // escriben en mayúscula, minúscula o mezclada-. Si este campo en realidad
-    // es el DNI (no hay nombre), pasarlo a minúscula no cambia nada (son dígitos).
+    // Tanto el nombre/DNI como la contraseña se normalizan a minúscula -no
+    // importa si la persona escribe en mayúscula, minúscula o mezclada-. Si el
+    // segundo campo en realidad es el DNI (no hay nombre), pasarlo a minúscula
+    // no cambia nada (son dígitos).
+    const nombreClean = nombre.trim().toLowerCase()
     const claveIngresada = dni.trim().toLowerCase()
 
     let cleanDni = claveIngresada
