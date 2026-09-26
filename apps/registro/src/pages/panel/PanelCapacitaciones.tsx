@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase, AMBITO_DEPARTAMENTO } from '../../lib/supabase'
 import {
-  usePanelData, rolNorm, ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST,
+  usePanelData, rolNorm, norm, ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST,
   type Perfil, type Colegio,
 } from '../../lib/panel'
 import { eliminarPersoneroCompleto } from '../../lib/personeros'
@@ -45,10 +45,13 @@ const fechaCorta = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : null
 
 export default function PanelCapacitaciones() {
-  const { rol: actorRol, nombreCompleto: actorNombre, dni: actorDni } = useOutletContext<{ rol: string; nombreCompleto: string; dni: string }>()
+  const { rol: actorRol, nombreCompleto: actorNombre, dni: actorDni, local: actorLocal } =
+    useOutletContext<{ rol: string; nombreCompleto: string; dni: string; local: string }>()
   const actorNorm = rolNorm(actorRol)
   const esSuperadmin = actorNorm === 'Administrador General'
+  const esPCV = actorNorm === ROL_LOCAL
   const puedeModificar = esSuperadmin || actorNorm === ROL_ZONAL || actorNorm === ROL_COORD_DIST
+
   const editadoPor = actorNombre ? `${actorNombre} (DNI ${actorDni})` : `DNI ${actorDni}`
 
   const d = usePanelData()
@@ -58,10 +61,17 @@ export default function PanelCapacitaciones() {
   const [chip, setChip] = useState<'todos' | Estado>('todos')
   const [editPerfil, setEditPerfil] = useState<Perfil | null>(null)
 
+  // El PCV solo ve la capacitación de SUS propios personeros de mesa (los del
+  // centro de votación que tiene asignado) — no la del distrito completo.
   const cohorte = useMemo(
-    () => d.perfiles.filter(p =>
-      rolNorm(p.rol) === ROL_MESA || rolNorm(p.rol) === ROL_LOCAL || rolNorm(p.rol) === ROL_COORD_DIST),
-    [d.perfiles],
+    () => d.perfiles.filter(p => {
+      if (esPCV) {
+        return rolNorm(p.rol) === ROL_MESA &&
+          norm(p.local_asignado || p.local_votacion) === norm(actorLocal)
+      }
+      return rolNorm(p.rol) === ROL_MESA || rolNorm(p.rol) === ROL_LOCAL || rolNorm(p.rol) === ROL_COORD_DIST
+    }),
+    [d.perfiles, esPCV, actorLocal],
   )
 
   const distritos = useMemo(() =>
@@ -159,7 +169,9 @@ export default function PanelCapacitaciones() {
     <div className="space-y-4 w-full">
       <section>
         <p className="text-sm font-extrabold text-slate-900 mb-2 flex items-center gap-2">
-          <GraduationCap size={15} /> Progreso de Capacitaciones · Personeros de Mesa, de Local y Coordinador Distrital
+          <GraduationCap size={15} /> Progreso de Capacitaciones · {esPCV
+            ? `Personeros de Mesa de ${actorLocal || 'tu Centro de Votación'}`
+            : 'Personeros de Mesa, de Local y Coordinador Distrital'}
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <Kpi color="#3b82f6" icon={Users} value={kpis.total} label="Sujetos a Capacitación" sub="Mesa + Local + Coord. Distrital" />
@@ -224,18 +236,22 @@ export default function PanelCapacitaciones() {
             <option value="proceso">En proceso</option>
             <option value="noiniciado">Sin iniciar</option>
           </select>
-          <select value={fDist} onChange={e => setFDist(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[12rem]">
-            <option value="">📍 Todos los Distritos</option>
-            {distritos.map(dist => <option key={dist} value={dist}>{dist}</option>)}
-          </select>
-          <select value={fRol} onChange={e => setFRol(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[14rem]">
-            <option value="">🛡️ Todos los Roles</option>
-            <option value={ROL_MESA}>{ROL_MESA}</option>
-            <option value={ROL_LOCAL}>{ROL_LOCAL}</option>
-            <option value={ROL_COORD_DIST}>{ROL_COORD_DIST}</option>
-          </select>
+          {!esPCV && (
+            <select value={fDist} onChange={e => setFDist(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[12rem]">
+              <option value="">📍 Todos los Distritos</option>
+              {distritos.map(dist => <option key={dist} value={dist}>{dist}</option>)}
+            </select>
+          )}
+          {!esPCV && (
+            <select value={fRol} onChange={e => setFRol(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[14rem]">
+              <option value="">🛡️ Todos los Roles</option>
+              <option value={ROL_MESA}>{ROL_MESA}</option>
+              <option value={ROL_LOCAL}>{ROL_LOCAL}</option>
+              <option value={ROL_COORD_DIST}>{ROL_COORD_DIST}</option>
+            </select>
+          )}
           <button onClick={exportar}
             className="text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 flex items-center gap-1.5 flex-shrink-0">
             <Download size={13} /> Descargar Excel

@@ -81,11 +81,11 @@ export default function PanelLayout() {
 
   const salir = async () => { await supabase.auth.signOut(); nav('/login') }
 
-  // Personero de Centro de Votación: solo ve "Panel General" (acotado a su propio
-  // local ahí mismo); Capacitaciones/Trayecto muestran datos de todo el distrito
-  // y son para coordinadores, no para este rol.
+  // Personero de Centro de Votación: ve "Panel General" (acotado a su propio local) y
+  // "Capacitaciones" (acotada a sus propios personeros de mesa, ver PanelCapacitaciones.tsx).
+  // "Trayecto" muestra datos de todo el distrito y es solo para coordinadores.
   const esPCV = rolNorm(rol) === ROL_LOCAL
-  const navItems = esPCV ? NAV.slice(0, 1) : NAV
+  const navItems = esPCV ? NAV.filter(n => n.to !== '/panel/trayecto') : NAV
 
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-800">
