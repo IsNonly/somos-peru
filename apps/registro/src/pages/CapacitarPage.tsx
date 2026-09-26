@@ -1,10 +1,15 @@
 import { useEffect, useState, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import {
   Play, Lock, CheckCircle, LogOut, BookOpen, X, Download, Award, Users, ChevronRight, MapPin,
-  type LucideIcon,
+  LayoutGrid, type LucideIcon,
 } from 'lucide-react'
 import Constancia from '../components/Constancia'
+
+// Roles que tienen un Panel al que volver (a diferencia de un Personero de
+// Mesa, para quien esta página ES su pantalla principal tras el login).
+const TIENE_PANEL = ['Administrador', 'Coordinador', 'Personero de Centro de Votación', 'Personero de Local de Votación', 'Coordinador de Local']
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre']
@@ -310,11 +315,20 @@ export default function CapacitarPage() {
           <div className="w-9 h-9 rounded-xl bg-[#e11d48] flex items-center justify-center text-white text-base flex-shrink-0">❤️</div>
           <span className="text-lg font-extrabold text-slate-900">Capacítate</span>
         </div>
-        <button onClick={handleSalir}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-500 hover:bg-rose-100 text-xs font-bold transition-colors">
-          <LogOut size={13} />
-          Cerrar sesión
-        </button>
+        <div className="flex items-center gap-2">
+          {TIENE_PANEL.some(r => (profile?.rol ?? '').includes(r)) && (
+            <Link to="/panel"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 text-xs font-bold transition-colors">
+              <LayoutGrid size={13} />
+              Volver al Panel
+            </Link>
+          )}
+          <button onClick={handleSalir}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rose-200 bg-rose-50 text-rose-500 hover:bg-rose-100 text-xs font-bold transition-colors">
+            <LogOut size={13} />
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       <div className="max-w-[1400px] mx-auto p-4 sm:p-6">

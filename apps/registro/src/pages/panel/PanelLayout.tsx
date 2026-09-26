@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { LayoutGrid, GraduationCap, Navigation, ChevronLeft, LogOut, Menu, X } from 'lucide-react'
+import { LayoutGrid, GraduationCap, Navigation, ChevronLeft, LogOut, Menu, X, BookOpenCheck } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { rolNorm, ROL_LOCAL } from '../../lib/panel'
 
@@ -9,6 +9,10 @@ const NAV = [
   { to: '/panel/capacitaciones', end: false, icon: GraduationCap, label: 'Capacitaciones' },
   { to: '/panel/trayecto', end: false, icon: Navigation, label: 'Trayecto' },
 ]
+// El PCV también debe hacer su propia capacitación (video + cartilla + constancia),
+// igual que sus personeros de mesa -pero sin bloquearle el acceso al resto del
+// Panel mientras tanto, por eso es solo un link más, no un gate-.
+const NAV_CAPACITATE = { to: '/capacitate', end: false, icon: BookOpenCheck, label: 'Capacítate' }
 
 function Reloj() {
   const [t, setT] = useState(() => new Date().toLocaleTimeString('es-PE', { hour12: false }))
@@ -85,7 +89,7 @@ export default function PanelLayout() {
   // "Capacitaciones" (acotada a sus propios personeros de mesa, ver PanelCapacitaciones.tsx).
   // "Trayecto" muestra datos de todo el distrito y es solo para coordinadores.
   const esPCV = rolNorm(rol) === ROL_LOCAL
-  const navItems = esPCV ? NAV.filter(n => n.to !== '/panel/trayecto') : NAV
+  const navItems = esPCV ? [...NAV.filter(n => n.to !== '/panel/trayecto'), NAV_CAPACITATE] : NAV
 
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-800">
