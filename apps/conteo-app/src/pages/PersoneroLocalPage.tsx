@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, getMiPerfil } from '../lib/supabase'
 import {
   Shield, School, MapPin, RefreshCw, LogOut, Search, Users,
-  CheckCircle2, Clock, Loader, Pencil, X, AlertTriangle,
+  CheckCircle2, Clock, Loader, Pencil, X, AlertTriangle, GraduationCap, MessageCircle,
 } from 'lucide-react'
 
 type Personero = {
@@ -12,6 +12,34 @@ type Personero = {
   celular: string | null
   mesa: string | null
   marcadoAt: string | null
+  videosVistos: number
+  pdfsVistos: number
+  quizEstado: string | null
+}
+
+type EstadoCap = 'completo' | 'proceso' | 'noiniciado'
+
+const estadoCapDe = (p: Personero): EstadoCap => {
+  const v = p.videosVistos ?? 0
+  const pdf = p.pdfsVistos ?? 0
+  if (v >= 1 && pdf >= 1 && p.quizEstado === 'Aprobado') return 'completo'
+  if (v === 0 && pdf === 0 && p.quizEstado !== 'Aprobado' && p.quizEstado !== 'Reprobado') return 'noiniciado'
+  return 'proceso'
+}
+
+const CAP_LABEL: Record<EstadoCap, string> = { completo: 'Capacitado', proceso: 'En proceso', noiniciado: 'Sin iniciar' }
+const CAP_CLASS: Record<EstadoCap, string> = {
+  completo: 'text-emerald-400', proceso: 'text-amber-400', noiniciado: 'text-red-400',
+}
+
+const wa = (tel?: string | null, msg?: string) =>
+  tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}${msg ? `?text=${encodeURIComponent(msg)}` : ''}` : undefined
+
+const recordatorioCap = (p: Personero) => {
+  const nombre = p.nombre?.split(' ')[0] ?? ''
+  return `Hola ${nombre}! Te recordamos completar tu capacitación de personero ERM 2026 (ingresa a tu cuenta → Capacítate). ` +
+    `Llevas: Video ${p.videosVistos}/2, Cartilla ${p.pdfsVistos >= 1 ? 'lista ✓' : 'pendiente'}, Cuestionario ${p.quizEstado === 'Aprobado' ? 'aprobado ✓' : 'pendiente'}. ` +
+    `Sin estos 3 pasos tu cuenta no queda habilitada para el conteo. ¡Gracias por tu compromiso!`
 }
 
 const horaPE = (iso: string) =>
@@ -46,7 +74,7 @@ export default function PersoneroLocalPage() {
     if (local) {
       const { data: pers } = await supabase
         .from('profiles')
-        .select('id, nombre_completo, dni, celular, mesa_asignada, asistencia_local_at')
+        .select('id, nombre_completo, dni, celular, mesa_asignada, asistencia_local_at, videos_vistos, pdfs_vistos, quiz_estado')
         .eq('local_asignado', local)
         .eq('rol', 'Personero de Mesa')
         .order('nombre_completo')
@@ -58,6 +86,9 @@ export default function PersoneroLocalPage() {
         celular: x.celular,
         mesa: x.mesa_asignada,
         marcadoAt: x.asistencia_local_at,
+        videosVistos: x.videos_vistos ?? 0,
+        pdfsVistos: x.pdfs_vistos ?? 0,
+        quizEstado: x.quiz_estado,
       })))
 
       const { data: col } = await supabase
@@ -114,6 +145,10 @@ export default function PersoneroLocalPage() {
   const marcados   = personeros.filter(p => p.marcadoAt).length
   const pendientes = personeros.length - marcados
   const faltan     = Math.max(0, totalMesas - marcados)
+
+  const capacitados  = personeros.filter(p => estadoCapDe(p) === 'completo').length
+  const capEnProceso = personeros.filter(p => estadoCapDe(p) === 'proceso').length
+  const capSinIniciar = personeros.filter(p => estadoCapDe(p) === 'noiniciado').length
 
   const filtrados = personeros.filter(p => {
     const okTab = tab === 'todos' ? true : tab === 'marcados' ? !!p.marcadoAt : !p.marcadoAt
@@ -196,6 +231,18 @@ export default function PersoneroLocalPage() {
           </div>
         </div>
 
+        {/* Capacitación de mis personeros */}
+        <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 flex items-center gap-1.5">
+            <GraduationCap size={13} className="text-sky-400" /> Capacitación de mis personeros
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <Metrica label="Capacitados" value={capacitados} tone="ok" />
+            <Metrica label="En Proceso" value={capEnProceso} tone="warn" />
+            <Metrica label="Sin Iniciar" value={capSinIniciar} tone="bad" />
+          </div>
+        </div>
+
         {/* Tabs */}
         <div className="flex gap-2">
           {([
@@ -264,6 +311,16 @@ export default function PersoneroLocalPage() {
                       {p.marcadoAt
                         ? <><CheckCircle2 size={11} /> Marcado {horaPE(p.marcadoAt)}</>
                         : <><Clock size={11} /> Pendiente de Asistencia</>}
+                    </p>
+                    <p className={`text-[11px] mt-0.5 flex items-center gap-1 ${CAP_CLASS[estadoCapDe(p)]}`}>
+                      <GraduationCap size={11} /> Capacitación: {CAP_LABEL[estadoCapDe(p)]}
+                      {estadoCapDe(p) !== 'completo' && p.celular && (
+                        <a href={wa(p.celular, recordatorioCap(p))} target="_blank" rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="ml-1 text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5">
+                          <MessageCircle size={11} /> Recordar
+                        </a>
+                      )}
                     </p>
                   </div>
                   <button onClick={() => marcar(p)} disabled={savingId === p.id}
@@ -357,11 +414,12 @@ export default function PersoneroLocalPage() {
 }
 
 function Metrica({ label, value, tone }: {
-  label: string; value: number; tone: 'plain' | 'ok' | 'warn'
+  label: string; value: number; tone: 'plain' | 'ok' | 'warn' | 'bad'
 }) {
   const cls =
     tone === 'ok'   ? 'bg-emerald-500/8 border-emerald-500/25 text-emerald-400' :
     tone === 'warn' ? 'bg-amber-500/8 border-amber-500/25 text-amber-400' :
+    tone === 'bad'  ? 'bg-red-500/8 border-red-500/25 text-red-400' :
                       'bg-[#0b0f1d] border-white/10 text-white'
   return (
     <div className={`rounded-xl border p-2.5 text-center ${cls}`}>
