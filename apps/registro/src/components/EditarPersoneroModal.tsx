@@ -23,13 +23,16 @@ export interface CambiosPersonero {
   mesa_asignada?: string | null
 }
 
-export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, mesasOcupadas, onClose, onSaved, onEliminado }: {
+export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, mesasOcupadas, colegiosOpciones, onClose, onSaved, onEliminado }: {
   perfil: PersoneroEditable
   esMesa: boolean
   puedeEliminar: boolean
   // Mesas ya asignadas a OTROS personeros de este mismo colegio: se ocultan del
   // buscador para no poder asignar por error una mesa que ya tiene dueño.
   mesasOcupadas?: Set<string>
+  // Colegios del ámbito, para poder elegir el local desde una lista en vez de
+  // escribirlo a mano (evita nombres mal tipeados que no calzan con ningún colegio real).
+  colegiosOpciones?: string[]
   onClose: () => void
   onSaved: (id: string, cambios: CambiosPersonero) => void
   onEliminado: (id: string) => void
@@ -42,6 +45,12 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
   const [guardando, setGuardando] = useState(false)
   const [eliminando, setEliminando] = useState(false)
   const [error, setError] = useState('')
+
+  const [qLocal, setQLocal] = useState('')
+  const [abiertoLocal, setAbiertoLocal] = useState(false)
+  const hayColegios = (colegiosOpciones?.length ?? 0) > 0
+  const filtradosLocal = (colegiosOpciones ?? []).filter(c =>
+    !qLocal.trim() || normTexto(c).includes(normTexto(qLocal)))
 
   // Padrón oficial de mesas (tabla `mesas`, importada de ONPE): permite buscar y
   // asignar una mesa real en vez de escribir el número a mano. null = cargando;
@@ -102,7 +111,36 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
         <Campo label="Nombre completo" value={nombre} onChange={setNombre} />
         <Campo label="Celular" value={celular} onChange={setCelular} />
         <Campo label="Correo" value={correo} onChange={setCorreo} />
-        <Campo label="Local de Votación Asignado" value={local} onChange={setLocal} />
+        {hayColegios ? (
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-500">Local de Votación Asignado</span>
+            <div className="relative">
+              <input
+                value={abiertoLocal ? qLocal : local}
+                onChange={e => { setQLocal(e.target.value); setAbiertoLocal(true) }}
+                onFocus={() => { setQLocal(''); setAbiertoLocal(true) }}
+                onBlur={() => setTimeout(() => setAbiertoLocal(false), 150)}
+                placeholder="Buscar colegio..."
+                className="text-sm rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-500 w-full" />
+              {abiertoLocal && (
+                <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+                  {filtradosLocal.length > 0 ? filtradosLocal.slice(0, 100).map(c => (
+                    <button key={c} type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => { setLocal(c); setQLocal(''); setAbiertoLocal(false) }}
+                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-sky-50 transition-colors">
+                      {c}
+                    </button>
+                  )) : (
+                    <p className="px-3 py-2.5 text-xs text-slate-400">Sin coincidencias.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </label>
+        ) : (
+          <Campo label="Local de Votación Asignado" value={local} onChange={setLocal} />
+        )}
         {esMesa && (
           hayPadronMesas ? (
             <label className="flex flex-col gap-1">

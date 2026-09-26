@@ -232,6 +232,7 @@ export default function PanelGeneral() {
           // que un administrador, pero acotado a su propio centro de votación. Solo
           // eliminar personeros sigue siendo exclusivo de Administrador General.
           <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital || esPCV} puedeEliminar={esAdmin}
+            colegios={d.colegios.map(c => c.nombre)}
             onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} onEliminado={onPersoneroEliminado} />
         )}
       </div>
@@ -342,14 +343,15 @@ export default function PanelGeneral() {
 
       {sel && (
         <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital} puedeEliminar={esAdmin}
+          colegios={d.colegios.map(c => c.nombre)}
           onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} onEliminado={onPersoneroEliminado} />
       )}
     </div>
   )
 }
 
-function CentroModal({ c, puedeEditar, puedeEliminar, onClose, onActualizado, onEliminado }: {
-  c: CentroFila; puedeEditar: boolean; puedeEliminar: boolean; onClose: () => void
+function CentroModal({ c, puedeEditar, puedeEliminar, colegios, onClose, onActualizado, onEliminado }: {
+  c: CentroFila; puedeEditar: boolean; puedeEliminar: boolean; colegios: string[]; onClose: () => void
   onActualizado: (id: string, cambios: CambiosPersonero) => void
   onEliminado: (id: string) => void
 }) {
@@ -488,6 +490,7 @@ function CentroModal({ c, puedeEditar, puedeEliminar, onClose, onActualizado, on
           mesasOcupadas={new Set(
             c.personeros.filter(p => p.id !== editando.p.id && p.mesa_asignada).map(p => p.mesa_asignada as string),
           )}
+          colegiosOpciones={colegios}
           onClose={() => setEditando(null)}
           onSaved={(id, cambios) => {
             const seMovio = norm(cambios.local_asignado ?? '') !== norm(editando.p.local_asignado ?? '')
