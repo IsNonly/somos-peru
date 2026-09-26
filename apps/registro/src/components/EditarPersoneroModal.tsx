@@ -23,13 +23,16 @@ export interface CambiosPersonero {
   mesa_asignada?: string | null
 }
 
-export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, soloMesa, onClose, onSaved, onEliminado }: {
+export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, soloMesa, mesasOcupadas, onClose, onSaved, onEliminado }: {
   perfil: PersoneroEditable
   esMesa: boolean
   puedeEliminar: boolean
   // El PCV solo puede asignar la mesa de sus propios personeros desde este modal —
   // no puede tocar nombre/celular/correo/local ni eliminar a nadie.
   soloMesa?: boolean
+  // Mesas ya asignadas a OTROS personeros de este mismo colegio: se ocultan del
+  // buscador para no poder asignar por error una mesa que ya tiene dueño.
+  mesasOcupadas?: Set<string>
   onClose: () => void
   onSaved: (id: string, cambios: CambiosPersonero) => void
   onEliminado: (id: string) => void
@@ -58,7 +61,8 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, so
   const [abiertoMesa, setAbiertoMesa] = useState(false)
   const hayPadronMesas = (mesasDisponibles?.length ?? 0) > 0
   const filtradasMesa = (mesasDisponibles ?? []).filter(m =>
-    !qMesa.trim() || m.numero.includes(qMesa.trim()) || normTexto(m.colegio_nombre ?? '').includes(normTexto(qMesa)))
+    !mesasOcupadas?.has(m.numero) &&
+    (!qMesa.trim() || m.numero.includes(qMesa.trim()) || normTexto(m.colegio_nombre ?? '').includes(normTexto(qMesa))))
 
   const elegirMesa = (m: MesaOpt) => {
     setMesa(m.numero)

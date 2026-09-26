@@ -209,6 +209,11 @@ function ConteoPageInner() {
 
   const bloques = cand?.bloques ?? []
 
+  // Si el PCV ya le asignó oficialmente una mesa (mesa_asignada en su perfil, ver
+  // "Asignar mesa" en el Panel del PCV), no debe poder escribir un número distinto
+  // a mano -el campo se muestra bloqueado con la mesa que le corresponde de verdad-.
+  const mesaAsignadaOficialmente = !!perfil?.mesa_asignada
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -327,6 +332,8 @@ function ConteoPageInner() {
   useEffect(() => {
     if (mesa.length !== 6) { setMesaValida('idle'); setMesaOficial(null); return }
     if (!hayPadronMesas) { setMesaValida('idle'); setMesaOficial(null); return }
+    // Ya viene validada de origen: la asignó el PCV desde el padrón oficial mismo.
+    if (mesaAsignadaOficialmente) { setMesaValida('ok'); return }
     let vivo = true
     setMesaValida('checking')
     supabase.from('mesas').select('colegio_nombre, total_electores').eq('numero', mesa).maybeSingle()
@@ -342,7 +349,9 @@ function ConteoPageInner() {
         }
       })
     return () => { vivo = false }
-  }, [mesa, hayPadronMesas])
+    // Si el PCV ya se la asignó oficialmente, no hace falta re-verificarla contra
+    // el padrón -ya salió de ahí mismo-.
+  }, [mesa, hayPadronMesas, mesaAsignadaOficialmente])
 
   // Campos base que identifican el acta de esta mesa, repetidos en cada
   // guardado parcial (foto de instalación, electores hábiles, envío final).
@@ -627,23 +636,34 @@ function ConteoPageInner() {
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
           <div>
             <label className="text-white/40 text-[11px] font-semibold mb-1 block">Mesa de sufragio:</label>
-            <input value={mesa} inputMode="numeric"
+            <input value={mesa} inputMode="numeric" disabled={mesaAsignadaOficialmente} readOnly={mesaAsignadaOficialmente}
               onChange={e => { setMesa(e.target.value.replace(/\D/g, '').slice(0, 6)); setMesaConfirmada(false) }}
               placeholder="000000"
-              className="w-full bg-[#0b0f1d] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/25 outline-none focus:border-sky-500/50 tabular-nums" />
-            {mesa.length > 0 && mesa.length < 6 && (
-              <p className="text-amber-400 text-[10px] mt-1">Faltan {6 - mesa.length} dígito{6 - mesa.length === 1 ? '' : 's'}.</p>
-            )}
-            {mesa.length === 6 && hayPadronMesas && mesaValida === 'checking' && (
-              <p className="text-white/40 text-[10px] mt-1">Verificando mesa…</p>
-            )}
-            {mesa.length === 6 && mesaValida === 'ok' && mesaOficial && (
+              className={`w-full border rounded-xl px-4 py-2.5 text-sm placeholder-white/25 outline-none tabular-nums ${
+                mesaAsignadaOficialmente
+                  ? 'bg-[#0b0f1d]/60 border-white/10 text-white/80 cursor-not-allowed'
+                  : 'bg-[#0b0f1d] border-white/10 text-white focus:border-sky-500/50'}`} />
+            {mesaAsignadaOficialmente ? (
               <p className="text-emerald-400 text-[10px] mt-1 flex items-center gap-1">
-                <CheckCircle size={11} /> Mesa verificada — {mesaOficial.colegio_nombre}
+                <CheckCircle size={11} /> Asignada por tu Personero de Centro de Votación
               </p>
-            )}
-            {mesa.length === 6 && mesaValida === 'no' && (
-              <p className="text-red-400 text-[10px] mt-1">Esta mesa no existe en el padrón oficial. Revisa el número.</p>
+            ) : (
+              <>
+                {mesa.length > 0 && mesa.length < 6 && (
+                  <p className="text-amber-400 text-[10px] mt-1">Faltan {6 - mesa.length} dígito{6 - mesa.length === 1 ? '' : 's'}.</p>
+                )}
+                {mesa.length === 6 && hayPadronMesas && mesaValida === 'checking' && (
+                  <p className="text-white/40 text-[10px] mt-1">Verificando mesa…</p>
+                )}
+                {mesa.length === 6 && mesaValida === 'ok' && mesaOficial && (
+                  <p className="text-emerald-400 text-[10px] mt-1 flex items-center gap-1">
+                    <CheckCircle size={11} /> Mesa verificada — {mesaOficial.colegio_nombre}
+                  </p>
+                )}
+                {mesa.length === 6 && mesaValida === 'no' && (
+                  <p className="text-red-400 text-[10px] mt-1">Esta mesa no existe en el padrón oficial. Revisa el número.</p>
+                )}
+              </>
             )}
           </div>
           <div>

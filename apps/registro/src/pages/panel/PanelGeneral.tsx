@@ -487,6 +487,9 @@ function CentroModal({ c, puedeEditar, puedeEliminar, restringidoAMesa, onClose,
           esMesa={editando.esMesa}
           puedeEliminar={puedeEliminar}
           soloMesa={restringidoAMesa}
+          mesasOcupadas={new Set(
+            c.personeros.filter(p => p.id !== editando.p.id && p.mesa_asignada).map(p => p.mesa_asignada as string),
+          )}
           onClose={() => setEditando(null)}
           onSaved={(id, cambios) => {
             const seMovio = norm(cambios.local_asignado ?? '') !== norm(editando.p.local_asignado ?? '')
