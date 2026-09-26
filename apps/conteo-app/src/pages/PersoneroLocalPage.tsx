@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, getMiPerfil } from '../lib/supabase'
 import {
   Shield, School, MapPin, RefreshCw, LogOut, Search, Users,
-  CheckCircle2, Clock, Loader, Pencil, X, AlertTriangle, GraduationCap, MessageCircle,
+  CheckCircle2, Clock, Loader, Pencil, X, AlertTriangle, GraduationCap, MessageCircle, ChevronRight,
 } from 'lucide-react'
 
 type Personero = {
@@ -46,7 +46,7 @@ const horaPE = (iso: string) =>
   new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
 const normTexto = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
-export default function PersoneroLocalPage() {
+export default function PersoneroLocalPage({ onAbrirConteo }: { onAbrirConteo?: (personeroId: string) => void }) {
   const [perfil, setPerfil]       = useState<any>(null)
   const [personeros, setPersoneros] = useState<Personero[]>([])
   const [totalMesas, setTotalMesas] = useState(0)
@@ -289,9 +289,9 @@ export default function PersoneroLocalPage() {
           ) : (
             <div className="divide-y divide-white/[0.06]">
               {filtrados.map(p => (
-                <div key={p.id}
-                  className={`flex items-center gap-3 px-4 py-3 ${p.marcadoAt ? 'bg-emerald-500/[0.05]' : ''}`}>
-                  <button onClick={() => { setEditandoId(p.id); setQMesa('') }}
+                <div key={p.id} onClick={() => onAbrirConteo?.(p.id)}
+                  className={`flex items-center gap-3 px-4 py-3 ${onAbrirConteo ? 'cursor-pointer hover:bg-white/[0.03]' : ''} ${p.marcadoAt ? 'bg-emerald-500/[0.05]' : ''}`}>
+                  <button onClick={e => { e.stopPropagation(); setEditandoId(p.id); setQMesa('') }}
                     disabled={savingId === p.id}
                     className={`w-14 h-8 rounded-md text-[10px] font-black flex items-center justify-center flex-shrink-0 border transition-colors disabled:opacity-50 ${
                     p.marcadoAt ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300' : 'bg-[#0b0f1d] border-white/10 text-white/40 hover:border-sky-500/40'
@@ -323,7 +323,7 @@ export default function PersoneroLocalPage() {
                       )}
                     </p>
                   </div>
-                  <button onClick={() => marcar(p)} disabled={savingId === p.id}
+                  <button onClick={e => { e.stopPropagation(); marcar(p) }} disabled={savingId === p.id}
                     className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center gap-1.5 flex-shrink-0 transition-all disabled:opacity-50 ${
                       p.marcadoAt
                         ? 'bg-red-500/10 border-red-500/30 text-red-400'
@@ -333,6 +333,7 @@ export default function PersoneroLocalPage() {
                       ? <Loader size={13} className="animate-spin" />
                       : p.marcadoAt ? 'Quitar' : 'Marcar Asistencia'}
                   </button>
+                  {onAbrirConteo && <ChevronRight size={16} className="text-white/20 flex-shrink-0" />}
                 </div>
               ))}
             </div>

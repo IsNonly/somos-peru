@@ -27,6 +27,9 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [perfil, setPerfil] = useState<any>(null)
   const [perfilLoading, setPerfilLoading] = useState(false)
+  // El PCV puede abrir el conteo de uno de sus personeros de mesa desde su propio
+  // panel (PersoneroLocalPage) para registrar el acta en su nombre.
+  const [asistidoId, setAsistidoId] = useState<string | null>(null)
 
   useEffect(() => {
     // Supabase dispara onAuthStateChange no solo en login/logout, sino
@@ -50,6 +53,7 @@ export default function App() {
       userIdAnterior = u?.id ?? null
       if (event === 'SIGNED_OUT') {
         try { sessionStorage.removeItem('conteo_intro_ok') } catch { /* modo privado */ }
+        setAsistidoId(null)
       }
       if (cambio) setUser(u)
     })
@@ -100,9 +104,28 @@ export default function App() {
       return <GateCapacitacion perfil={perfil} pasos={pasos} />
     }
 
-    // Personero de Centro de Votación -> panel de asistencia de su local
+    // Personero de Centro de Votación -> panel de asistencia de su local, salvo
+    // que haya elegido registrar el acta de uno de sus personeros de mesa.
     if (ROLES_LOCAL.includes(rol)) {
-      return <PersoneroLocalPage />
+      if (asistidoId) return (
+        <div className="fixed inset-0 flex flex-col overflow-hidden">
+          <header className="flex items-center gap-2.5 px-4 py-3 bg-[#0b0f19] border-b border-white/8 flex-shrink-0">
+            <div className="flex items-center gap-2 text-indigo-400">
+              <div className="p-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10">
+                <CheckSquare size={18} className="text-indigo-400" />
+              </div>
+              <span className="font-extrabold text-base tracking-tight text-white">VotoReal</span>
+            </div>
+            <span className="text-[9px] font-bold font-mono tracking-wider px-2 py-0.5 rounded-full bg-[#161d31] text-indigo-400 border border-indigo-500/20">
+              MÓVIL
+            </span>
+          </header>
+          <div className="flex-1 overflow-y-auto">
+            <ConteoPage asistidoPersoneroId={asistidoId} onSalirAsistido={() => setAsistidoId(null)} />
+          </div>
+        </div>
+      )
+      return <PersoneroLocalPage onAbrirConteo={setAsistidoId} />
     }
 
     // Coordinadores / Administrador -> su lugar es el panel web, no el conteo

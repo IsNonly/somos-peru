@@ -88,11 +88,19 @@ async function saveGeminiKey(authId: string, key: string) {
   )
 }
 
-export default function ConteoPage() {
+export default function ConteoPage({ asistidoPersoneroId, onSalirAsistido }: {
+  // El PCV puede abrir el conteo de UNO de sus personeros de mesa desde su propio
+  // panel (PersoneroLocalPage) para registrar el acta en su nombre. En ese caso
+  // se carga el perfil de ESE personero (no el del PCV autenticado) y se ocultan
+  // los pasos que no aplican a un registro remoto/asistido (foto de instalación,
+  // electores hábiles).
+  asistidoPersoneroId?: string
+  onSalirAsistido?: () => void
+}) {
   return (
     <>
       <IntroModal />
-      <ConteoPageInner />
+      <ConteoPageInner asistidoPersoneroId={asistidoPersoneroId} onSalirAsistido={onSalirAsistido} />
     </>
   )
 }
@@ -166,7 +174,11 @@ const FOTOS_VACIAS: Record<NivelCandidatura, FotoNivelState> = {
   REGIONAL: { ...FOTO_NIVEL_VACIA }, PROVINCIAL: { ...FOTO_NIVEL_VACIA }, DISTRITAL: { ...FOTO_NIVEL_VACIA },
 }
 
-function ConteoPageInner() {
+function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
+  asistidoPersoneroId?: string
+  onSalirAsistido?: () => void
+}) {
+  const esAsistido = !!asistidoPersoneroId
   const [perfil, setPerfil]           = useState<any>(null)
   const [userId, setUserId]           = useState('')   // id real del perfil (para escrituras)
   const [authId, setAuthId]           = useState('')   // id de auth (para app_config)
@@ -214,12 +226,24 @@ function ConteoPageInner() {
   // a mano -el campo se muestra bloqueado con la mesa que le corresponde de verdad-.
   const mesaAsignadaOficialmente = !!perfil?.mesa_asignada
 
+  // En modo asistido la mesa ya viene oficial (asignada por el propio PCV que está
+  // entrando), así que se confirma sola -no tiene sentido pedirle al PCV un check
+  // manual de algo que él mismo acaba de asignar-.
+  useEffect(() => {
+    if (esAsistido && mesaAsignadaOficialmente) setMesaConfirmada(true)
+  }, [esAsistido, mesaAsignadaOficialmente])
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      // Modo asistido: el PCV entra a registrar el acta de UNO de sus personeros
+      // de mesa -se carga el perfil de ESE personero, no el del PCV autenticado-,
+      // pero la clave de Gemini sigue siendo la del PCV (su propia sesión).
       const [p, key] = await Promise.all([
-        getMiPerfil('*'),
+        asistidoPersoneroId
+          ? supabase.from('profiles').select('*').eq('id', asistidoPersoneroId).maybeSingle().then(r => r.data)
+          : getMiPerfil('*'),
         getGeminiKey(user.id),
       ])
       setUserId(p?.id ?? user.id)   // el id real del perfil, para escrituras
@@ -242,7 +266,7 @@ function ConteoPageInner() {
       }
     }
     init()
-  }, [])
+  }, [asistidoPersoneroId])
 
   // ── Cargar las candidaturas del ámbito del personero ───────────────────
   useEffect(() => {
@@ -592,22 +616,32 @@ function ConteoPageInner() {
     <div className="bg-[#131a2e] border border-white/10 rounded-2xl p-4 flex items-center gap-3">
       <UserCircle2 size={26} className="text-white/70 flex-shrink-0" strokeWidth={1.5} />
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] uppercase tracking-widest text-white/35 font-bold">Personero</p>
+        <p className="text-[10px] uppercase tracking-widest text-white/35 font-bold flex items-center gap-1.5">
+          Personero
+          {esAsistido && (
+            <span className="text-[9px] normal-case tracking-normal font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30 rounded-full px-2 py-0.5">
+              Registrado por tu PCV
+            </span>
+          )}
+        </p>
         <p className="text-white font-bold text-sm truncate">{perfil?.nombre_completo ?? '—'}</p>
         <p className="text-white/40 text-xs truncate">
           DNI: {perfil?.dni ?? '—'} <span className="mx-1 text-white/20">|</span> Distrito: {distritoTxt}
         </p>
       </div>
-      <button onClick={detectarGPS}
-        className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border bg-white/[0.02] flex-shrink-0 ${gpsBtn}`}>
-        {gpsStatus === 'loading'
-          ? <Loader size={13} className="animate-spin" />
-          : <MapPin size={13} />}
-        <span className="hidden sm:inline">Confirmar Llegada</span>
-      </button>
-      <button onClick={() => supabase.auth.signOut()}
+      {!esAsistido && (
+        <button onClick={detectarGPS}
+          className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border bg-white/[0.02] flex-shrink-0 ${gpsBtn}`}>
+          {gpsStatus === 'loading'
+            ? <Loader size={13} className="animate-spin" />
+            : <MapPin size={13} />}
+          <span className="hidden sm:inline">Confirmar Llegada</span>
+        </button>
+      )}
+      <button onClick={() => esAsistido ? onSalirAsistido?.() : supabase.auth.signOut()}
+        title={esAsistido ? 'Volver a mi panel' : 'Salir'}
         className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center justify-center flex-shrink-0">
-        <LogOut size={15} />
+        {esAsistido ? <ChevronLeft size={17} /> : <LogOut size={15} />}
       </button>
     </div>
   )
@@ -633,7 +667,7 @@ function ConteoPageInner() {
           </span>
           Instalación de Mesa de Sufragio
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+        <div className={`grid grid-cols-1 gap-3 items-end ${esAsistido ? 'sm:grid-cols-2' : 'sm:grid-cols-[1fr_1fr_auto]'}`}>
           <div>
             <label className="text-white/40 text-[11px] font-semibold mb-1 block">Mesa de sufragio:</label>
             <input value={mesa} inputMode="numeric" disabled={mesaAsignadaOficialmente} readOnly={mesaAsignadaOficialmente}
@@ -671,16 +705,18 @@ function ConteoPageInner() {
             <input value={centro} disabled readOnly
               className="w-full bg-[#0b0f1d]/60 border border-white/10 rounded-xl px-4 py-2.5 text-white/50 text-sm outline-none cursor-not-allowed" />
           </div>
-          <button onClick={() => instalacionInputRef.current?.click()} disabled={subiendoInstalacion || mesa.length !== 6}
-            className="py-2.5 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap">
-            {subiendoInstalacion
-              ? <Loader size={15} className="animate-spin" />
-              : fotoInstalacion ? <CheckCircle size={15} /> : <Camera size={15} />}
-            {fotoInstalacion ? 'Foto lista' : 'Tomar Foto'}
-          </button>
+          {!esAsistido && (
+            <button onClick={() => instalacionInputRef.current?.click()} disabled={subiendoInstalacion || mesa.length !== 6}
+              className="py-2.5 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap">
+              {subiendoInstalacion
+                ? <Loader size={15} className="animate-spin" />
+                : fotoInstalacion ? <CheckCircle size={15} /> : <Camera size={15} />}
+              {fotoInstalacion ? 'Foto lista' : 'Tomar Foto'}
+            </button>
+          )}
           <input ref={instalacionInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={tomarFotoInstalacion} />
         </div>
-        {fotoInstalacion && (
+        {!esAsistido && fotoInstalacion && (
           <div className="flex items-center gap-2 rounded-xl overflow-hidden border border-white/10 w-fit">
             <img src={fotoInstalacion} alt="Instalación de mesa" className="h-14 w-20 object-cover" />
             <span className="pr-3 text-green-400 text-[11px] font-semibold flex items-center gap-1">
@@ -688,30 +724,37 @@ function ConteoPageInner() {
             </span>
           </div>
         )}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {(() => {
-            // Solo se exige que la mesa esté en el padrón oficial cuando esta
-            // instancia ya tiene uno cargado (tabla `mesas`) -si todavía no se
-            // importó para este distrito, se acepta con solo los 6 dígitos-.
-            const puedeConfirmar = mesa.length === 6 && (!hayPadronMesas || mesaValida === 'ok')
-            return (
-              <label className={`flex items-center gap-1.5 text-sm font-semibold ${puedeConfirmar ? 'cursor-pointer' : 'cursor-not-allowed'} ${mesaConfirmada ? 'text-sky-400' : 'text-white/40'}`}>
-                <input type="checkbox" checked={mesaConfirmada} disabled={!puedeConfirmar}
-                  onChange={e => setMesaConfirmada(e.target.checked && puedeConfirmar)}
-                  className="accent-sky-500 w-4 h-4" />
-                Confirmar mesa
-              </label>
-            )
-          })()}
-          <div className="flex items-center gap-2">
-            <span className="text-sky-400 text-xs font-semibold flex-shrink-0">Electores hábiles:</span>
-            <input value={electoresHabiles} inputMode="numeric"
-              onChange={e => setElectoresHabiles(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              onBlur={guardarElectores}
-              placeholder="Ej. 300"
-              className="w-24 bg-[#0b0f1d] border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs placeholder-white/25 outline-none focus:border-sky-500/50 tabular-nums" />
+        {/* En asistido, si el PCV ya le asignó mesa oficial se confirma sola (ver
+            efecto de arriba); si por algún motivo aún no tiene mesa, se deja el
+            checkbox para que la confirme igual que cualquier registro manual. */}
+        {!(esAsistido && mesaAsignadaOficialmente) && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {(() => {
+              // Solo se exige que la mesa esté en el padrón oficial cuando esta
+              // instancia ya tiene uno cargado (tabla `mesas`) -si todavía no se
+              // importó para este distrito, se acepta con solo los 6 dígitos-.
+              const puedeConfirmar = mesa.length === 6 && (!hayPadronMesas || mesaValida === 'ok')
+              return (
+                <label className={`flex items-center gap-1.5 text-sm font-semibold ${puedeConfirmar ? 'cursor-pointer' : 'cursor-not-allowed'} ${mesaConfirmada ? 'text-sky-400' : 'text-white/40'}`}>
+                  <input type="checkbox" checked={mesaConfirmada} disabled={!puedeConfirmar}
+                    onChange={e => setMesaConfirmada(e.target.checked && puedeConfirmar)}
+                    className="accent-sky-500 w-4 h-4" />
+                  Confirmar mesa
+                </label>
+              )
+            })()}
+            {!esAsistido && (
+              <div className="flex items-center gap-2">
+                <span className="text-sky-400 text-xs font-semibold flex-shrink-0">Electores hábiles:</span>
+                <input value={electoresHabiles} inputMode="numeric"
+                  onChange={e => setElectoresHabiles(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  onBlur={guardarElectores}
+                  placeholder="Ej. 300"
+                  className="w-24 bg-[#0b0f1d] border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs placeholder-white/25 outline-none focus:border-sky-500/50 tabular-nums" />
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Escrutinio: elegir método */}
