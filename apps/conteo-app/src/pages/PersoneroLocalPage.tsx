@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, getMiPerfil } from '../lib/supabase'
 import {
   Shield, School, MapPin, RefreshCw, LogOut, Search, Users,
-  CheckCircle2, Clock, Loader,
+  CheckCircle2, Clock, Loader, Pencil, X, AlertTriangle,
 } from 'lucide-react'
 
 type Personero = {
@@ -16,6 +16,7 @@ type Personero = {
 
 const horaPE = (iso: string) =>
   new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
+const normTexto = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 export default function PersoneroLocalPage() {
   const [perfil, setPerfil]       = useState<any>(null)
@@ -26,6 +27,12 @@ export default function PersoneroLocalPage() {
   const [loading, setLoading]     = useState(true)
   const [savingId, setSavingId]   = useState<string | null>(null)
   const [lastSync, setLastSync]   = useState<Date>(new Date())
+  // Mesas oficiales del colegio (tabla `mesas`, importada de ONPE): el PCV asigna
+  // desde acá el número de mesa de cada personero a su cargo -incluyendo dejar a
+  // alguien "sin mesa" (suplente), listo para cubrir a quien no se presente-.
+  const [mesasOficiales, setMesasOficiales] = useState<string[]>([])
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [qMesa, setQMesa]         = useState('')
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -60,6 +67,10 @@ export default function PersoneroLocalPage() {
         .limit(1)
         .maybeSingle()
       setTotalMesas(col?.total_mesas || (pers?.length ?? 0))
+
+      const { data: mesasCol } = await supabase
+        .from('mesas').select('numero').eq('colegio_nombre', local).order('numero')
+      setMesasOficiales((mesasCol ?? []).map((m: any) => m.numero))
     }
 
     setLastSync(new Date())
@@ -80,6 +91,25 @@ export default function PersoneroLocalPage() {
     }
     setSavingId(null)
   }
+
+  const asignarMesa = async (per: Personero, numero: string | null) => {
+    setSavingId(per.id)
+    const { error } = await supabase.from('profiles').update({ mesa_asignada: numero }).eq('id', per.id)
+    if (!error) {
+      setPersoneros(prev => prev.map(x => x.id === per.id ? { ...x, mesa: numero } : x))
+      setEditandoId(null)
+      setQMesa('')
+    }
+    setSavingId(null)
+  }
+
+  // Quién ya tiene cada mesa, para avisar antes de reasignarla (ej. al activar
+  // un suplente, primero hay que soltar la mesa del titular ausente).
+  const mesaOcupadaPor = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of personeros) if (p.mesa) m.set(p.mesa, p.nombre)
+    return m
+  }, [personeros])
 
   const marcados   = personeros.filter(p => p.marcadoAt).length
   const pendientes = personeros.length - marcados
@@ -214,11 +244,17 @@ export default function PersoneroLocalPage() {
               {filtrados.map(p => (
                 <div key={p.id}
                   className={`flex items-center gap-3 px-4 py-3 ${p.marcadoAt ? 'bg-emerald-500/[0.05]' : ''}`}>
-                  <div className={`w-14 h-8 rounded-md text-[10px] font-black flex items-center justify-center flex-shrink-0 border ${
-                    p.marcadoAt ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300' : 'bg-[#0b0f1d] border-white/10 text-white/40'
+                  <button onClick={() => { setEditandoId(p.id); setQMesa('') }}
+                    disabled={savingId === p.id}
+                    className={`w-14 h-8 rounded-md text-[10px] font-black flex items-center justify-center flex-shrink-0 border transition-colors disabled:opacity-50 ${
+                    p.marcadoAt ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300' : 'bg-[#0b0f1d] border-white/10 text-white/40 hover:border-sky-500/40'
                   }`}>
-                    {p.mesa || 'N/A'}
-                  </div>
+                    {p.mesa || (
+                      <span className="flex flex-col items-center leading-none gap-0.5 text-amber-400">
+                        <Pencil size={9} /> <span className="text-[7px]">Asignar</span>
+                      </span>
+                    )}
+                  </button>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold truncate">{p.nombre}</p>
                     <p className="text-white/40 text-[11px] mt-0.5 truncate">
@@ -250,6 +286,72 @@ export default function PersoneroLocalPage() {
           Última actualización: {lastSync.toLocaleTimeString('es-PE')} · Sistema Electoral 2026
         </p>
       </div>
+
+      {editandoId && (() => {
+        const per = personeros.find(x => x.id === editandoId)
+        if (!per) return null
+        const filtradas = qMesa.trim()
+          ? mesasOficiales.filter(m => m.includes(qMesa.trim()))
+          : mesasOficiales
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            onClick={() => { setEditandoId(null); setQMesa('') }}>
+            <div className="bg-[#131a2e] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm max-h-[80vh] flex flex-col"
+              onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 flex-shrink-0">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold truncate">{per.nombre}</p>
+                  <p className="text-white/40 text-[11px]">Asignar mesa oficial</p>
+                </div>
+                <button onClick={() => { setEditandoId(null); setQMesa('') }} className="text-white/40 hover:text-white flex-shrink-0">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="p-3 flex-shrink-0">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                  <input value={qMesa} onChange={e => setQMesa(e.target.value.replace(/\D/g, ''))} autoFocus
+                    placeholder="Buscar N° de mesa..." inputMode="numeric"
+                    className="w-full bg-[#0b0f1d] border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-sm placeholder-white/25 outline-none focus:border-sky-500/50 tabular-nums" />
+                </div>
+                <button onClick={() => asignarMesa(per, null)} disabled={!per.mesa || savingId === per.id}
+                  className="w-full mt-2 py-2 rounded-xl text-xs font-bold border border-amber-500/30 bg-amber-500/10 text-amber-300 disabled:opacity-40 flex items-center justify-center gap-1.5">
+                  Dejar sin mesa (suplente)
+                </button>
+              </div>
+              <div className="overflow-y-auto flex-1 divide-y divide-white/[0.06] pb-2">
+                {mesasOficiales.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-xs text-white/30">
+                    Este colegio todavía no tiene su padrón de mesas cargado.
+                  </p>
+                ) : filtradas.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-xs text-white/30">Sin coincidencias.</p>
+                ) : filtradas.map(numero => {
+                  const ocupante = mesaOcupadaPor.get(numero)
+                  const esLaMia = numero === per.mesa
+                  return (
+                    <button key={numero} onClick={() => {
+                        if (ocupante && !esLaMia && !window.confirm(`La mesa ${numero} ya está asignada a ${ocupante}. ¿Reasignarla a ${per.nombre}?`)) return
+                        asignarMesa(per, numero)
+                      }}
+                      disabled={savingId === per.id}
+                      className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between gap-2 transition-colors disabled:opacity-50 ${
+                        esLaMia ? 'bg-sky-500/15 text-sky-300' : 'text-white/80 hover:bg-white/5'
+                      }`}>
+                      <span className="font-mono font-semibold tabular-nums">{numero}</span>
+                      {esLaMia
+                        ? <span className="text-[10px] font-bold text-sky-400">ASIGNADA A ESTE</span>
+                        : ocupante
+                          ? <span className="text-[10px] text-amber-400 flex items-center gap-1 truncate max-w-[9rem]"><AlertTriangle size={10} className="flex-shrink-0" /> {ocupante}</span>
+                          : <span className="text-[10px] text-emerald-400">Libre</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
