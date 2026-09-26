@@ -56,7 +56,6 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, on
   const hayPadronMesas = (mesasDisponibles?.length ?? 0) > 0
   const filtradasMesa = (mesasDisponibles ?? []).filter(m =>
     !qMesa.trim() || m.numero.includes(qMesa.trim()) || normTexto(m.colegio_nombre ?? '').includes(normTexto(qMesa)))
-  const mesaSeleccionada = (mesasDisponibles ?? []).find(m => m.numero === mesa)
 
   const elegirMesa = (m: MesaOpt) => {
     setMesa(m.numero)
@@ -106,7 +105,7 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, on
               <span className="text-[11px] font-semibold text-slate-500">Mesa asignada</span>
               <div className="relative">
                 <input
-                  value={abiertoMesa ? qMesa : (mesa ? `${mesa}${mesaSeleccionada?.colegio_nombre ? ' — ' + mesaSeleccionada.colegio_nombre : ''}` : '')}
+                  value={abiertoMesa ? qMesa : mesa}
                   onChange={e => { setQMesa(e.target.value); setAbiertoMesa(true) }}
                   onFocus={() => { setQMesa(''); setAbiertoMesa(true) }}
                   onBlur={() => setTimeout(() => setAbiertoMesa(false), 150)}
@@ -120,7 +119,6 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, on
                         onClick={() => elegirMesa(m)}
                         className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-sky-50 transition-colors">
                         <span className="font-mono font-semibold">{m.numero}</span>
-                        {m.colegio_nombre && <span className="text-slate-400"> — {m.colegio_nombre}</span>}
                       </button>
                     )) : (
                       <p className="px-3 py-2.5 text-xs text-slate-400">Sin coincidencias.</p>
