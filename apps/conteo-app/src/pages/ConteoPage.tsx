@@ -597,6 +597,12 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
         Mesa <span className="text-white font-mono font-bold">{perfil?.mesa_asignada ?? mesa}</span> —
         solo 1 envío permitido.
       </p>
+      {esAsistido && (
+        <button onClick={onSalirAsistido}
+          className="flex items-center gap-2 text-sm font-bold text-sky-400 border border-sky-500/30 bg-sky-500/10 rounded-xl px-4 py-2.5">
+          <ChevronLeft size={16} /> Volver a mi panel — registrar otro personero
+        </button>
+      )}
     </div>
   )
 
