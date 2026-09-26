@@ -7,18 +7,25 @@ import CoordinadoresPage from './pages/CoordinadoresPage'
 import PersoneroMonitorPage from './pages/PersoneroMonitorPage'
 import CentrosPage from './pages/CentrosPage'
 import PadronPage from './pages/PadronPage'
+import FotosPage from './pages/FotosPage'
 import Layout from './components/Layout'
 import type { User } from '@supabase/supabase-js'
+
+// El PCV (Personero de Centro de Votación) puede entrar SOLO para ver las
+// fotos de sus propios personeros de mesa -no el resto del dashboard-.
+const ROLES_PCV = new Set(['Personero de Centro de Votación', 'Personero de Local de Votación', 'Coordinador de Local'])
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [esPCV, setEsPCV] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const checkRole = async (u: User | null) => {
     if (!u) {
       setUser(null)
       setIsAdmin(false)
+      setEsPCV(false)
       setLoading(false)
       return
     }
@@ -32,11 +39,14 @@ export default function App() {
     }
 
     const rol = data?.rol || ''
-    // Solo roles directivos pueden acceder al centro de cómputo / dashboard
-    const permitido = rol.includes('Administrador') || rol.includes('Coordinador')
-    
+    const esPcvRol = ROLES_PCV.has(rol)
+    // Roles directivos entran a todo el dashboard; el PCV entra pero acotado
+    // (solo la pestaña Fotos, ver rutas abajo).
+    const permitido = rol.includes('Administrador') || rol.includes('Coordinador') || esPcvRol
+
     setUser(u)
     setIsAdmin(permitido)
+    setEsPCV(esPcvRol)
     setLoading(false)
   }
 
@@ -70,14 +80,16 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={!user || !isAdmin ? <LoginPage /> : <Navigate to="/dashboard" />} />
-        <Route path="/" element={user && isAdmin ? <Layout /> : <Navigate to="/login" />}>
-          <Route index element={<Navigate to="/dashboard" />} />
-          <Route path="dashboard"     element={<DashboardPage />} />
-          <Route path="coordinadores" element={<CoordinadoresPage />} />
-          <Route path="personeros"    element={<PersoneroMonitorPage />} />
-          <Route path="centros"       element={<CentrosPage />} />
-          <Route path="padron"        element={<PadronPage />} />
+        <Route path="/login" element={!user || !isAdmin ? <LoginPage /> : <Navigate to={esPCV ? '/fotos' : '/dashboard'} />} />
+        <Route path="/" element={user && isAdmin ? <Layout esPCV={esPCV} /> : <Navigate to="/login" />}>
+          <Route index element={<Navigate to={esPCV ? '/fotos' : '/dashboard'} />} />
+          <Route path="fotos" element={<FotosPage />} />
+          {/* El PCV solo ve "Fotos" — el resto del dashboard es de coordinadores/admin. */}
+          <Route path="dashboard"     element={esPCV ? <Navigate to="/fotos" /> : <DashboardPage />} />
+          <Route path="coordinadores" element={esPCV ? <Navigate to="/fotos" /> : <CoordinadoresPage />} />
+          <Route path="personeros"    element={esPCV ? <Navigate to="/fotos" /> : <PersoneroMonitorPage />} />
+          <Route path="centros"       element={esPCV ? <Navigate to="/fotos" /> : <CentrosPage />} />
+          <Route path="padron"        element={esPCV ? <Navigate to="/fotos" /> : <PadronPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

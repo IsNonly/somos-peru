@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Users, CheckCircle2, Building2, Menu, RotateCcw, Download } from 'lucide-react'
+import { LayoutDashboard, Users, CheckCircle2, Building2, Menu, RotateCcw, Download, Camera } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import { FiltrosProvider, useFiltros, type Filtros } from '../lib/filtros'
@@ -9,7 +9,10 @@ const NAV = [
   { to: '/coordinadores', icon: Users,           label: 'Coordinador' },
   { to: '/personeros',    icon: CheckCircle2,    label: 'Personeros' },
   { to: '/centros',       icon: Building2,       label: 'Centros de Votación' },
+  { to: '/fotos',         icon: Camera,          label: 'Fotos' },
 ]
+// El PCV solo ve "Fotos" -el resto del dashboard es de coordinadores/admin-.
+const NAV_PCV = [{ to: '/fotos', icon: Camera, label: 'Fotos' }]
 
 function Reloj() {
   const [t, setT] = useState(() => new Date().toLocaleTimeString('es-PE'))
@@ -64,11 +67,12 @@ function BarraFiltros() {
   )
 }
 
-function Shell() {
+function Shell({ esPCV }: { esPCV: boolean }) {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
   const { ambitoLabel } = useFiltros()
   const logout = async () => { await supabase.auth.signOut(); navigate('/login') }
+  const nav = esPCV ? NAV_PCV : NAV
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-800">
@@ -83,7 +87,7 @@ function Shell() {
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-widest text-slate-600">Principal</p>
-          {NAV.map(({ to, icon: Icon, label }) => (
+          {nav.map(({ to, icon: Icon, label }) => (
             <NavLink key={to} to={to} onClick={() => setOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all
@@ -112,8 +116,8 @@ function Shell() {
               <Download size={13} /> Exportar
             </button>
             <span className="flex items-center gap-1.5 bg-sky-100 text-sky-700 text-xs font-bold rounded-full px-2.5 py-1">
-              <span className="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[10px]">A</span>
-              Administrador
+              <span className="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[10px]">{esPCV ? 'P' : 'A'}</span>
+              {esPCV ? 'Personero de Centro' : 'Administrador'}
             </span>
             <button onClick={logout}
               className="text-xs font-semibold text-slate-600 border border-slate-300 rounded-md px-3 py-1.5">
@@ -132,10 +136,10 @@ function Shell() {
   )
 }
 
-export default function Layout() {
+export default function Layout({ esPCV = false }: { esPCV?: boolean }) {
   return (
     <FiltrosProvider>
-      <Shell />
+      <Shell esPCV={esPCV} />
     </FiltrosProvider>
   )
 }
