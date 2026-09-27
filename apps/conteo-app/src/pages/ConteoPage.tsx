@@ -1092,11 +1092,6 @@ function SeccionVotos({ bloque, total, votos, onDelta }: {
               {bloque.titulo} ({bloque.candidatos.length} listas)
             </p>
           </div>
-          {bloque.provisional && (
-            <span className="inline-block text-[9px] font-semibold uppercase tracking-wide px-2 py-1 rounded-md border text-amber-300/90 border-amber-500/30 bg-amber-500/10">
-              Lista provisional — verifica contra tu acta física
-            </span>
-          )}
         </div>
         <div className="text-right flex-shrink-0">
           <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold">Votos</p>
