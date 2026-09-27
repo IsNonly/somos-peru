@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import * as XLSX from 'xlsx'
-import { Doughnut, Bar } from 'react-chartjs-2'
+import { Doughnut } from 'react-chartjs-2'
 import {
-  Chart as ChartJS, ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend,
+  Chart as ChartJS, ArcElement, Tooltip, Legend,
 } from 'chart.js'
 import {
   Search, Download, Users, GraduationCap, PlayCircle, BookOpenCheck, ClipboardCheck,
-  MessageCircle, PieChart, BarChart3, CheckCircle2, Pencil, Lock, Save, Trash2,
+  MessageCircle, PieChart, CheckCircle2, Pencil, Lock, Save, Trash2,
   User, Phone, ShieldCheck, MapPin, Building2, Hash, Sparkles, Filter, KeyRound,
 } from 'lucide-react'
 import { supabase, AMBITO_DEPARTAMENTO } from '../../lib/supabase'
@@ -17,7 +17,7 @@ import {
 } from '../../lib/panel'
 import { eliminarPersoneroCompleto, cambiarPasswordPersonero } from '../../lib/personeros'
 
-ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend)
+ChartJS.register(ArcElement, Tooltip, Legend)
 
 const wa = (tel?: string | null, msg?: string) =>
   tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}${msg ? `?text=${encodeURIComponent(msg)}` : ''}` : undefined
@@ -113,30 +113,6 @@ export default function PanelCapacitaciones() {
     }],
   }
 
-  // Agrupado por COLEGIO (no por distrito): esta instancia opera un solo
-  // distrito, así que "por distrito" siempre daba una sola barra — por
-  // colegio sí distingue de verdad dónde falta avanzar.
-  const porColegio = useMemo(() => {
-    const map = new Map<string, { total: number; video: number; pdf: number }>()
-    for (const p of cohorte) {
-      const local = p.local_asignado || p.local_votacion || 'Sin local asignado'
-      const e = map.get(local) ?? { total: 0, video: 0, pdf: 0 }
-      e.total++
-      if ((p.videos_vistos ?? 0) >= 1) e.video++
-      if ((p.pdfs_vistos ?? 0) >= 1) e.pdf++
-      map.set(local, e)
-    }
-    return [...map.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 10)
-  }, [cohorte])
-
-  const barData = {
-    labels: porColegio.map(([local]) => local),
-    datasets: [
-      { label: 'Video completo (1/1)', data: porColegio.map(([, v]) => v.video), backgroundColor: '#0ea5e9', borderRadius: 5 },
-      { label: 'Cartilla leída', data: porColegio.map(([, v]) => v.pdf), backgroundColor: '#a855f7', borderRadius: 5 },
-    ],
-  }
-
   const filtrados = useMemo(() => {
     const s = q.trim().toLowerCase()
     return conEstado.filter(({ p, estado }) => {
@@ -182,45 +158,25 @@ export default function PanelCapacitaciones() {
         </div>
       </section>
 
-      <div className="grid lg:grid-cols-5 gap-4">
-        <section className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-4">
-          <p className="text-sm font-extrabold text-slate-900 mb-3 flex items-center gap-2">
-            <PieChart size={15} /> Estado de Capacitación
-          </p>
-          {kpis.total === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-10">Sin personeros registrados todavía.</p>
-          ) : (
-            <>
-              <div className="max-w-[220px] mx-auto">
-                <Doughnut data={donutData} options={{ plugins: { legend: { display: false } }, cutout: '68%' }} />
-              </div>
-              <div className="mt-4 space-y-1.5 text-xs">
-                <Leyenda color="#16a34a" label="Capacitación completa" n={kpis.completo} />
-                <Leyenda color="#d97706" label="En proceso" n={cohorte.length - kpis.completo - kpis.noiniciado} />
-                <Leyenda color="#dc2626" label="Sin iniciar" n={kpis.noiniciado} />
-              </div>
-            </>
-          )}
-        </section>
-
-        <section className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl p-4">
-          <p className="text-sm font-extrabold text-slate-900 mb-3 flex items-center gap-2">
-            <BarChart3 size={15} /> Video vs. Cartilla por Colegio (top 10)
-          </p>
-          {porColegio.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-10">Sin datos por colegio.</p>
-          ) : (
-            <Bar data={barData} options={{
-              responsive: true,
-              plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
-              scales: {
-                x: { ticks: { font: { size: 9 }, maxRotation: 45, minRotation: 45, autoSkip: false } },
-                y: { beginAtZero: true, ticks: { stepSize: 1 } },
-              },
-            }} />
-          )}
-        </section>
-      </div>
+      <section className="max-w-md bg-white border border-slate-200 rounded-2xl p-4">
+        <p className="text-sm font-extrabold text-slate-900 mb-3 flex items-center gap-2">
+          <PieChart size={15} /> Estado de Capacitación
+        </p>
+        {kpis.total === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-10">Sin personeros registrados todavía.</p>
+        ) : (
+          <>
+            <div className="max-w-[220px] mx-auto">
+              <Doughnut data={donutData} options={{ plugins: { legend: { display: false } }, cutout: '68%' }} />
+            </div>
+            <div className="mt-4 space-y-1.5 text-xs">
+              <Leyenda color="#16a34a" label="Capacitación completa" n={kpis.completo} />
+              <Leyenda color="#d97706" label="En proceso" n={cohorte.length - kpis.completo - kpis.noiniciado} />
+              <Leyenda color="#dc2626" label="Sin iniciar" n={kpis.noiniciado} />
+            </div>
+          </>
+        )}
+      </section>
 
       <section className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
