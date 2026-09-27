@@ -219,7 +219,7 @@ export default function PanelGeneral() {
           <Building2 size={15} /> Mi Centro de Votación
         </p>
         {centroPropio ? (
-          <Card c={centroPropio} onClick={() => setSel(centroPropio)} vistaPropia />
+          <Card c={centroPropio} onClick={() => setSel(centroPropio)} />
         ) : (
           <p className="text-sm text-slate-400 py-10 text-center">
             No encontramos un centro de votación asignado a tu perfil. Verifica con tu coordinador que tu "Local de Votación Asignado" esté correctamente registrado.
@@ -514,12 +514,8 @@ function Grid({ centros, borde, onPick }: { centros: CentroFila[]; borde?: strin
   )
 }
 
-function Card({ c, borde, onClick, vistaPropia }: {
+function Card({ c, borde, onClick }: {
   c: CentroFila; borde?: string; onClick: () => void
-  // El PCV viendo SU PROPIA tarjeta ya sabe que tiene Personero de Centro
-  // (es él mismo) y no le importa la zona de coordinación -eso es información
-  // para admin/coordinador, no para él-.
-  vistaPropia?: boolean
 }) {
   const cov = c.cobertura >= 100 ? '#16a34a' : c.cobertura >= 40 ? '#d97706' : '#dc2626'
   return (
@@ -530,12 +526,6 @@ function Card({ c, borde, onClick, vistaPropia }: {
         <span className="text-[11px] font-bold text-rose-600 bg-rose-50 rounded px-2 py-0.5 flex items-center gap-1">
           <MapPin size={11} /> {c.distrito ?? '—'}
         </span>
-        {!vistaPropia && (
-          <span className={`text-[10px] font-bold rounded-full px-2 py-1 ${
-            c.pcv ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-            {c.pcv ? '✓ Con Personero de Centro' : '⚠ Sin Personero de Centro'}
-          </span>
-        )}
       </div>
 
       <div>
@@ -565,10 +555,6 @@ function Card({ c, borde, onClick, vistaPropia }: {
 
       <div className="flex flex-col gap-1.5 text-xs">
         <Linea tag="PCV" cls="bg-emerald-100 text-emerald-700" p={c.pcv} vacio="Sin Personero de Centro" />
-        {!vistaPropia && (
-          <Linea tag="Zonal" cls="bg-violet-100 text-violet-700"
-            p={c.zonal ? { nombre: c.zonal.nombre, dni: c.zonal.dni, celular: c.zonal.celular } : null} vacio="Sin zonal" />
-        )}
       </div>
     </div>
   )
