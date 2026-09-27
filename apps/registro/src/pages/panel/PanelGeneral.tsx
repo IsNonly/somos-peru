@@ -66,8 +66,6 @@ export default function PanelGeneral() {
   const [fDist, setFDist] = useState('')
   const [fRol, setFRol] = useState('')
   const [fExp, setFExp] = useState('')
-  const [fMov, setFMov] = useState('')
-  const [fComp, setFComp] = useState('')
   const [chip, setChip] = useState<'todos' | 'multi' | 'unicos' | 'sinzonal'>('todos')
   const [agrupar, setAgrupar] = useState(true)
 
@@ -153,11 +151,9 @@ export default function PanelGeneral() {
       if (fDist && p.distrito_asignado !== fDist && p.distrito_vota !== fDist) return false
       if (fRol && rolNorm(p.rol) !== fRol) return false
       if (fExp && (fExp === 'si') !== !!p.tiene_experiencia) return false
-      if (fMov && (fMov === 'si') !== !!p.cuenta_movilidad) return false
-      if (fComp && (fComp === 'si') !== !!p.se_compromete) return false
       return true
     })
-  }, [d.perfiles, q, fDist, fRol, fExp, fMov, fComp])
+  }, [d.perfiles, q, fDist, fRol, fExp])
 
   // Centros filtrados por búsqueda / distrito / chip
   const filtrarCentro = (c: CentroFila) => {
@@ -255,8 +251,6 @@ export default function PanelGeneral() {
           <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={esProvincial ? distritosProvincia : distritos} disabled={bloqueado('dist')} />
           <Sel v={fRol} set={setFRol} all="🛡️ Todos los roles" opts={ROLES} />
           <Sel v={fExp} set={setFExp} all="⭐ Exp: Todos" opts={[['si', 'Con experiencia'], ['no', 'Sin experiencia']]} />
-          <Sel v={fMov} set={setFMov} all="🚗 Mov: Todos" opts={[['si', 'Con movilidad'], ['no', 'Sin movilidad']]} />
-          <Sel v={fComp} set={setFComp} all="📅 Comp: Todos" opts={[['si', 'Comprometido'], ['no', 'Pendiente']]} />
         </div>
         <div className="flex items-center justify-between text-xs">
           <span className="bg-sky-50 text-sky-700 font-bold rounded-full px-3 py-1">{perfilesFiltrados.length} personeros</span>
