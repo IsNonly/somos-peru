@@ -124,7 +124,6 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
         </div>
         <Campo label="Nombre completo" value={nombre} onChange={setNombre} />
         <Campo label="Celular" value={celular} onChange={setCelular} />
-        <Campo label="Correo" value={correo} onChange={setCorreo} />
         {hayColegios ? (
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-500">Local de Votación Asignado</span>

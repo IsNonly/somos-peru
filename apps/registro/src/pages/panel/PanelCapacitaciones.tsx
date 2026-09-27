@@ -510,8 +510,10 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Campo label="Rol a Desempeñar" icon={ShieldCheck}>
+              {/* Solo roles de personero: promover a Coordinador/Administrador
+                  no es algo que deba hacerse desde este editor rápido. */}
               <select value={rolSel} onChange={e => setRolSel(e.target.value)} className={inputCls}>
-                {[ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST, 'Administrador General'].map(r => <option key={r} value={r}>{r}</option>)}
+                {[ROL_MESA, ROL_LOCAL].map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </Campo>
             <Campo label="Estado de Credencial" icon={ShieldCheck}>
