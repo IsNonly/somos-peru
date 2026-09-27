@@ -19,7 +19,10 @@ interface PanelCtx {
   ambitoListo: boolean
 }
 
-const ROLES = [ROL_MESA, ROL_LOCAL]
+// El Administrador General sí puede filtrar por cualquier rol (incluida la
+// jerarquía de coordinadores); el resto solo necesita ver personeros.
+const ROLES_BASICO = [ROL_MESA, ROL_LOCAL]
+const ROLES_TODOS = [ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST, 'Administrador General']
 const wa = (tel?: string | null) => tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}` : undefined
 
 // Aplica los cambios guardados en el modal de edición al Persona que corresponda
@@ -249,7 +252,7 @@ export default function PanelGeneral() {
           <Sel v={fDepto} set={setDepto} all={`🗺️ ${AMBITO_DEPARTAMENTO}`} opts={departamentos} disabled={bloqueado('depto')} />
           <Sel v={fProv} set={setProv} all="Todas las provincias" opts={provincias} disabled={bloqueado('prov')} />
           <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={esProvincial ? distritosProvincia : distritos} disabled={bloqueado('dist')} />
-          <Sel v={fRol} set={setFRol} all="🛡️ Todos los roles" opts={ROLES} />
+          <Sel v={fRol} set={setFRol} all="🛡️ Todos los roles" opts={esAdmin ? ROLES_TODOS : ROLES_BASICO} />
           <Sel v={fExp} set={setFExp} all="⭐ Exp: Todos" opts={[['si', 'Con experiencia'], ['no', 'Sin experiencia']]} />
         </div>
         <div className="flex items-center justify-between text-xs">
