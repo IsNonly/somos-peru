@@ -19,7 +19,7 @@ interface PanelCtx {
   ambitoListo: boolean
 }
 
-const ROLES = [ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST, 'Administrador General']
+const ROLES = [ROL_MESA, ROL_LOCAL]
 const wa = (tel?: string | null) => tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}` : undefined
 
 // Aplica los cambios guardados en el modal de edición al Persona que corresponda
