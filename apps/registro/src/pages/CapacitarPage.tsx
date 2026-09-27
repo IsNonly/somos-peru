@@ -374,9 +374,9 @@ export default function CapacitarPage() {
               <div>
                 <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-[#0b3d6b] text-white">
                   <p className="text-xs sm:text-sm font-bold truncate">
-                    Curso virtual para personeros ERM 2026 – Módulo 1 / Oficina Nacional de Procesos Electorales
+                    Capacitación para personeros ERM2026
                   </p>
-                  <span className="text-[11px] font-semibold text-sky-200 flex-shrink-0">Video Oficial</span>
+                  <span className="text-[11px] font-semibold text-sky-200 flex-shrink-0">Fuente: ONPE</span>
                 </div>
 
                 <div className="p-4 sm:p-5 space-y-4">
