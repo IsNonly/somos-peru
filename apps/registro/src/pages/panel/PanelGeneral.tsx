@@ -231,7 +231,7 @@ export default function PanelGeneral() {
           // que un administrador, pero acotado a su propio centro de votación. Solo
           // eliminar personeros sigue siendo exclusivo de Administrador General.
           <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital || esPCV} puedeEliminar={esAdmin}
-            colegios={d.colegios.map(c => c.nombre)} ocultarZona={esPCV}
+            colegios={d.colegios.map(c => c.nombre)}
             onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} onEliminado={onPersoneroEliminado} />
         )}
       </div>
@@ -347,17 +347,12 @@ export default function PanelGeneral() {
   )
 }
 
-function CentroModal({ c, puedeEditar, puedeEliminar, colegios, ocultarZona, onClose, onActualizado, onEliminado }: {
+function CentroModal({ c, puedeEditar, puedeEliminar, colegios, onClose, onActualizado, onEliminado }: {
   c: CentroFila; puedeEditar: boolean; puedeEliminar: boolean; colegios: string[]
-  // Al PCV no le interesa la zona multi-colegio de su coordinador -esa
-  // agrupación es para que el coordinador organice SUS colegios, no algo que
-  // el PCV de un único centro necesite ver-.
-  ocultarZona?: boolean
   onClose: () => void
   onActualizado: (id: string, cambios: CambiosPersonero) => void
   onEliminado: (id: string) => void
 }) {
-  const [t, setT] = useState<'personeros' | 'zona'>('personeros')
   const [editando, setEditando] = useState<{ p: Persona; esMesa: boolean } | null>(null)
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
@@ -374,25 +369,8 @@ function CentroModal({ c, puedeEditar, puedeEliminar, colegios, ocultarZona, onC
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-lg leading-none">✕</button>
         </div>
 
-        {!ocultarZona && (
-          <div className="flex gap-2 p-3">
-            <button onClick={() => setT('personeros')}
-              className={`flex-1 text-sm font-bold rounded-lg px-3 py-2 flex items-center justify-center gap-1.5 ${
-                t === 'personeros' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-              <Users size={14} /> Personeros ({c.nPersoneros})
-            </button>
-            <button onClick={() => setT('zona')}
-              className={`flex-1 text-sm font-bold rounded-lg px-3 py-2 flex items-center justify-center gap-1.5 ${
-                t === 'zona' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-              <GraduationCap size={14} /> Zona ({c.zonal ? c.zonal.nColegios : 0} loc.)
-            </button>
-          </div>
-        )}
-
-        <div className="p-4 pt-0 space-y-3 max-h-[60vh] overflow-y-auto">
-          {(ocultarZona || t === 'personeros') ? (
-            <>
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+        <div className="p-4 pt-3 space-y-3 max-h-[60vh] overflow-y-auto">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                 <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wide flex items-center gap-1.5">
                   🪪 Personero de Centro de Votación (PCV)
                 </p>
@@ -449,38 +427,6 @@ function CentroModal({ c, puedeEditar, puedeEliminar, colegios, ocultarZona, onC
                   ))}
                 </div>
               )}
-            </>
-          ) : (
-            <>
-              {c.zonal ? (
-                <>
-                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
-                    <p className="text-[11px] font-bold text-violet-700 uppercase tracking-wide">Zonal (Coordinador Provincial)</p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <div>
-                        <p className="font-bold text-slate-800 text-sm">{c.zonal.nombre}</p>
-                        <p className="text-xs text-slate-500">DNI: {c.zonal.dni ?? '—'} · {c.zonal.nColegios} colegios a cargo</p>
-                      </div>
-                      {c.zonal.celular && (
-                        <a href={wa(c.zonal.celular)} target="_blank" rel="noreferrer"
-                          className="text-xs text-emerald-600 font-bold flex items-center gap-1"><Phone size={12} /> {c.zonal.celular}</a>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Colegios de esta zona</p>
-                  <ol className="space-y-1 text-sm list-decimal list-inside">
-                    {c.zonal.lista.map((n, i) => (
-                      <li key={i} className={n.toUpperCase() === c.nombre.toUpperCase() ? 'font-bold text-slate-900' : 'text-slate-600'}>
-                        {n}{n.toUpperCase() === c.nombre.toUpperCase() && ' ← este'}
-                      </li>
-                    ))}
-                  </ol>
-                </>
-              ) : (
-                <p className="text-sm text-slate-400">Este centro no pertenece a ninguna zona multi-colegio.</p>
-              )}
-            </>
-          )}
         </div>
       </div>
       {editando && (
