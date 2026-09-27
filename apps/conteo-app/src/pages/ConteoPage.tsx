@@ -940,7 +940,7 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
 
       {/* Cabeceras de columna */}
       <div className="flex items-center justify-between px-3 text-white/30 text-[10px] font-bold uppercase tracking-widest">
-        <span>Partido {'·'} Candidato</span>
+        <span>Partido</span>
         <span>Conteo votos</span>
       </div>
 
@@ -1155,9 +1155,6 @@ function FilaCandidato({ candidato, accent, value, onDelta }: {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-white text-xs font-bold leading-tight truncate">{candidato.partido}</p>
-        {candidato.nombre && (
-          <p className="text-white/40 text-[10px] leading-tight mt-0.5 truncate">{candidato.nombre}</p>
-        )}
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <button type="button" onClick={() => onDelta(-1)} disabled={value === 0}

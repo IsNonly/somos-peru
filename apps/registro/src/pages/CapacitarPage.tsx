@@ -305,7 +305,7 @@ export default function CapacitarPage() {
     </div>
   )
 
-  const pasoTitulo = paso === 'video' ? 'Ver Curso' : paso === 'cartilla' ? 'Leer Cartilla' : 'Evaluación'
+  const pasoTitulo = paso === 'video' ? 'Ver Video' : paso === 'cartilla' ? 'Leer Cartilla' : 'Evaluación'
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -351,7 +351,7 @@ export default function CapacitarPage() {
                 Menú principal
               </p>
               <div className="flex lg:flex-col gap-1.5 overflow-x-auto">
-                <PasoNav n={1} label="Ver curso" icon={Play} activo={paso === 'video'}
+                <PasoNav n={1} label="Ver video" icon={Play} activo={paso === 'video'}
                   bloqueado={false} completado={doneVideo} onClick={() => irAPaso('video')} />
                 <PasoNav n={2} label="Cartilla" icon={BookOpen} activo={paso === 'cartilla'}
                   bloqueado={!unlockedCartilla} completado={doneCartilla} onClick={() => irAPaso('cartilla')} />

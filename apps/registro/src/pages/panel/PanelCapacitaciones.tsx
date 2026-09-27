@@ -151,8 +151,8 @@ export default function PanelCapacitaciones() {
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <Kpi color="#3b82f6" icon={Users} value={kpis.total} label="Sujetos a Capacitación" sub="Mesa + Local + Coord. Distrital" />
-          <Kpi color="#0ea5e9" icon={PlayCircle} value={`${kpis.videoPct}%`} label="Video Completo" sub={`${kpis.videoOk} de ${kpis.total}`} />
-          <Kpi color="#a855f7" icon={BookOpenCheck} value={`${kpis.pdfPct}%`} label="Cartilla Leída" sub={`${kpis.pdfOk} de ${kpis.total}`} />
+          <Kpi color="#0ea5e9" icon={PlayCircle} value={`${kpis.videoPct}%`} label="Video" sub={`${kpis.videoOk} de ${kpis.total}`} />
+          <Kpi color="#a855f7" icon={BookOpenCheck} value={`${kpis.pdfPct}%`} label="Cartilla" sub={`${kpis.pdfOk} de ${kpis.total}`} />
           <Kpi color="#f59e0b" icon={ClipboardCheck} value={`${kpis.quizPct}%`} label="Cuestionario Aprobado" sub={`${kpis.quizOk} de ${kpis.total}`} />
           <Kpi color="#16a34a" icon={CheckCircle2} value={`${kpis.completoPct}%`} label="Capacitación Completa" sub={`${kpis.completo} de ${kpis.total}`} />
         </div>
