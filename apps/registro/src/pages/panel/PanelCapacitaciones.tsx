@@ -128,10 +128,11 @@ export default function PanelCapacitaciones() {
   }, [conEstado, q, fDist, fRol, chip])
 
   const exportar = () => {
-    const rows = filtrados.map(({ p }) => ({
+    const rows = filtrados.map(({ p, estado }) => ({
       DNI: p.dni ?? '', Nombre: p.nombre_completo, Rol: rolNorm(p.rol), Distrito: p.distrito_asignado ?? p.distrito_vota ?? '',
+      'Local / Colegio': p.local_asignado ?? p.local_votacion ?? '',
       Celular: p.celular ?? '', 'Videos vistos': p.videos_vistos ?? 0, 'Cartilla leída': (p.pdfs_vistos ?? 0) >= 1 ? 'Sí' : 'No',
-      Cuestionario: p.quiz_estado ?? 'Pendiente', 'Estado Credencial': p.credencial_estado ?? 'Pendiente',
+      Cuestionario: p.quiz_estado ?? 'Pendiente', Capacitación: estado === 'completo' ? 'Capacitado' : 'Sin capacitar',
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
@@ -236,13 +237,13 @@ export default function PanelCapacitaciones() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-                {['#', 'Personero / DNI', 'Rol', 'Distrito Asignado', 'Local / Colegio', 'Progreso Video', 'Progreso PDF', 'Estado Credencial', 'WhatsApp Recordatorio', 'Acciones'].map(h => (
+                {['#', 'Personero / DNI', 'Rol', 'Distrito Asignado', 'Local / Colegio', 'Progreso Video', 'Progreso PDF', 'Capacitación', 'WhatsApp Recordatorio', 'Acciones'].map(h => (
                   <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtrados.slice(0, 800).map(({ p }, i) => (
+              {filtrados.slice(0, 800).map(({ p, estado }, i) => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2.5 text-slate-400 font-semibold">#{i + 1}</td>
                   <td className="px-4 py-2.5">
@@ -266,7 +267,7 @@ export default function PanelCapacitaciones() {
                     <ProgresoBar value={Math.min(p.pdfs_vistos ?? 0, 1)} total={1} color="#a855f7" />
                   </td>
                   <td className="px-4 py-2.5">
-                    <CredencialBadge estado={p.credencial_estado} />
+                    <CapacitacionBadge estado={estado} />
                   </td>
                   <td className="px-4 py-2.5">
                     {p.celular ? (
@@ -350,13 +351,10 @@ function ProgresoBar({ value, total, color }: { value: number; total: number; co
   )
 }
 
-function CredencialBadge({ estado }: { estado: string | null }) {
-  const e = estado ?? 'Pendiente'
-  const cls = e === 'Confirmado' ? 'bg-emerald-100 text-emerald-700'
-    : e === 'Bloqueado' ? 'bg-rose-100 text-rose-700'
-    : e === 'Reprobado' ? 'bg-rose-100 text-rose-700'
-    : 'bg-amber-100 text-amber-700'
-  return <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${cls}`}>{e}</span>
+function CapacitacionBadge({ estado }: { estado: Estado }) {
+  const capacitado = estado === 'completo'
+  const cls = capacitado ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+  return <span className={`text-[11px] font-bold rounded-full px-2 py-0.5 ${cls}`}>{capacitado ? 'Capacitado' : 'Sin capacitar'}</span>
 }
 
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-sky-500'

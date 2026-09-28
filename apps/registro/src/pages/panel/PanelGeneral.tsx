@@ -69,7 +69,6 @@ export default function PanelGeneral() {
   const [fDist, setFDist] = useState('')
   const [fRol, setFRol] = useState('')
   const [fExp, setFExp] = useState('')
-  const [chip, setChip] = useState<'todos' | 'multi' | 'unicos' | 'sinzonal'>('todos')
   const [agrupar, setAgrupar] = useState(true)
 
   const [sel, setSel] = useState<CentroFila | null>(null)
@@ -158,30 +157,20 @@ export default function PanelGeneral() {
     })
   }, [d.perfiles, q, fDist, fRol, fExp])
 
-  // Centros filtrados por búsqueda / distrito / chip
+  // Centros filtrados por búsqueda / distrito
   const filtrarCentro = (c: CentroFila) => {
     const s = q.trim().toLowerCase()
     if (s && !(c.nombre.toLowerCase().includes(s) || (c.distrito ?? '').toLowerCase().includes(s) ||
       (c.pcv?.nombre ?? '').toLowerCase().includes(s) || (c.zonal?.nombre ?? '').toLowerCase().includes(s))) return false
     if (fDist && c.distrito !== fDist) return false
-    if (chip === 'multi') return !!(c.zonal && c.zonal.nColegios > 1)
-    if (chip === 'unicos') return !!(c.zonal && c.zonal.nColegios === 1)
-    if (chip === 'sinzonal') return !c.zonal
     return true
   }
 
-  const centrosFlat = useMemo(() => d.centros.filter(filtrarCentro), [d.centros, q, fDist, chip])
+  const centrosFlat = useMemo(() => d.centros.filter(filtrarCentro), [d.centros, q, fDist])
   const zonasFiltradas = useMemo<ZonaGrupo[]>(() =>
     d.zonas.map(z => ({ ...z, centros: z.centros.filter(filtrarCentro) })).filter(z => z.centros.length),
-    [d.zonas, q, fDist, chip])
-  const sinZonalFiltrado = useMemo(() => d.sinZonal.filter(filtrarCentro), [d.sinZonal, q, fDist, chip])
-
-  const chipCounts = useMemo(() => ({
-    todos: d.centros.length,
-    multi: d.centros.filter(c => c.zonal && c.zonal.nColegios > 1).length,
-    unicos: d.centros.filter(c => c.zonal && c.zonal.nColegios === 1).length,
-    sinzonal: d.centros.filter(c => !c.zonal).length,
-  }), [d.centros])
+    [d.zonas, q, fDist])
+  const sinZonalFiltrado = useMemo(() => d.sinZonal.filter(filtrarCentro), [d.sinZonal, q, fDist])
 
   const exportar = () => {
     const rows = centrosFlat.map(c => ({
@@ -289,13 +278,7 @@ export default function PanelGeneral() {
 
       {tab === 'centros' && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
-            <div className="flex flex-wrap gap-1.5 text-xs">
-              <ChipBtn active={chip === 'todos'} onClick={() => setChip('todos')} label="Todos" n={chipCounts.todos} />
-              <ChipBtn active={chip === 'multi'} onClick={() => setChip('multi')} label="Multi-Colegio" n={chipCounts.multi} />
-              <ChipBtn active={chip === 'unicos'} onClick={() => setChip('unicos')} label="Únicos" n={chipCounts.unicos} />
-              <ChipBtn active={chip === 'sinzonal'} onClick={() => setChip('sinzonal')} label="Sin Zonal" n={chipCounts.sinzonal} />
-            </div>
+          <div className="flex items-center justify-end gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
             <label className="text-xs text-slate-500 flex items-center gap-2">
               <input type="checkbox" checked={agrupar} onChange={e => setAgrupar(e.target.checked)} />
               Agrupar por Zona / Coordinador
@@ -492,16 +475,6 @@ function Tab({ active, onClick, icon: Icon, label }: { active: boolean; onClick:
       className={`text-sm font-bold rounded-lg px-4 py-2 border flex items-center gap-1.5 transition-colors ${
         active ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
       <Icon size={14} /> {label}
-    </button>
-  )
-}
-
-function ChipBtn({ active, onClick, label, n }: { active: boolean; onClick: () => void; label: string; n: number }) {
-  return (
-    <button onClick={onClick}
-      className={`rounded-lg px-2.5 py-1.5 font-bold border transition-colors flex items-center gap-1.5 ${
-        active ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
-      {label} <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-white/25' : 'bg-slate-100 text-slate-600'}`}>{n}</span>
     </button>
   )
 }
