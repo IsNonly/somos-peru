@@ -24,6 +24,20 @@ interface ConstanciaProps {
   fecha: string // ya formateada, ej. "2 de setiembre de 2026"
 }
 
+// El espacio entre la línea azul y el párrafo "Por su participación..." es
+// angosto: un nombre largo en 2 líneas se monta sobre ambos. Se reduce el
+// tamaño de letra según el largo del nombre para que entre en una sola línea
+// (con clamp() sigue siendo responsivo al ancho de pantalla).
+function tamanoNombre(nombre: string): { min: number; pref: number; max: number } {
+  const len = (nombre || '').trim().length
+  if (len <= 18) return { min: 13, pref: 3.0, max: 30 }
+  if (len <= 24) return { min: 12, pref: 2.6, max: 26 }
+  if (len <= 30) return { min: 11, pref: 2.2, max: 22 }
+  if (len <= 36) return { min: 10, pref: 1.9, max: 19 }
+  if (len <= 44) return { min: 9, pref: 1.6, max: 16 }
+  return { min: 8, pref: 1.3, max: 13 }
+}
+
 export default function Constancia({ nombre, cargo, distrito, fecha }: ConstanciaProps) {
   return (
     <div
@@ -37,14 +51,14 @@ export default function Constancia({ nombre, cargo, distrito, fecha }: Constanci
         draggable={false}
       />
 
-      {/* NOMBRE — sobre la línea azul */}
+      {/* NOMBRE — sobre la línea azul, en una sola línea (ver tamanoNombre) */}
       <div
-        className="absolute left-1/2 -translate-x-1/2 w-[62%] text-center"
+        className="absolute left-1/2 -translate-x-1/2 w-[68%] text-center"
         style={{ top: `${POS.nombreTop}%` }}
       >
         <span
-          className="font-extrabold uppercase tracking-wide text-[#1b2a4a] leading-tight"
-          style={{ fontSize: 'clamp(13px, 3vw, 30px)' }}
+          className="inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-extrabold uppercase tracking-wide text-[#1b2a4a] leading-tight"
+          style={(({ min, pref, max }) => ({ fontSize: `clamp(${min}px, ${pref}vw, ${max}px)` }))(tamanoNombre(nombre))}
         >
           {nombre || '—'}
         </span>
