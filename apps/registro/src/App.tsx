@@ -12,7 +12,6 @@ import CentrosPage from './pages/CentrosPage'
 import PanelLayout from './pages/panel/PanelLayout'
 import PanelGeneral from './pages/panel/PanelGeneral'
 import PanelCapacitaciones from './pages/panel/PanelCapacitaciones'
-import PanelTrayecto from './pages/panel/PanelTrayecto'
 import Layout from './components/Layout'
 import { rolNorm, ROL_LOCAL } from './lib/panel'
 import type { User } from '@supabase/supabase-js'
@@ -105,7 +104,6 @@ export default function App() {
         <Route path="/panel" element={!rolListo ? Spinner : !user ? <Navigate to="/login" /> : (esAdmin || esPCV) ? <PanelLayout /> : <Navigate to="/capacitate" />}>
           <Route index element={<PanelGeneral />} />
           <Route path="capacitaciones" element={<PanelCapacitaciones />} />
-          <Route path="trayecto" element={<PanelTrayecto />} />
         </Route>
 
         {/* Panel admin clásico: solo Administrador / Coordinador */}
