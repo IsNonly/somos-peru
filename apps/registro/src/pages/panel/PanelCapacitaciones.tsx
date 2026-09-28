@@ -426,6 +426,13 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
     [colegios, distrito],
   )
 
+  const [qCentro, setQCentro] = useState('')
+  const [abiertoCentro, setAbiertoCentro] = useState(false)
+  const centrosFiltrados = centrosDelDistrito.filter(c => !qCentro.trim() || normTexto(c).includes(normTexto(qCentro)))
+  const elegirCentro = (c: string) => {
+    setCentro(c); setMesa(''); setQCentro(''); setAbiertoCentro(false)
+  }
+
   const guardar = async () => {
     if (!nombre.trim()) { alert('El nombre no puede estar vacío.'); return }
     setGuardando(true)
@@ -515,10 +522,33 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
             </select>
           </Campo>
           <Campo label="Centro de Votación Asignado" icon={Building2}>
-            <select value={centro} onChange={e => { setCentro(e.target.value); setMesa('') }} className={inputCls}>
-              <option value="">No aplica</option>
-              {centrosDelDistrito.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <div className="relative">
+              <input
+                value={abiertoCentro ? qCentro : centro}
+                onChange={e => { setQCentro(e.target.value); setAbiertoCentro(true) }}
+                onFocus={() => { setQCentro(''); setAbiertoCentro(true) }}
+                onBlur={() => setTimeout(() => setAbiertoCentro(false), 150)}
+                placeholder="Buscar colegio... (vacío = No aplica)"
+                className={inputCls} />
+              {abiertoCentro && (
+                <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+                  <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => elegirCentro('')}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-400 hover:bg-slate-50 transition-colors">
+                    — No aplica —
+                  </button>
+                  {centrosFiltrados.length > 0 ? centrosFiltrados.map(c => (
+                    <button key={c} type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => elegirCentro(c)}
+                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-sky-50 transition-colors">
+                      {c}
+                    </button>
+                  )) : (
+                    <p className="px-3 py-2.5 text-xs text-slate-400">Sin coincidencias.</p>
+                  )}
+                </div>
+              )}
+            </div>
           </Campo>
           <Campo label="Mesa Asignada" icon={Hash}>
             {hayPadronMesas && centro ? (
