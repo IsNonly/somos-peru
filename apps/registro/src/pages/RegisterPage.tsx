@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase, generarToken, generarClave4, AMBITO_DEPARTAMENTO, AMBITO_PROVINCIAS, AMBITO_DISTRITOS } from '../lib/supabase'
+import { supabase, generarToken, generarClave4, AMBITO_DEPARTAMENTO, AMBITO_PROVINCIAS, AMBITO_DISTRITOS, AMBITO_TOKEN_PREFIX } from '../lib/supabase'
 import type { Rol } from '../lib/supabase'
 import {
   User, Phone, CreditCard, MapPin, Building2, Check,
@@ -310,6 +310,13 @@ export default function RegisterPage() {
   const [cargandoAsignado, setCargandoAsignado] = useState(false)
   const [colegiosReservados, setColegiosReservados] = useState<Set<string>>(new Set())
 
+  // Solo para VES: los cupos de "Personero de Centro de Votación" ya están completos
+  // (se deshabilita ese rol) y los colegios cuyo cupo de Personeros de Mesa ya se
+  // llenó (personeros registrados >= total_mesas) dejan de aparecer en el buscador.
+  const esVES = AMBITO_TOKEN_PREFIX === 'VES2026'
+  const [capacidadColegios, setCapacidadColegios] = useState<Map<string, number>>(new Map())
+  const [colegiosCompletos, setColegiosCompletos] = useState<Set<string>>(new Set())
+
   // Ámbito fijo: solo se registra gente del ámbito de esta instancia por ahora,
   // así que el departamento nunca se pide — se fija directo a AMBITO_DEPARTAMENTO.
   const [provincias] = useState<ProvinciaRow[]>(
@@ -370,13 +377,39 @@ export default function RegisterPage() {
   }, [form.departamentoAsignado, form.provinciaAsignado])
 
   useEffect(() => {
-    if (!form.distritoAsignado) { setColegiosAsignado([]); return }
+    if (!form.distritoAsignado) { setColegiosAsignado([]); setCapacidadColegios(new Map()); return }
     setCargandoAsignado(true)
-    supabase.from('colegios').select('nombre')
+    supabase.from('colegios').select('nombre, total_mesas')
       .eq('departamento', form.departamentoAsignado).eq('provincia', form.provinciaAsignado).eq('distrito', form.distritoAsignado)
       .order('nombre')
-      .then(({ data }) => { setColegiosAsignado((data || []).map(c => ({ nombre: c.nombre, checked: false }))); setCargandoAsignado(false) })
+      .then(({ data }) => {
+        setColegiosAsignado((data || []).map(c => ({ nombre: c.nombre, checked: false })))
+        setCapacidadColegios(new Map((data || []).map(c => [c.nombre, c.total_mesas ?? 0])))
+        setCargandoAsignado(false)
+      })
   }, [form.distritoAsignado])
+
+  // VES: un colegio cuyo cupo de Personeros de Mesa ya está completo
+  // (registrados >= total_mesas) deja de aparecer en el buscador de locales.
+  useEffect(() => {
+    if (!esVES || !esPersonero || !form.distritoAsignado || colegiosAsignado.length === 0) { setColegiosCompletos(new Set()); return }
+    supabase.from('profiles').select('local_asignado')
+      .eq('rol', 'Personero de Mesa')
+      .eq('distrito_asignado', form.distritoAsignado)
+      .then(({ data }) => {
+        const conteo = new Map<string, number>()
+        for (const row of data ?? []) {
+          const n = String((row as any).local_asignado ?? '').trim()
+          if (n) conteo.set(n, (conteo.get(n) ?? 0) + 1)
+        }
+        const completos = new Set<string>()
+        for (const c of colegiosAsignado) {
+          const cap = capacidadColegios.get(c.nombre) ?? 0
+          if (cap > 0 && (conteo.get(c.nombre) ?? 0) >= cap) completos.add(c.nombre)
+        }
+        setColegiosCompletos(completos)
+      })
+  }, [esVES, esPersonero, form.distritoAsignado, colegiosAsignado, capacidadColegios])
 
   // Un colegio ya asignado a un Coordinador Distrital no debe aparecer para el siguiente registro
   // de ese mismo rol (solo aplica a "Coordinador Distrital", no a Personero ni Coordinador Provincial).
@@ -405,6 +438,12 @@ export default function RegisterPage() {
   const handleRevisar = (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.nombres || !form.dni || !form.celular) { setError('Complete los datos personales obligatorios.'); return }
+    if (esVES && form.rol === 'Personero de Centro de Votación') {
+      setError('Los cupos de Personero de Centro de Votación ya están completos.'); return
+    }
+    if (esVES && form.rol === 'Personero de Mesa' && colegiosCompletos.has(form.localAsignado)) {
+      setError('Ese colegio ya completó su cupo de Personeros de Mesa. Elige otro local de votación.'); return
+    }
     setError('')
     setDniDuplicado(false)
     setShowModal(true)
@@ -556,9 +595,12 @@ export default function RegisterPage() {
               ] as const).map(item => {
                 const Icon = item.icon
                 const sel = form.rol === item.id
+                // VES: los cupos de Personero de Centro de Votación ya están completos.
+                const deshabilitado = esVES && item.id === 'Personero de Centro de Votación'
                 return (
-                  <button key={item.id} type="button"
+                  <button key={item.id} type="button" disabled={deshabilitado}
                     onClick={() => {
+                      if (deshabilitado) return
                       // Personero de Mesa/Centro de Votación: provincia y distrito ya están
                       // fijos (un solo ámbito por instancia), no se le piden.
                       // Coordinador Distrital: la provincia también está fija (Lima), pero
@@ -573,9 +615,14 @@ export default function RegisterPage() {
                         localAsignado: '', localesAsignados: [],
                       }))
                     }}
-                    className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${sel ? 'bg-[#00a3e8] border-[#00a3e8] text-white shadow-md shadow-sky-500/20' : 'bg-white border-slate-200 text-slate-700 hover:border-sky-300'}`}>
-                    <div className={sel ? 'text-white' : 'text-slate-500'}><Icon size={20} /></div>
-                    <span className="text-xs font-bold leading-tight">{item.title}</span>
+                    className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${
+                      deshabilitado ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-70'
+                        : sel ? 'bg-[#00a3e8] border-[#00a3e8] text-white shadow-md shadow-sky-500/20' : 'bg-white border-slate-200 text-slate-700 hover:border-sky-300'}`}>
+                    <div className={deshabilitado ? 'text-slate-300' : sel ? 'text-white' : 'text-slate-500'}><Icon size={20} /></div>
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold leading-tight block">{item.title}</span>
+                      {deshabilitado && <span className="text-[10px] font-semibold text-rose-500">Cupos completos</span>}
+                    </div>
                   </button>
                 )
               })}
@@ -589,9 +636,14 @@ export default function RegisterPage() {
                 {colegiosAsignado.length > 0 ? (
                   <>
                     <BuscadorColegios
-                      opciones={colegiosAsignado.map(c => c.nombre)}
+                      opciones={colegiosAsignado.filter(c => !colegiosCompletos.has(c.nombre)).map(c => c.nombre)}
                       onElegir={n => set('localAsignado', n)}
-                      placeholder={`Buscar entre ${colegiosAsignado.length} locales...`} />
+                      placeholder={`Buscar entre ${colegiosAsignado.length - colegiosCompletos.size} locales...`} />
+                    {colegiosCompletos.size > 0 && (
+                      <p className="text-[11px] text-amber-600 mt-1.5">
+                        {colegiosCompletos.size} colegio{colegiosCompletos.size === 1 ? '' : 's'} ya completó{colegiosCompletos.size === 1 ? '' : 'aron'} su cupo de Personeros de Mesa y no aparece{colegiosCompletos.size === 1 ? '' : 'n'} en la lista.
+                      </p>
+                    )}
                     {form.localAsignado && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-100 text-sky-700 text-xs font-semibold rounded-full">
