@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { Doughnut } from 'react-chartjs-2'
@@ -21,6 +21,9 @@ ChartJS.register(ArcElement, Tooltip, Legend)
 
 const wa = (tel?: string | null, msg?: string) =>
   tel ? `https://wa.me/51${String(tel).replace(/\D/g, '')}${msg ? `?text=${encodeURIComponent(msg)}` : ''}` : undefined
+
+interface MesaOpt { numero: string; colegio_nombre: string | null }
+const normTexto = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 type Estado = 'completo' | 'proceso' | 'noiniciado'
 
@@ -306,6 +309,11 @@ export default function PanelCapacitaciones() {
           editadoPor={editadoPor}
           colegios={d.colegios}
           distritosOpts={distritosModal}
+          mesasOcupadas={new Set(
+            d.perfiles
+              .filter(p => p.id !== editPerfil.id && rolNorm(p.rol) === ROL_MESA && p.mesa_asignada)
+              .map(p => p.mesa_asignada as string),
+          )}
           onClose={() => setEditPerfil(null)}
           onSaved={() => d.refetch()}
         />
@@ -370,8 +378,9 @@ function Campo({ label, icon: Icon, children }: { label: string; icon: any; chil
   )
 }
 
-function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, colegios, distritosOpts, onClose, onSaved }: {
+function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, colegios, distritosOpts, mesasOcupadas, onClose, onSaved }: {
   perfil: Perfil; actorEsSuperadmin: boolean; puedeEliminar: boolean; editadoPor: string; colegios: Colegio[]; distritosOpts: string[]
+  mesasOcupadas: Set<string>
   onClose: () => void; onSaved: () => void
 }) {
   const [nombre, setNombre] = useState(perfil.nombre_completo ?? '')
@@ -383,6 +392,29 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
   const [mesa, setMesa] = useState(perfil.mesa_asignada ?? '')
   const [guardando, setGuardando] = useState(false)
   const [eliminando, setEliminando] = useState(false)
+
+  // Padrón oficial de mesas (tabla `mesas`): permite buscar y asignar una mesa
+  // real del centro elegido, en vez de escribir el número a mano.
+  const [mesasDisponibles, setMesasDisponibles] = useState<MesaOpt[] | null>(null)
+  useEffect(() => {
+    supabase.from('mesas').select('numero, colegio_nombre').order('numero').then(({ data }) => {
+      setMesasDisponibles(data ?? [])
+    })
+  }, [])
+
+  const [qMesa, setQMesa] = useState('')
+  const [abiertoMesa, setAbiertoMesa] = useState(false)
+  const hayPadronMesas = (mesasDisponibles?.length ?? 0) > 0
+  const filtradasMesa = (mesasDisponibles ?? []).filter(m =>
+    normTexto(m.colegio_nombre ?? '') === normTexto(centro) &&
+    (m.numero === mesa || !mesasOcupadas.has(m.numero)) &&
+    (!qMesa.trim() || m.numero.includes(qMesa.trim())))
+
+  const elegirMesa = (m: MesaOpt) => {
+    setMesa(m.numero)
+    setQMesa('')
+    setAbiertoMesa(false)
+  }
 
   const [nuevaClave, setNuevaClave] = useState('')
   const [mostrarClave, setMostrarClave] = useState(false)
@@ -477,22 +509,50 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
             </Campo>
           </div>
           <Campo label="Distrito Asignado" icon={MapPin}>
-            <select value={distrito} onChange={e => { setDistrito(e.target.value); setCentro('') }} className={inputCls}>
+            <select value={distrito} onChange={e => { setDistrito(e.target.value); setCentro(''); setMesa('') }} className={inputCls}>
               <option value="">— Sin asignar —</option>
               {distritosOpts.map(dist => <option key={dist} value={dist}>{dist}</option>)}
             </select>
           </Campo>
           <Campo label="Centro de Votación Asignado" icon={Building2}>
-            <select value={centro} onChange={e => setCentro(e.target.value)} className={inputCls}>
+            <select value={centro} onChange={e => { setCentro(e.target.value); setMesa('') }} className={inputCls}>
               <option value="">No aplica</option>
               {centrosDelDistrito.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </Campo>
           <Campo label="Mesa Asignada" icon={Hash}>
-            <input value={mesa} onChange={e => setMesa(e.target.value)} placeholder="Ej. 064321 (6 dígitos de la mesa)" className={inputCls} />
+            {hayPadronMesas && centro ? (
+              <div className="relative">
+                <input
+                  value={abiertoMesa ? qMesa : mesa}
+                  onChange={e => { setQMesa(e.target.value); setAbiertoMesa(true) }}
+                  onFocus={() => { setQMesa(''); setAbiertoMesa(true) }}
+                  onBlur={() => setTimeout(() => setAbiertoMesa(false), 150)}
+                  placeholder="Buscar por N° de mesa..."
+                  className={inputCls} />
+                {abiertoMesa && (
+                  <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+                    {filtradasMesa.length > 0 ? filtradasMesa.slice(0, 100).map(m => (
+                      <button key={m.numero} type="button"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => elegirMesa(m)}
+                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-sky-50 transition-colors">
+                        <span className="font-mono font-semibold">{m.numero}</span>
+                      </button>
+                    )) : (
+                      <p className="px-3 py-2.5 text-xs text-slate-400">Sin coincidencias, o ya están todas asignadas.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <input value={mesa} onChange={e => setMesa(e.target.value)} placeholder="Ej. 064321 (6 dígitos de la mesa)" className={inputCls} />
+            )}
           </Campo>
           <p className="text-[11px] text-amber-700 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-            💡 Ingresa el número de mesa de 6 dígitos asignada al personero en este centro de votación.
+            💡 {centro
+              ? 'Elige la mesa entre las del centro de votación seleccionado (ya no aparecen las que otro personero ya tiene asignadas).'
+              : 'Primero elige el Centro de Votación Asignado para poder buscar su mesa.'}
           </p>
           {puedeEliminar && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
