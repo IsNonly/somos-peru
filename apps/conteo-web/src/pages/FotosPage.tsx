@@ -171,7 +171,7 @@ function TarjetaFotos({ p, acta, onVer }: {
           {fotos.map(fo => (
             <button key={fo.label} onClick={() => onVer({ url: fo.url, titulo: `${p.nombre_completo} — ${fo.label}` })}
               className="aspect-square rounded-lg overflow-hidden border border-slate-200 hover:opacity-80 transition-opacity relative group">
-              <img src={fo.url} alt={fo.label} className="w-full h-full object-cover" />
+              <img src={fo.url} alt={fo.label} loading="lazy" decoding="async" className="w-full h-full object-cover" />
               <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] px-1 py-0.5 truncate">{fo.label}</span>
             </button>
           ))}
