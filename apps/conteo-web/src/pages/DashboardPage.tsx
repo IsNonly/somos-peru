@@ -13,11 +13,13 @@ interface Voto { nivel: string; partido: string; cantidad: number; metodo: strin
 interface Lista { partido: string; nombre?: string; letra: string; color: string; orden: number }
 
 type Nivel = 'REGIONAL' | 'PROVINCIAL' | 'DISTRITAL'
+const NIVELES: Nivel[] = ['REGIONAL', 'PROVINCIAL', 'DISTRITAL']
 const NIVEL_LABEL: Record<Nivel, string> = {
   REGIONAL: 'Gobernador Regional',
   PROVINCIAL: 'Alcaldía Provincial',
   DISTRITAL: 'Alcaldía Distrital',
 }
+const NIVEL_ICONO: Record<Nivel, string> = { REGIONAL: '🏛️', PROVINCIAL: '🏢', DISTRITAL: '🏘️' }
 
 const chartOpts: any = {
   responsive: true, maintainAspectRatio: false,
@@ -35,10 +37,9 @@ function inicialesPartido(p: string): string {
   return (w.slice(0, 3).map(x => x[0]).join('') || p.slice(0, 3)).toUpperCase()
 }
 
-function agrupar(votos: Voto[], nivel?: string, metodo?: string) {
+function agrupar(votos: Voto[], metodo?: string) {
   const acc: Record<string, number> = {}
   for (const v of votos) {
-    if (nivel && v.nivel !== nivel) continue
     if (metodo && v.metodo !== metodo) continue
     acc[v.partido] = (acc[v.partido] ?? 0) + (v.cantidad || 0)
   }
@@ -53,17 +54,19 @@ const total = (acc: Record<string, number>) => Object.values(acc).reduce((a, b) 
 export default function DashboardPage() {
   const { distritosEfectivos, f, ambitoLabel, loading: scopeLoading } = useFiltros()
   const [votos, setVotos] = useState<Voto[]>([])
-  const [listas, setListas] = useState<Lista[]>([])   // universo de partidos del ámbito (tabla candidaturas)
+  // Universo de partidos POR NIVEL (tabla `candidaturas`, misma fuente que ve el
+  // personero en la conteo-app) -antes se mezclaba un solo universo para todos
+  // los niveles, lo que terminaba sumando votos de la Alcaldía Provincial de
+  // Lima junto con los de la Alcaldía Distrital como si fueran la misma lista.
+  const [listasPorNivel, setListasPorNivel] = useState<Record<Nivel, Lista[]>>({ REGIONAL: [], PROVINCIAL: [], DISTRITAL: [] })
   const [mesas, setMesas] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  // ── Universo de partidos: SIEMPRE desde la tabla `candidaturas` (misma
-  //    fuente que ve el personero en la conteo-app), acotado al ámbito. ──
   useEffect(() => {
     if (scopeLoading) return
     let vivo = true
     ;(async () => {
-      let q = supabase.from('candidaturas').select('partido, sigla, color, orden, provincia, distrito').eq('activo', true)
+      let q = supabase.from('candidaturas').select('nivel, partido, sigla, color, orden, provincia, distrito').eq('activo', true)
       if (f.departamento) q = q.eq('departamento', f.departamento)
       const { data } = await q
       if (!vivo) return
@@ -71,18 +74,22 @@ export default function DashboardPage() {
       const rows = (data ?? []).filter((r: any) =>
         (!f.provincia || !r.provincia || norm(r.provincia) === norm(f.provincia)) &&
         (!f.distrito  || !r.distrito  || norm(r.distrito)  === norm(f.distrito)))
-      const map = new Map<string, Lista>()
-      for (const r of rows as any[]) {
-        if (map.has(r.partido)) continue
-        map.set(r.partido, {
-          partido: r.partido,
-          letra: (r.sigla || inicialesPartido(r.partido)).slice(0, 4),
-          color: r.color || '#64748b',
-          orden: r.orden ?? 999,
-        })
+
+      const porNivel: Record<Nivel, Lista[]> = { REGIONAL: [], PROVINCIAL: [], DISTRITAL: [] }
+      for (const nivel of NIVELES) {
+        const map = new Map<string, Lista>()
+        for (const r of rows.filter((x: any) => x.nivel === nivel) as any[]) {
+          if (map.has(r.partido)) continue
+          map.set(r.partido, {
+            partido: r.partido,
+            letra: (r.sigla || inicialesPartido(r.partido)).slice(0, 4),
+            color: r.color || '#64748b',
+            orden: r.orden ?? 999,
+          })
+        }
+        porNivel[nivel] = [...map.values()].sort((a, b) => a.orden - b.orden || a.partido.localeCompare(b.partido, 'es'))
       }
-      const arr = [...map.values()].sort((a, b) => a.orden - b.orden || a.partido.localeCompare(b.partido, 'es'))
-      setListas(arr)
+      setListasPorNivel(porNivel)
     })()
     return () => { vivo = false }
   }, [scopeLoading, f.departamento, f.provincia, f.distrito])
@@ -116,8 +123,46 @@ export default function DashboardPage() {
     return () => { vivo = false }
   }, [scopeLoading, distritosEfectivos, f.colegio, f.mesa])
 
-  // Orden final = partidos del ámbito + votos especiales + cualquier partido
-  // que aparezca en los votos pero no esté en candidaturas (defensivo).
+  // Niveles a mostrar: los que tienen listas cargadas para este ámbito, más
+  // cualquiera que ya tenga votos (defensivo). Un distrito sin Gobernador
+  // Regional (caso de Lima Metropolitana) simplemente no lo muestra.
+  const niveles = useMemo<Nivel[]>(() => {
+    const conVotos = new Set(votos.map(v => v.nivel))
+    const set = new Set<Nivel>([...NIVELES.filter(n => listasPorNivel[n].length > 0), ...([...conVotos] as Nivel[])])
+    return NIVELES.filter(n => set.has(n))
+  }, [listasPorNivel, votos])
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">📊 Dashboard de Resultados Electorales</h1>
+        <p className="text-sm text-slate-500">
+          Ámbito: <strong className="text-sky-600">{ambitoLabel || AMBITO_DEPARTAMENTO}</strong>
+          {' · '}Mesas con actas transmitidas: <strong className="text-slate-700">{mesas}</strong>
+        </p>
+      </div>
+
+      {!loading && niveles.length === 0 && (
+        <p className="text-sm text-slate-400 text-center py-10 bg-white rounded-2xl border border-slate-200">
+          Aún no hay votos transmitidos en este ámbito.
+        </p>
+      )}
+
+      {/* Un bloque completo por nivel -Gobernador Regional / Alcaldía Provincial /
+          Alcaldía Distrital-, cada uno con SU propio consolidado y % de
+          participación: son elecciones distintas, no se suman entre sí. */}
+      {niveles.map(nivel => (
+        <BloqueNivel key={nivel} nivel={nivel} votos={votos.filter(v => v.nivel === nivel)} listas={listasPorNivel[nivel]} />
+      ))}
+    </div>
+  )
+}
+
+function BloqueNivel({ nivel, votos, listas }: { nivel: Nivel; votos: Voto[]; listas: Lista[] }) {
+  const { f } = useFiltros()
+
+  // Orden final = partidos del nivel + votos especiales + cualquier partido que
+  // aparezca en los votos pero no esté en candidaturas (defensivo).
   const orden = useMemo<Lista[]>(() => {
     const base = [...listas]
     const vistos = new Set(base.map(l => l.partido))
@@ -133,27 +178,9 @@ export default function DashboardPage() {
     ]
   }, [listas, votos])
 
-  // Niveles presentes (según lo que realmente llegó en los votos)
-  const niveles = useMemo<Nivel[]>(() => {
-    const set = new Set(votos.map(v => v.nivel))
-    return (['REGIONAL', 'PROVINCIAL', 'DISTRITAL'] as Nivel[]).filter(n => set.has(n))
-  }, [votos])
-
-  const porNivel = useMemo(() => {
-    const o: Record<string, Record<string, number>> = {}
-    for (const n of ['REGIONAL', 'PROVINCIAL', 'DISTRITAL']) {
-      o[n] = agrupar(votos, n)
-      o[n + ':MANUAL'] = agrupar(votos, n, 'MANUAL')
-      o[n + ':IMAGEN'] = agrupar(votos, n, 'IMAGEN')
-    }
-    return o
-  }, [votos])
-
-  const consolidado = useMemo(() => {
-    const acc: Record<string, number> = {}
-    for (const l of orden) acc[l.partido] = niveles.reduce((s, n) => s + (porNivel[n][l.partido] ?? 0), 0)
-    return acc
-  }, [orden, niveles, porNivel])
+  const manual = useMemo(() => agrupar(votos, 'MANUAL'), [votos])
+  const imagen = useMemo(() => agrupar(votos, 'IMAGEN'), [votos])
+  const consolidado = useMemo(() => agrupar(votos), [votos])
   const granTotal = total(consolidado)
 
   const chips = useMemo(() => orden
@@ -162,15 +189,11 @@ export default function DashboardPage() {
     .sort((a, b) => b.pct - a.pct).slice(0, 6), [orden, consolidado, granTotal])
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">📊 Dashboard de Resultados Electorales</h1>
-          <p className="text-sm text-slate-500">
-            Ámbito: <strong className="text-sky-600">{ambitoLabel || AMBITO_DEPARTAMENTO}</strong>
-            {listas.length > 0 && <span className="text-slate-400"> · {listas.length} listas</span>}
-          </p>
-        </div>
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+        <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+          {NIVEL_ICONO[nivel]} {NIVEL_LABEL[nivel]}
+        </h2>
         <div className="flex flex-wrap gap-1.5">
           {chips.map(c => (
             <span key={c.letra} className="text-xs font-bold rounded-full px-2.5 py-1"
@@ -181,38 +204,30 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Un par de paneles (Manual / OCR) por cada nivel presente */}
       <div className="grid lg:grid-cols-2 gap-5">
-        {niveles.flatMap(n => [
-          <Panel key={n + 'M'} titulo={`${NIVEL_LABEL[n]} (Manual)`} sub="Votos digitados"
-            total={total(porNivel[n + ':MANUAL'])} data={dataset(porNivel[n + ':MANUAL'], orden)} />,
-          <Panel key={n + 'O'} titulo={`${NIVEL_LABEL[n]} (OCR / Foto)`} sub="Votos procesados por imagen"
-            total={total(porNivel[n + ':IMAGEN'])} data={dataset(porNivel[n + ':IMAGEN'], orden)} />,
-        ])}
-        {niveles.length === 0 && (
-          <p className="text-sm text-slate-400 col-span-2 py-6 text-center">Aún no hay votos transmitidos en este ámbito.</p>
-        )}
+        <Panel titulo={`${NIVEL_LABEL[nivel]} (Manual)`} sub="Votos digitados" total={total(manual)} data={dataset(manual, orden)} />
+        <Panel titulo={`${NIVEL_LABEL[nivel]} (OCR / Foto)`} sub="Votos procesados por imagen" total={total(imagen)} data={dataset(imagen, orden)} />
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="font-extrabold text-slate-900">Consolidado {ambitoLabel || AMBITO_DEPARTAMENTO}</h3>
-            <span className="text-xs text-slate-500">Total consolidado ({niveles.map(n => NIVEL_LABEL[n]).join(' + ') || '—'}, Manual + OCR)</span>
+            <h3 className="font-extrabold text-slate-900">Consolidado {NIVEL_LABEL[nivel]}</h3>
+            <span className="text-xs text-slate-500">Manual + OCR</span>
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <span className="bg-emerald-50 text-emerald-600 font-bold rounded-full px-2.5 py-1">Total de Votos Emitidos: {granTotal.toLocaleString('es-PE')}</span>
-            <span className="bg-slate-100 text-slate-500 font-semibold rounded px-2 py-1">Mesas: {mesas}</span>
+            <span className="bg-emerald-50 text-emerald-600 font-bold rounded-full px-2.5 py-1">Total de Votos: {granTotal.toLocaleString('es-PE')}</span>
           </div>
         </div>
-        <div className="h-60"><Bar data={dataset(consolidado, orden)} options={chartOpts} /></div>
+        {granTotal > 0
+          ? <div className="h-60"><Bar data={dataset(consolidado, orden)} options={chartOpts} /></div>
+          : <p className="text-sm text-slate-400 text-center py-10">Esperando actas transmitidas para este nivel.</p>}
       </div>
 
-      {/* Tabla de partidos */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-100">
-          <h3 className="font-extrabold text-slate-900 text-sm">Detalle de Partidos</h3>
-          <p className="text-xs text-slate-500">Listas de {ambitoLabel || AMBITO_DEPARTAMENTO} — fuente: tabla de candidaturas</p>
+          <h3 className="font-extrabold text-slate-900 text-sm">Detalle de Partidos — {NIVEL_LABEL[nivel]}</h3>
+          <p className="text-xs text-slate-500">Fuente: tabla de candidaturas</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -220,9 +235,6 @@ export default function DashboardPage() {
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
                 <th className="px-4 py-3 text-left whitespace-nowrap">Símbolo</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">Partido / Tipo</th>
-                {niveles.map(n => (
-                  <th key={n} className="px-4 py-3 text-left whitespace-nowrap">Votos {NIVEL_LABEL[n]}</th>
-                ))}
                 <th className="px-4 py-3 text-left whitespace-nowrap">Total Votos</th>
                 <th className="px-4 py-3 text-left whitespace-nowrap">% Participación</th>
               </tr>
@@ -230,19 +242,15 @@ export default function DashboardPage() {
             <tbody className="divide-y divide-slate-100">
               {orden
                 .filter(l => !f.partido || l.partido === f.partido)
-                .map(l => {
-                  const porN = niveles.map(n => porNivel[n][l.partido] ?? 0)
-                  const tot = porN.reduce((a, b) => a + b, 0)
-                  return { l, porN, tot }
-                })
+                .map(l => ({ l, tot: consolidado[l.partido] ?? 0 }))
                 .sort((a, b) => {
                   const aEsp = VOTOS_ESPECIALES.some(e => e.partido === a.l.partido)
                   const bEsp = VOTOS_ESPECIALES.some(e => e.partido === b.l.partido)
                   if (aEsp !== bEsp) return aEsp ? 1 : -1
-                  if (aEsp && bEsp) return 0 // mantiene el orden Blanco/Nulo/Impugnado de VOTOS_ESPECIALES
+                  if (aEsp && bEsp) return 0
                   return b.tot - a.tot
                 })
-                .map(({ l, porN, tot }) => {
+                .map(({ l, tot }) => {
                   const pct = granTotal > 0 ? (tot / granTotal) * 100 : 0
                   return (
                     <tr key={l.partido} className="hover:bg-slate-50">
@@ -255,9 +263,6 @@ export default function DashboardPage() {
                         </div>
                       </td>
                       <td className="px-4 py-2.5 font-semibold text-slate-800 whitespace-nowrap">{l.nombre ?? l.partido}</td>
-                      {porN.map((n, i) => (
-                        <td key={i} className="px-4 py-2.5 text-sky-700 font-semibold tabular-nums">{n.toLocaleString('es-PE')}</td>
-                      ))}
                       <td className="px-4 py-2.5 font-bold text-slate-900 tabular-nums">{tot.toLocaleString('es-PE')}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center gap-2">
@@ -273,12 +278,8 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </div>
-        {loading && <p className="px-5 py-3 text-xs text-slate-400">Cargando resultados…</p>}
-        {!loading && granTotal === 0 && (
-          <p className="px-5 py-6 text-center text-sm text-slate-400">Esperando actas transmitidas — aún no hay votos en este ámbito.</p>
-        )}
       </div>
-    </div>
+    </section>
   )
 }
 
