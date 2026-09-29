@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useState, useMemo } from 'react'
 import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
 import { restablecerClavePersonero } from '../lib/personeroActions'
@@ -41,40 +41,39 @@ export default function PersoneroMonitorPage() {
   const [editando, setEditando] = useState<Perfil | null>(null)
   const [editandoVotos, setEditandoVotos] = useState<Perfil | null>(null)
 
+  const cargar = useCallback(async () => {
+    setLoading(true)
+    let pq = supabase.from('profiles')
+      .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, asistencia_local_at')
+      .ilike('rol', 'Personero%')
+      .order('nombre_completo')
+    if (distritosEfectivos) pq = pq.in('distrito_asignado', distritosEfectivos)
+
+    const [{ data: p }, { data: actas }] = await Promise.all([
+      pq,
+      supabase.from('actas').select('personero_id, personero_dni, metodo, estado'),
+    ])
+
+    // Estado de envío por personero: metodo MANUAL / IMAGEN (clave por id y por dni)
+    const map = new Map<string, Envio>()
+    for (const a of (actas ?? []) as any[]) {
+      if (a.estado && a.estado !== 'TRANSMITIDA') continue
+      const esImg = String(a.metodo).toUpperCase() === 'IMAGEN'
+      for (const k of [a.personero_id, a.personero_dni].filter(Boolean)) {
+        const cur = map.get(k) ?? { ...EMPTY_ENVIO }
+        if (esImg) cur.imagen = true; else cur.manual = true
+        map.set(k, cur)
+      }
+    }
+    setPers((p ?? []) as Perfil[])
+    setEnvios(map)
+    setLoading(false)
+  }, [distritosEfectivos])
+
   useEffect(() => {
     if (scopeLoading) return
-    let vivo = true
-    ;(async () => {
-      setLoading(true)
-      let pq = supabase.from('profiles')
-        .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, asistencia_local_at')
-        .ilike('rol', 'Personero%')
-        .order('nombre_completo')
-      if (distritosEfectivos) pq = pq.in('distrito_asignado', distritosEfectivos)
-
-      const [{ data: p }, { data: actas }] = await Promise.all([
-        pq,
-        supabase.from('actas').select('personero_id, personero_dni, metodo, estado'),
-      ])
-      if (!vivo) return
-
-      // Estado de envío por personero: metodo MANUAL / IMAGEN (clave por id y por dni)
-      const map = new Map<string, Envio>()
-      for (const a of (actas ?? []) as any[]) {
-        if (a.estado && a.estado !== 'TRANSMITIDA') continue
-        const esImg = String(a.metodo).toUpperCase() === 'IMAGEN'
-        for (const k of [a.personero_id, a.personero_dni].filter(Boolean)) {
-          const cur = map.get(k) ?? { ...EMPTY_ENVIO }
-          if (esImg) cur.imagen = true; else cur.manual = true
-          map.set(k, cur)
-        }
-      }
-      setPers((p ?? []) as Perfil[])
-      setEnvios(map)
-      setLoading(false)
-    })()
-    return () => { vivo = false }
-  }, [scopeLoading, distritosEfectivos])
+    cargar()
+  }, [scopeLoading, cargar])
 
   const envioDe = (p: Perfil): Envio =>
     envios.get(p.id) ?? (p.dni ? envios.get(p.dni) : undefined) ?? EMPTY_ENVIO
@@ -286,6 +285,8 @@ export default function PersoneroMonitorPage() {
         <EditarVotosModal
           personero={editandoVotos}
           onClose={() => setEditandoVotos(null)}
+          onSaved={cargar}
+          onAnulado={cargar}
         />
       )}
     </div>

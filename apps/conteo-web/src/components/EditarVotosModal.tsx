@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { X, Save, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { X, Save, AlertTriangle, CheckCircle2, Undo2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { VOTOS_ESPECIALES, slugPartido } from '../lib/candidatos'
 
@@ -46,15 +46,20 @@ function inicialesPartido(p: string): string {
   return (w.slice(0, 3).map(x => x[0]).join('') || p.slice(0, 3)).toUpperCase()
 }
 
-export default function EditarVotosModal({ personero, onClose, onSaved }: {
+export default function EditarVotosModal({ personero, onClose, onSaved, onAnulado }: {
   personero: PersoneroVotos
   onClose: () => void
   onSaved?: () => void
+  // Se dispara tras anular el envío -a diferencia de onSaved, el padre debe
+  // reflejar que este personero YA NO tiene acta transmitida (vuelve a "Sin envío").
+  onAnulado?: () => void
 }) {
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
+  const [anulando, setAnulando] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState(false)
+  const [anulado, setAnulado] = useState(false)
   const [acta, setActa] = useState<Acta | null>(null)
   const [bloques, setBloques] = useState<Bloque[]>([])
 
@@ -191,6 +196,33 @@ export default function EditarVotosModal({ personero, onClose, onSaved }: {
     setGuardando(false)
   }
 
+  // Borra el acta y sus votos por completo -no solo pone la cantidad en 0- y
+  // reabilita al personero para transmitir de nuevo (foto o manual) desde cero.
+  // Útil cuando la foto/OCR salió mal desde el inicio y conviene rehacer el
+  // envío entero, no solo corregir números.
+  const anularEnvio = async () => {
+    if (!acta) return
+    if (!window.confirm(
+      `¿Anular el envío de la mesa ${acta.mesa_numero}? Se borrarán todos los votos guardados y el acta, y ${personero.nombre_completo} podrá volver a transmitir desde cero (foto o manual). Esta acción no se puede deshacer.`
+    )) return
+    setAnulando(true); setError(''); setOk(false)
+    try {
+      const { error: errVotos } = await supabase.from('votos').delete().eq('acta_id', acta.id)
+      if (errVotos) throw errVotos
+      const { error: errActa } = await supabase.from('actas').delete().eq('id', acta.id)
+      if (errActa) throw errActa
+      const { error: errPerfil } = await supabase.from('profiles').update({ acta_transmitida: false }).eq('id', personero.id)
+      if (errPerfil) throw errPerfil
+      setActa(null)
+      setBloques([])
+      setAnulado(true)
+      onAnulado?.()
+    } catch (e: any) {
+      setError(e.message ?? 'No se pudo anular el envío.')
+    }
+    setAnulando(false)
+  }
+
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-2xl mt-10 mb-10 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -211,6 +243,13 @@ export default function EditarVotosModal({ personero, onClose, onSaved }: {
           {!loading && error && (
             <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5 flex items-start gap-2">
               <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" /> {error}
+            </p>
+          )}
+
+          {!loading && anulado && (
+            <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 flex items-start gap-2">
+              <CheckCircle2 size={15} className="flex-shrink-0 mt-0.5" />
+              Envío anulado. {personero.nombre_completo} ya puede volver a transmitir su acta desde cero.
             </p>
           )}
 
@@ -258,19 +297,23 @@ export default function EditarVotosModal({ personero, onClose, onSaved }: {
         </div>
 
         <div className="flex items-center justify-between gap-2 p-4 border-t border-slate-100">
-          <div className="text-xs">
+          {!loading && acta ? (
+            <button onClick={anularEnvio} disabled={anulando || guardando}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 disabled:opacity-50 px-1">
+              <Undo2 size={13} /> {anulando ? 'Anulando…' : 'Anular envío'}
+            </button>
+          ) : <span />}
+          <div className="flex items-center gap-3">
             {ok && !hayCambios && (
-              <span className="text-emerald-600 font-semibold flex items-center gap-1.5">
+              <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1.5">
                 <CheckCircle2 size={14} /> Corrección guardada.
               </span>
             )}
-          </div>
-          <div className="flex gap-2">
             <button onClick={onClose} className="text-xs font-semibold text-slate-600 border border-slate-300 rounded-md px-3 py-1.5">
               Cerrar
             </button>
             {!loading && acta && bloques.length > 0 && (
-              <button onClick={guardar} disabled={guardando || !hayCambios}
+              <button onClick={guardar} disabled={guardando || anulando || !hayCambios}
                 className="flex items-center gap-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-40 rounded-md px-3.5 py-1.5">
                 <Save size={13} /> {guardando ? 'Guardando…' : 'Guardar corrección'}
               </button>
