@@ -117,8 +117,11 @@ export function FiltrosProvider({ children }: { children: React.ReactNode }) {
   const [partidos, setPartidos] = useState<string[]>(ESPECIALES)
   useEffect(() => {
     if (scope.loading) return
-    let q = supabase.from('candidaturas').select('partido').eq('activo', true)
-    if (f.departamento) q = q.eq('departamento', f.departamento)
+    // Igual que en DashboardPage: sin este filtro, sin Departamento elegido la
+    // consulta trae partidos de todo el país (se corta antes de llegar a los
+    // del ámbito real de esta instancia).
+    const q = supabase.from('candidaturas').select('partido')
+      .eq('activo', true).eq('departamento', f.departamento || AMBITO_DEPARTAMENTO)
     q.then(({ data }) => {
       const nombres = [...new Set((data ?? []).map((r: any) => r.partido).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, 'es'))

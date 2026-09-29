@@ -66,8 +66,12 @@ export default function DashboardPage() {
     if (scopeLoading) return
     let vivo = true
     ;(async () => {
-      let q = supabase.from('candidaturas').select('nivel, partido, sigla, color, orden, provincia, distrito').eq('activo', true)
-      if (f.departamento) q = q.eq('departamento', f.departamento)
+      // Sin este filtro, si se elige un Distrito sin elegir Departamento (caso
+      // normal del Administrador: solo toca "Distrito"), la consulta traía
+      // candidaturas de TODO el país y se cortaba en el límite de filas antes
+      // de llegar a las del distrito elegido -por eso un nivel podía "no salir".
+      const q = supabase.from('candidaturas').select('nivel, partido, sigla, color, orden, provincia, distrito')
+        .eq('activo', true).eq('departamento', f.departamento || AMBITO_DEPARTAMENTO)
       const { data } = await q
       if (!vivo) return
       const norm = (s?: string | null) => (s ?? '').normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '').toLowerCase().trim()
