@@ -71,15 +71,18 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
   const [qMesa, setQMesa] = useState('')
   const [abiertoMesa, setAbiertoMesa] = useState(false)
   const hayPadronMesas = (mesasDisponibles?.length ?? 0) > 0
+  // Solo mesas del colegio elegido en "Local de Votación Asignado" -antes buscaba
+  // en TODAS las mesas del padrón sin filtrar por colegio, y mostraba mesas de
+  // otros locales.
   const filtradasMesa = (mesasDisponibles ?? []).filter(m =>
-    !mesasOcupadas?.has(m.numero) &&
-    (!qMesa.trim() || m.numero.includes(qMesa.trim()) || normTexto(m.colegio_nombre ?? '').includes(normTexto(qMesa))))
+    normTexto(m.colegio_nombre ?? '') === normTexto(local) &&
+    (m.numero === mesa || !mesasOcupadas?.has(m.numero)) &&
+    (!qMesa.trim() || m.numero.includes(qMesa.trim())))
 
   const elegirMesa = (m: MesaOpt) => {
     setMesa(m.numero)
     setQMesa('')
     setAbiertoMesa(false)
-    if (m.colegio_nombre && !local.trim()) setLocal(m.colegio_nombre)
   }
 
   const guardar = async () => {
@@ -140,7 +143,7 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
                   {filtradosLocal.length > 0 ? filtradosLocal.slice(0, 100).map(c => (
                     <button key={c} type="button"
                       onMouseDown={e => e.preventDefault()}
-                      onClick={() => { setLocal(c); setQLocal(''); setAbiertoLocal(false) }}
+                      onClick={() => { setLocal(c); setMesa(''); setQLocal(''); setAbiertoLocal(false) }}
                       className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-sky-50 transition-colors">
                       {c}
                     </button>
@@ -152,10 +155,10 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
             </div>
           </label>
         ) : (
-          <Campo label="Local de Votación Asignado" value={local} onChange={setLocal} />
+          <Campo label="Local de Votación Asignado" value={local} onChange={v => { setLocal(v); setMesa('') }} />
         )}
         {esMesa && (
-          hayPadronMesas ? (
+          hayPadronMesas && local.trim() ? (
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-semibold text-slate-500">Mesa asignada</span>
               <div className="relative">
@@ -164,7 +167,7 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
                   onChange={e => { setQMesa(e.target.value); setAbiertoMesa(true) }}
                   onFocus={() => { setQMesa(''); setAbiertoMesa(true) }}
                   onBlur={() => setTimeout(() => setAbiertoMesa(false), 150)}
-                  placeholder="Buscar por N° de mesa o colegio..."
+                  placeholder="Buscar por N° de mesa..."
                   className="text-sm rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-500 w-full" />
                 {abiertoMesa && (
                   <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
@@ -176,7 +179,7 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
                         <span className="font-mono font-semibold">{m.numero}</span>
                       </button>
                     )) : (
-                      <p className="px-3 py-2.5 text-xs text-slate-400">Sin coincidencias.</p>
+                      <p className="px-3 py-2.5 text-xs text-slate-400">Sin coincidencias, o ya están todas asignadas.</p>
                     )}
                   </div>
                 )}
