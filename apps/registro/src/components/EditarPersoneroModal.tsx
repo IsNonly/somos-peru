@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Trash2, KeyRound } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { eliminarPersoneroCompleto, cambiarPasswordPersonero } from '../lib/personeros'
+import { fetchTodasLasMesas } from '../lib/panel'
 
 interface MesaOpt { numero: string; colegio_nombre: string | null }
 const normTexto = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
@@ -63,9 +64,7 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
   const [mesasDisponibles, setMesasDisponibles] = useState<MesaOpt[] | null>(null)
   useEffect(() => {
     if (!esMesa) return
-    supabase.from('mesas').select('numero, colegio_nombre').order('numero').then(({ data }) => {
-      setMesasDisponibles(data ?? [])
-    })
+    fetchTodasLasMesas().then(setMesasDisponibles)
   }, [esMesa])
 
   const [qMesa, setQMesa] = useState('')

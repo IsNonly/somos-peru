@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase, AMBITO_DEPARTAMENTO } from '../../lib/supabase'
 import {
-  usePanelData, rolNorm, norm, ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST,
+  usePanelData, rolNorm, norm, ROL_MESA, ROL_LOCAL, ROL_ZONAL, ROL_COORD_DIST, fetchTodasLasMesas,
   type Perfil, type Colegio,
 } from '../../lib/panel'
 import { eliminarPersoneroCompleto, cambiarPasswordPersonero } from '../../lib/personeros'
@@ -397,9 +397,7 @@ function ModalEditar({ perfil, actorEsSuperadmin, puedeEliminar, editadoPor, col
   // real del centro elegido, en vez de escribir el número a mano.
   const [mesasDisponibles, setMesasDisponibles] = useState<MesaOpt[] | null>(null)
   useEffect(() => {
-    supabase.from('mesas').select('numero, colegio_nombre').order('numero').then(({ data }) => {
-      setMesasDisponibles(data ?? [])
-    })
+    fetchTodasLasMesas().then(setMesasDisponibles)
   }, [])
 
   const [qMesa, setQMesa] = useState('')

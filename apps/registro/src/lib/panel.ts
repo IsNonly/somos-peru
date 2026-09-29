@@ -7,6 +7,25 @@ export const norm = (t: string | null | undefined) =>
     .toUpperCase().replace(/[^A-Z0-9]/g, ' ').replace(/\s+/g, ' ').trim()
 export const claveLocal = (d: string | null | undefined, l: string | null | undefined) => `${norm(d)}||${norm(l)}`
 
+// Trae TODO el padrón de mesas paginando -Supabase corta cada consulta a 1000
+// filas (db-max-rows) y esta tabla ya supera eso en instancias grandes (VES
+// tiene 1171): sin paginar, los colegios cuyas mesas caen después de la fila
+// 1000 simplemente no aparecían en los buscadores de mesa.
+export async function fetchTodasLasMesas(): Promise<{ numero: string; colegio_nombre: string | null }[]> {
+  const PAGINA = 1000
+  const todas: { numero: string; colegio_nombre: string | null }[] = []
+  let desde = 0
+  while (true) {
+    const { data } = await supabase.from('mesas').select('numero, colegio_nombre')
+      .order('numero').range(desde, desde + PAGINA - 1)
+    if (!data || data.length === 0) break
+    todas.push(...data)
+    if (data.length < PAGINA) break
+    desde += PAGINA
+  }
+  return todas
+}
+
 export const ROL_LOCAL = 'Personero de Centro de Votación'
 export const ROL_MESA = 'Personero de Mesa'
 export const ROL_COORD_DIST = 'Coordinador Distrital'

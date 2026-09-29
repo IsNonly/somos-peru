@@ -15,6 +15,25 @@ export interface PersoneroEditable {
 interface MesaOpt { numero: string; colegio_nombre: string | null }
 const normTexto = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
+// Trae TODO el padrón de mesas paginando -Supabase corta cada consulta a 1000
+// filas (db-max-rows) y esta tabla ya supera eso en instancias grandes (VES
+// tiene 1171): sin paginar, los colegios cuyas mesas caen después de la fila
+// 1000 simplemente no aparecían en el buscador.
+async function fetchTodasLasMesas(): Promise<MesaOpt[]> {
+  const PAGINA = 1000
+  const todas: MesaOpt[] = []
+  let desde = 0
+  while (true) {
+    const { data } = await supabase.from('mesas').select('numero, colegio_nombre')
+      .order('numero').range(desde, desde + PAGINA - 1)
+    if (!data || data.length === 0) break
+    todas.push(...data)
+    if (data.length < PAGINA) break
+    desde += PAGINA
+  }
+  return todas
+}
+
 export default function EditarPersoneroModal({ perfil, onClose, onSaved }: {
   perfil: PersoneroEditable
   onClose: () => void
@@ -37,9 +56,7 @@ export default function EditarPersoneroModal({ perfil, onClose, onSaved }: {
   const [mesasDisponibles, setMesasDisponibles] = useState<MesaOpt[] | null>(null)
   useEffect(() => {
     if (!esMesa) return
-    supabase.from('mesas').select('numero, colegio_nombre').order('numero').then(({ data }) => {
-      setMesasDisponibles(data ?? [])
-    })
+    fetchTodasLasMesas().then(setMesasDisponibles)
   }, [esMesa])
 
   const [qMesa, setQMesa] = useState('')
