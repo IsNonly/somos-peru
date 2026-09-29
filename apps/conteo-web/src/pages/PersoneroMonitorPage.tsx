@@ -3,11 +3,12 @@ import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
 import { restablecerClavePersonero } from '../lib/personeroActions'
 import EditarPersoneroModal from '../components/EditarPersoneroModal'
+import EditarVotosModal from '../components/EditarVotosModal'
 import { Doughnut, Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
 } from 'chart.js'
-import { UserCheck, FileCheck, Pencil, KeyRound, MessageCircle } from 'lucide-react'
+import { UserCheck, FileCheck, Pencil, KeyRound, MessageCircle, Vote } from 'lucide-react'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -38,6 +39,7 @@ export default function PersoneroMonitorPage() {
   const [fAsis, setFAsis] = useState<'todos' | 'con' | 'sin'>('todos')
   const [fEnv, setFEnv] = useState<'todos' | 'enviado' | 'sin'>('todos')
   const [editando, setEditando] = useState<Perfil | null>(null)
+  const [editandoVotos, setEditandoVotos] = useState<Perfil | null>(null)
 
   useEffect(() => {
     if (scopeLoading) return
@@ -246,6 +248,11 @@ export default function PersoneroMonitorPage() {
                           className="flex items-center gap-1 text-xs font-bold rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white px-2.5 py-1.5">
                           <MessageCircle size={13} /> Avisar
                         </button>
+                        <button onClick={() => setEditandoVotos(p)} disabled={!enviado}
+                          title={enviado ? 'Ver / corregir los votos digitados de su acta' : 'Aún no transmite su acta'}
+                          className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-300 disabled:opacity-30 disabled:hover:text-slate-500 disabled:hover:border-slate-200">
+                          <Vote size={14} />
+                        </button>
                         <button onClick={() => setEditando(p)} title="Editar datos"
                           className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-sky-600 hover:border-sky-300">
                           <Pencil size={14} />
@@ -272,6 +279,13 @@ export default function PersoneroMonitorPage() {
             setPers(prev => prev.map(p => p.id === editando.id ? { ...p, ...cambios } : p))
             setEditando(null)
           }}
+        />
+      )}
+
+      {editandoVotos && (
+        <EditarVotosModal
+          personero={editandoVotos}
+          onClose={() => setEditandoVotos(null)}
         />
       )}
     </div>
