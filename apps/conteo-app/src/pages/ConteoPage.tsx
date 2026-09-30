@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   supabase, getMiPerfil, VOTOS_ESPECIALES, haversineM,
 } from '../lib/supabase'
@@ -10,7 +10,7 @@ import { procesarActa } from '../lib/ocr'
 import { subirImagenActa } from '../lib/storage'
 import {
   Camera, Send, CheckCircle, AlertTriangle,
-  Loader, MapPin, Key, ChevronDown, ChevronUp, Minus, Plus,
+  Loader, MapPin, Key, ChevronDown, ChevronUp,
   Info, PencilLine, LogOut, UserCheck, Map as MapIcon,
   Eye, Layers, ChevronLeft, X, UserCircle2, type LucideIcon,
 } from 'lucide-react'
@@ -155,11 +155,12 @@ type VotosPorNivel = Record<NivelCandidatura, Record<string, number>>
 const VOTOS_VACIOS: VotosPorNivel = { REGIONAL: {}, PROVINCIAL: {}, DISTRITAL: {} }
 const NIVELES: NivelCandidatura[] = ['REGIONAL', 'PROVINCIAL', 'DISTRITAL']
 
-// ONPE emite un acta FÍSICA SEPARADA por cada nivel (Gobernador Regional,
-// Alcaldía Provincial, Alcaldía Distrital) -no siempre viene todo en una sola
-// hoja combinada-, así que cada nivel necesita su propia foto y su propio
-// resultado de OCR en vez de una sola foto global para toda la mesa.
-interface FotoNivelState {
+// ONPE emite UN SOLO acta de escrutinio (Acta C) con los resultados de Alcaldía
+// Provincial y Alcaldía Distrital juntos en la misma hoja -una tabla con una
+// columna de votos por cada nivel, "NO PARTICIPA" cuando un partido no postula
+// a ese nivel-, así que basta con una sola foto/OCR para toda la mesa (antes
+// se pedía una foto separada por nivel, que no correspondía al acta real).
+interface FotoActaState {
   imgSrc: string | null
   imgMime: string
   ocrLoading: boolean
@@ -167,11 +168,36 @@ interface FotoNivelState {
   ocrSinMatch: boolean
   ocrGeminiError: string
 }
-const FOTO_NIVEL_VACIA: FotoNivelState = {
+const FOTO_ACTA_VACIA: FotoActaState = {
   imgSrc: null, imgMime: 'image/jpeg', ocrLoading: false, ocrMetodo: null, ocrSinMatch: false, ocrGeminiError: '',
 }
-const FOTOS_VACIAS: Record<NivelCandidatura, FotoNivelState> = {
-  REGIONAL: { ...FOTO_NIVEL_VACIA }, PROVINCIAL: { ...FOTO_NIVEL_VACIA }, DISTRITAL: { ...FOTO_NIVEL_VACIA },
+
+// Una fila del acta = una organización política, con el candidato (si postula)
+// de cada nivel presente. El nivel con más listas (normalmente Provincial, que
+// trae TODAS las organizaciones) define el conjunto y el orden de filas; los
+// demás niveles solo agregan su candidato a la fila que ya existe por partido
+// -o abren una fila nueva si ese partido postula SOLO en ese nivel-.
+interface FilaActa { partido: string; porNivel: Partial<Record<NivelCandidatura, Candidato>> }
+
+function construirFilasActa(bloques: BloqueCandidaturas[]): FilaActa[] {
+  if (!bloques.length) return []
+  const base = [...bloques].sort((a, b) => b.candidatos.length - a.candidatos.length)[0]
+  const filas: FilaActa[] = base.candidatos.map(c => ({ partido: c.partido, porNivel: { [base.nivel]: c } }))
+  const porPartido = new Map(filas.map(f => [normTxt(f.partido), f]))
+  for (const b of bloques) {
+    if (b.nivel === base.nivel) continue
+    for (const c of b.candidatos) {
+      const clave = normTxt(c.partido)
+      const existente = porPartido.get(clave)
+      if (existente) existente.porNivel[b.nivel] = c
+      else {
+        const nueva: FilaActa = { partido: c.partido, porNivel: { [b.nivel]: c } }
+        filas.push(nueva)
+        porPartido.set(clave, nueva)
+      }
+    }
+  }
+  return filas
 }
 
 function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
@@ -201,7 +227,7 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
   const [cand, setCand]               = useState<Candidaturas | null>(null)
   const [candLoading, setCandLoading] = useState(true)
   const [votos, setVotos]             = useState<VotosPorNivel>(VOTOS_VACIOS)
-  const [fotos, setFotos]             = useState<Record<NivelCandidatura, FotoNivelState>>(FOTOS_VACIAS)
+  const [foto, setFoto]               = useState<FotoActaState>(FOTO_ACTA_VACIA)
   const [gpsStatus, setGpsStatus]     = useState<'idle' | 'loading' | 'ok' | 'warn' | 'fail'>('idle')
   const [gpsMsg, setGpsMsg]           = useState('')
   const [gpsCoords, setGpsCoords]     = useState<{ lat: number; lon: number } | null>(null)
@@ -209,10 +235,10 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
   const [error, setError]             = useState('')
   const [geminiKey, setGeminiKey]     = useState('')
   const [showKeyInput, setShowKeyInput] = useState(false)
-  const inputRefs = useRef<Record<NivelCandidatura, HTMLInputElement | null>>({ REGIONAL: null, PROVINCIAL: null, DISTRITAL: null })
+  const fotoInputRef = useRef<HTMLInputElement>(null)
 
-  const setFotoNivel = (nivel: NivelCandidatura, patch: Partial<FotoNivelState>) =>
-    setFotos(prev => ({ ...prev, [nivel]: { ...prev[nivel], ...patch } }))
+  const setFotoPatch = (patch: Partial<FotoActaState>) =>
+    setFoto(prev => ({ ...prev, ...patch }))
 
   // Foto de instalación de mesa (evidencia previa al escrutinio)
   const [fotoInstalacion, setFotoInstalacion]   = useState<string | null>(null)
@@ -220,6 +246,8 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
   const instalacionInputRef = useRef<HTMLInputElement>(null)
 
   const bloques = cand?.bloques ?? []
+  const nivelesPresentes = bloques.map(b => b.nivel)
+  const filasActa = useMemo(() => construirFilasActa(bloques), [bloques])
 
   // Si el PCV ya le asignó oficialmente una mesa (mesa_asignada en su perfil, ver
   // "Asignar mesa" en el Panel del PCV), no debe poder escribir un número distinto
@@ -434,8 +462,8 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
     reader.readAsDataURL(file)
   }
 
-  // ── Manejar foto (una por nivel: Regional / Provincial / Distrital) ───────
-  const handleFoto = async (nivel: NivelCandidatura, e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── Manejar la foto ÚNICA del acta de escrutinio (trae Provincial + Distrital) ──
+  const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const mime = file.type || 'image/jpeg'
@@ -443,57 +471,73 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
     const reader = new FileReader()
     reader.onload = async ev => {
       const dataUrl = ev.target?.result as string
-      setFotoNivel(nivel, { imgSrc: dataUrl, imgMime: mime, ocrLoading: true, ocrSinMatch: false, ocrGeminiError: '' })
+      setFotoPatch({ imgSrc: dataUrl, imgMime: mime, ocrLoading: true, ocrSinMatch: false, ocrGeminiError: '' })
 
       try {
         const base64 = dataUrl.split(',')[1]
         const resultado = await procesarActa(base64, mime, geminiKey)
 
-        // Mapear resultados OCR a los candidatos de ESTE nivel únicamente.
-        // Cada foto es de un solo nivel (acta física separada por ONPE), así
-        // que basta con tomar el valor que trajo el OCR en cualquiera de los
-        // 2 campos -algunas actas de un solo nivel igual traen ambos iguales,
-        // otras solo llenan uno- sin mezclarlo con los otros niveles.
-        const b = bloques.find(x => x.nivel === nivel)
-        const lista = b ? [...b.candidatos, ...VOTOS_ESPECIALES] : []
-        const nuevosNivel: Record<string, number> = {}
+        // Cada fila reconocida trae un valor Provincial y uno Distrital juntos
+        // (mismo formato que el acta física real): se matchea por partido y se
+        // aplica cada valor SOLO a los niveles donde ese partido participa de
+        // verdad (fila.porNivel) — así no se le asigna un número a un nivel
+        // donde el partido "no participa".
+        const listaCompleta = [...bloques.flatMap(b => b.candidatos), ...VOTOS_ESPECIALES]
+        const nuevos: VotosPorNivel = { REGIONAL: {}, PROVINCIAL: {}, DISTRITAL: {} }
+        let huboMatch = false
         resultado.votos.forEach(v => {
-          const c = matchCandidato(lista, v.partido)
+          const c = matchCandidato(listaCompleta, v.partido)
           if (!c) return
-          const n = v.distrital > 0 ? v.distrital : v.provincial
-          if (n > 0) nuevosNivel[c.id] = n
+          const esEspecial = VOTOS_ESPECIALES.some(e2 => e2.id === c.id)
+          const valorPara = (n: NivelCandidatura) =>
+            n === 'PROVINCIAL' ? v.provincial : n === 'DISTRITAL' ? v.distrital : null
+          if (esEspecial) {
+            for (const n of nivelesPresentes) {
+              const val = valorPara(n)
+              if (val && val > 0) { nuevos[n][c.id] = val; huboMatch = true }
+            }
+            return
+          }
+          const fila = filasActa.find(f => normTxt(f.partido) === normTxt(c.partido))
+          if (!fila) return
+          for (const n of nivelesPresentes) {
+            const candNivel = fila.porNivel[n]
+            if (!candNivel) continue
+            const val = valorPara(n)
+            if (val && val > 0) { nuevos[n][candNivel.id] = val; huboMatch = true }
+          }
         })
 
         // El texto reconocido puede no coincidir con ningún candidato real
         // (típico del fallback Tesseract con actas de mala calidad): en ese
         // caso NO hay que decir "votos reconocidos" -sería falso-, sino
         // avisar que hay que llenarlo a mano.
-        if (Object.keys(nuevosNivel).length > 0) {
-          setVotos(prev => ({ ...prev, [nivel]: nuevosNivel }))
-          setFotoNivel(nivel, { ocrMetodo: resultado.metodo, ocrGeminiError: resultado.geminiError ?? '' })
+        if (huboMatch) {
+          setVotos(prev => ({
+            REGIONAL: { ...prev.REGIONAL, ...nuevos.REGIONAL },
+            PROVINCIAL: { ...prev.PROVINCIAL, ...nuevos.PROVINCIAL },
+            DISTRITAL: { ...prev.DISTRITAL, ...nuevos.DISTRITAL },
+          }))
+          setFotoPatch({ ocrMetodo: resultado.metodo, ocrGeminiError: resultado.geminiError ?? '' })
         } else {
-          setFotoNivel(nivel, { ocrMetodo: resultado.metodo, ocrSinMatch: true, ocrGeminiError: resultado.geminiError ?? '' })
+          setFotoPatch({ ocrMetodo: resultado.metodo, ocrSinMatch: true, ocrGeminiError: resultado.geminiError ?? '' })
         }
       } catch {
         setError('No se pudo procesar el acta automáticamente. Ingresa los votos manualmente.')
       }
-      setFotoNivel(nivel, { ocrLoading: false })
+      setFotoPatch({ ocrLoading: false })
     }
     reader.readAsDataURL(file)
     e.target.value = ''
   }
 
-  const cambiarVoto = (nivel: NivelCandidatura, id: string, delta: number) => {
-    setVotos(prev => ({
-      ...prev,
-      [nivel]: { ...prev[nivel], [id]: Math.max(0, (prev[nivel][id] || 0) + delta) },
-    }))
+  const setVoto = (nivel: NivelCandidatura, id: string, valor: number) => {
+    setVotos(prev => ({ ...prev, [nivel]: { ...prev[nivel], [id]: Math.max(0, valor) } }))
   }
 
   const totalNivel = (nivel: NivelCandidatura) =>
     Object.values(votos[nivel]).reduce((a, b) => a + b, 0)
-  const granTotal = (['REGIONAL', 'PROVINCIAL', 'DISTRITAL'] as NivelCandidatura[])
-    .reduce((s, n) => s + totalNivel(n), 0)
+  const granTotal = NIVELES.reduce((s, n) => s + totalNivel(n), 0)
 
   // ── Enviar acta ─────────────────────────────────────────────────────────
   const enviar = async () => {
@@ -511,21 +555,18 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
         setEnviando(false); return
       }
 
-      // Subir las fotos del acta -una por nivel- si las hay
+      // Subir la foto ÚNICA del acta (trae Provincial + Distrital juntos). Se
+      // guarda la misma URL bajo cada nivel presente en 'imagenes_url' -mismo
+      // shape que antes ({"PROVINCIAL": url, "DISTRITAL": url})- para no tener
+      // que tocar quien ya lee ese campo (ej. FotosPage del dashboard).
       const imagenesUrl: Partial<Record<NivelCandidatura, string>> = {}
-      for (const nivel of NIVELES) {
-        const f = fotos[nivel]
-        if (!f.imgSrc) continue
+      if (foto.imgSrc) {
         setError('')
-        const url = await subirImagenActa(`${mesa}_${nivel}`, f.imgSrc, f.imgMime)
-        if (url) imagenesUrl[nivel] = url
+        const url = await subirImagenActa(mesa, foto.imgSrc, foto.imgMime)
+        if (url) for (const nivel of nivelesPresentes) imagenesUrl[nivel] = url
       }
-      // 'imagen_url' se mantiene con la primera foto para lo que ya lea ese
-      // campo; 'imagenes_url' trae el detalle completo por nivel.
       const imagenUrl = Object.values(imagenesUrl)[0] ?? null
-      const ocrRaw = Object.fromEntries(
-        NIVELES.filter(n => fotos[n].ocrMetodo).map(n => [n, fotos[n].ocrMetodo])
-      )
+      const ocrRaw = foto.ocrMetodo ? { COMBINADA: foto.ocrMetodo } : null
 
       const base = datosBaseActa()
       const { departamento: dep, provincia: prov, distrito: dist } = base
@@ -539,7 +580,7 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
         imagen_url:        imagenUrl,
         imagenes_url:      Object.keys(imagenesUrl).length ? imagenesUrl : null,
         metodo:            modo,
-        ocr_raw:           Object.keys(ocrRaw).length ? ocrRaw : null,
+        ocr_raw:           ocrRaw,
         estado:            'TRANSMITIDA',
         bloqueada:         true,
         latitude:          gpsCoords?.lat ?? null,
@@ -848,64 +889,55 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
         </div>
       </div>
 
-      {/* Modo IMAGEN: una foto + OCR por cada nivel (ONPE emite un acta física
-          separada por nivel -Regional / Provincial / Distrital-, no siempre
-          viene todo combinado en una sola hoja) */}
+      {/* Modo IMAGEN: UNA sola foto del acta de escrutinio -trae Provincial y
+          Distrital juntos en la misma tabla, como el acta física real-. */}
       {modo === 'IMAGEN' && (
         <div className="space-y-3">
           {bloques.length > 1 && (
             <p className="text-white/40 text-[11px] px-1">
-              Sube una foto por cada acta: {bloques.map(b => b.titulo).join(' · ')}.
+              Sube una sola foto: el acta trae {bloques.map(b => b.titulo.split(' — ')[0]).join(' y ')} juntos en la misma hoja.
             </p>
           )}
-          {bloques.map(b => {
-            const f = fotos[b.nivel]
-            return (
-              <div key={b.nivel} className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
-                {bloques.length > 1 && (
-                  <p className="text-white/70 text-xs font-bold">{b.titulo}</p>
-                )}
-                <div onClick={() => inputRefs.current[b.nivel]?.click()}
-                  className="border-2 border-dashed border-white/15 rounded-2xl p-8 text-center cursor-pointer hover:border-sky-500/50 transition-all">
-                  <Camera size={32} className="mx-auto text-white/25 mb-2" />
-                  <p className="text-white/50 text-sm">
-                    {f.imgSrc ? 'Toca para reemplazar la foto' : 'Toca para abrir la cámara / subir foto del acta'}
-                  </p>
-                  <p className="text-white/25 text-xs mt-1">Se procesa con IA automáticamente</p>
-                </div>
-                {f.imgSrc && (
-                  <div className="rounded-xl overflow-hidden border border-white/10">
-                    <img src={f.imgSrc} alt={`Acta ${b.titulo}`} className="w-full object-contain max-h-48" />
-                  </div>
-                )}
-                {f.ocrLoading && (
-                  <p className="flex items-center gap-2 text-sky-300 text-xs">
-                    <Loader size={14} className="animate-spin" /> Procesando acta con IA…
-                  </p>
-                )}
-                {f.ocrMetodo && !f.ocrLoading && (
-                  f.ocrSinMatch ? (
-                    <div className="space-y-1">
-                      <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
-                        <AlertTriangle size={13} /> No se pudo reconocer automáticamente ningún partido en la foto. Ingresa los votos manualmente abajo.
-                      </p>
-                      {f.ocrGeminiError && (
-                        <p className="text-[11px] text-white/40 pl-[19px]">
-                          Gemini no respondió ({f.ocrGeminiError}) — se intentó con el respaldo (Tesseract).
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className={`flex items-center gap-1.5 text-xs font-medium ${f.ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
-                      <CheckCircle size={13} /> Votos reconocidos ({f.ocrMetodo}) — revísalos abajo.
-                    </p>
-                  )
-                )}
-                <input ref={el => { inputRefs.current[b.nivel] = el }} type="file" accept="image/*" capture="environment"
-                  className="hidden" onChange={e => handleFoto(b.nivel, e)} />
+          <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
+            <div onClick={() => fotoInputRef.current?.click()}
+              className="border-2 border-dashed border-white/15 rounded-2xl p-8 text-center cursor-pointer hover:border-sky-500/50 transition-all">
+              <Camera size={32} className="mx-auto text-white/25 mb-2" />
+              <p className="text-white/50 text-sm">
+                {foto.imgSrc ? 'Toca para reemplazar la foto' : 'Toca para abrir la cámara / subir foto del acta'}
+              </p>
+              <p className="text-white/25 text-xs mt-1">Se procesa con IA automáticamente</p>
+            </div>
+            {foto.imgSrc && (
+              <div className="rounded-xl overflow-hidden border border-white/10">
+                <img src={foto.imgSrc} alt="Acta de escrutinio" className="w-full object-contain max-h-48" />
               </div>
-            )
-          })}
+            )}
+            {foto.ocrLoading && (
+              <p className="flex items-center gap-2 text-sky-300 text-xs">
+                <Loader size={14} className="animate-spin" /> Procesando acta con IA…
+              </p>
+            )}
+            {foto.ocrMetodo && !foto.ocrLoading && (
+              foto.ocrSinMatch ? (
+                <div className="space-y-1">
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
+                    <AlertTriangle size={13} /> No se pudo reconocer automáticamente ningún partido en la foto. Ingresa los votos manualmente abajo.
+                  </p>
+                  {foto.ocrGeminiError && (
+                    <p className="text-[11px] text-white/40 pl-[19px]">
+                      Gemini no respondió ({foto.ocrGeminiError}) — se intentó con el respaldo (Tesseract).
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className={`flex items-center gap-1.5 text-xs font-medium ${foto.ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
+                  <CheckCircle size={13} /> Votos reconocidos ({foto.ocrMetodo}) — revísalos abajo.
+                </p>
+              )
+            )}
+            <input ref={fotoInputRef} type="file" accept="image/*" capture="environment"
+              className="hidden" onChange={handleFoto} />
+          </div>
           <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
             <button onClick={() => setShowKeyInput(!showKeyInput)}
               className="w-full flex items-center justify-between text-white/50 text-xs">
@@ -938,12 +970,6 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
         </span>
       </div>
 
-      {/* Cabeceras de columna */}
-      <div className="flex items-center justify-between px-3 text-white/30 text-[10px] font-bold uppercase tracking-widest">
-        <span>Partido</span>
-        <span>Conteo votos</span>
-      </div>
-
       {/* Estado de carga de candidaturas */}
       {candLoading && (
         <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-6 flex items-center justify-center gap-2 text-white/40 text-sm">
@@ -964,51 +990,10 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
         </div>
       )}
 
-      {/* Secciones dinámicas por nivel (Regional / Provincial / Distrital) */}
-      {!candLoading && bloques.map(b => (
-        <SeccionVotos
-          key={b.nivel}
-          bloque={b}
-          total={totalNivel(b.nivel)}
-          votos={votos[b.nivel]}
-          onDelta={(id, d) => cambiarVoto(b.nivel, id, d)}
-        />
-      ))}
-
-      {/* Resumen */}
-      {bloques.length > 0 && (
-        <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 grid gap-2 text-center"
-          style={{ gridTemplateColumns: `repeat(${bloques.length + 1}, minmax(0, 1fr))` }}>
-          {bloques.map(b => (
-            <div key={b.nivel}>
-              <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">{b.nivel}</p>
-              <p className="text-white text-lg font-extrabold tabular-nums">{totalNivel(b.nivel)}</p>
-            </div>
-          ))}
-          <div>
-            <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Total de Votos Emitidos</p>
-            <p className="text-sky-400 text-lg font-extrabold tabular-nums">{granTotal}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Votos especiales: blanco/nulo/impugnado desglosados por nivel */}
-      {bloques.length > 0 && (
-        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${bloques.length}, minmax(0, 1fr))` }}>
-          {bloques.map(b => (
-            <div key={b.nivel} className="bg-[#131a2e] border border-white/8 rounded-2xl p-3 space-y-2">
-              <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold text-center truncate">{b.nivel}</p>
-              <div className="grid grid-cols-3 gap-1.5 text-center">
-                {VOTOS_ESPECIALES.map(v => (
-                  <div key={v.id}>
-                    <p className="text-[9px] font-bold truncate" style={{ color: v.color }}>{v.nombre.replace('Votos ', '')}</p>
-                    <p className="text-white text-sm font-extrabold tabular-nums">{votos[b.nivel][v.id] || 0}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Acta única: una fila por organización política, una columna por nivel
+          presente (Provincial / Distrital) -igual que el acta física real-. */}
+      {!candLoading && bloques.length > 0 && (
+        <TablaActaUnica bloques={bloques} filas={filasActa} votos={votos} onChange={setVoto} />
       )}
 
       {error && (
@@ -1019,7 +1004,7 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
       )}
 
       {/* Transmitir */}
-      <button onClick={enviar} disabled={enviando || Object.values(fotos).some(f => f.ocrLoading) || mesa.length !== 6 || !mesaConfirmada || !bloques.length}
+      <button onClick={enviar} disabled={enviando || foto.ocrLoading || mesa.length !== 6 || !mesaConfirmada || !bloques.length}
         className="w-full py-4 bg-gradient-to-r from-emerald-600 to-green-500 hover:opacity-95 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-40 active:scale-[0.98]">
         {enviando
           ? <><Loader size={16} className="animate-spin" /> Transmitiendo…</>
@@ -1071,97 +1056,113 @@ function TarjetaEscrutinio({ color, icon: Icon, titulo, desc, botonLabel, onInic
   )
 }
 
-// ── Sección de candidatos de un nivel (Regional / Provincial / Distrital) ────
-function SeccionVotos({ bloque, total, votos, onDelta }: {
-  bloque: BloqueCandidaturas; total: number
-  votos: Record<string, number>; onDelta: (id: string, delta: number) => void
+// ── Acta única: una fila por organización política, una columna por nivel
+//    presente (Provincial / Distrital) — igual que el acta física real, en
+//    vez de una sección completa y separada por cada nivel. ────────────────
+function TablaActaUnica({ bloques, filas, votos, onChange }: {
+  bloques: BloqueCandidaturas[]; filas: FilaActa[]
+  votos: VotosPorNivel; onChange: (nivel: NivelCandidatura, id: string, valor: number) => void
 }) {
-  const esProv = bloque.nivel === 'PROVINCIAL'
-  const barra   = esProv ? 'border-sky-500 bg-sky-500/5'   : 'border-emerald-500 bg-emerald-500/5'
-  const tinta   = esProv ? 'text-sky-300'                  : 'text-emerald-300'
-  const icono   = esProv ? 'text-sky-400'                  : 'text-emerald-400'
-  const accent: 'metro' | 'distrital' = esProv ? 'metro' : 'distrital'
+  const niveles = bloques.map(b => b.nivel)
+  const totalNivel = (n: NivelCandidatura) => Object.values(votos[n]).reduce((a, b) => a + b, 0)
+  const granTotal = niveles.reduce((s, n) => s + totalNivel(n), 0)
+
   return (
     <div className="bg-[#131a2e] border border-white/8 rounded-2xl overflow-hidden">
-      {/* Cabecera de sección */}
-      <div className={`flex items-start justify-between gap-2 pl-4 pr-3 py-3 border-l-4 ${barra}`}>
-        <div className="min-w-0 space-y-1.5">
-          <div className="flex items-center gap-1.5">
-            <MapIcon size={13} className={`${icono} flex-shrink-0`} />
-            <p className={`text-[11px] font-extrabold uppercase tracking-wide leading-tight ${tinta}`}>
-              {bloque.titulo} ({bloque.candidatos.length} listas)
-            </p>
-          </div>
-        </div>
-        <div className="text-right flex-shrink-0">
-          <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold">Votos</p>
-          <p className="text-white text-xl font-black tabular-nums leading-none mt-0.5">{total}</p>
-        </div>
+      <div className="flex items-center gap-2 pl-4 pr-3 py-3 border-l-4 border-sky-500 bg-sky-500/5">
+        <MapIcon size={13} className="text-sky-400 flex-shrink-0" />
+        <p className="text-[11px] font-extrabold uppercase tracking-wide leading-tight text-sky-300">
+          Acta de Escrutinio ({filas.length} organizaciones políticas)
+        </p>
       </div>
-      {/* Filas de candidatos */}
-      <div className="divide-y divide-white/[0.06] max-h-[60vh] overflow-y-auto">
-        {bloque.candidatos.map(c => (
-          <FilaCandidato key={c.id} candidato={c} accent={accent} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
+
+      {/* Cabecera de columnas: Partido + una por cada nivel */}
+      <div className="flex items-center gap-2 px-3 py-2 bg-black/20 border-b border-white/10">
+        <span className="flex-1 text-white/40 text-[9px] font-bold uppercase tracking-widest">Organización política</span>
+        {bloques.map(b => (
+          <span key={b.nivel} className="w-[4.2rem] shrink-0 text-center text-white/40 text-[8px] font-bold uppercase tracking-widest leading-tight">
+            {b.titulo.split(' — ')[0]}
+          </span>
         ))}
       </div>
 
-      {/* Votos especiales (blanco/nulo/impugnado): sección aparte y siempre
-          visible (no dentro del scroll), acotada a ESTE nivel — cada bloque
-          (Provincial/Distrital) lleva su propio conteo independiente. */}
+      <div className="divide-y divide-white/[0.06] max-h-[55vh] overflow-y-auto">
+        {filas.map(f => (
+          <FilaActaFila key={f.partido} label={f.partido} esLista niveles={niveles} porNivel={f.porNivel} votos={votos} onChange={onChange} />
+        ))}
+      </div>
+
+      {/* Votos especiales (blanco/nulo/impugnado): aplican a TODOS los niveles
+          presentes por igual -no hay "no participa" para ellos-. */}
       <div className="border-t-2 border-white/10 bg-black/20 pt-1">
-        <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold px-4 pt-2 pb-1">
-          Votos Especiales · {bloque.titulo}
-        </p>
+        <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold px-3 pt-2 pb-1">Votos Especiales</p>
         <div className="divide-y divide-white/[0.06]">
-          {VOTOS_ESPECIALES.map(c => (
-            <FilaCandidato key={c.id} candidato={c} accent={accent} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
+          {VOTOS_ESPECIALES.map(esp => (
+            <FilaActaFila key={esp.id} label={esp.partido} esLista={false} niveles={niveles}
+              porNivel={Object.fromEntries(niveles.map(n => [n, esp])) as Partial<Record<NivelCandidatura, Candidato>>}
+              votos={votos} onChange={onChange} />
           ))}
         </div>
+      </div>
+
+      {/* Totales */}
+      <div className="flex items-center gap-2 px-3 py-3 border-t-2 border-white/10">
+        <span className="flex-1 text-white/50 text-[10px] font-bold uppercase tracking-widest">Total de Votos Emitidos</span>
+        {niveles.map(n => (
+          <span key={n} className="w-[4.2rem] shrink-0 text-center text-white text-sm font-black tabular-nums">{totalNivel(n)}</span>
+        ))}
+      </div>
+      {niveles.length > 1 && new Set(niveles.map(totalNivel)).size > 1 && (
+        <p className="text-amber-300 text-[11px] px-3 pb-3 flex items-center gap-1.5">
+          <AlertTriangle size={12} className="flex-shrink-0" />
+          Los totales de {niveles.map(n => n.toLowerCase()).join(' y ')} deberían ser iguales (mismos ciudadanos votaron ambas elecciones) — revisa los números.
+        </p>
+      )}
+      <div className="px-3 pb-3 -mt-1">
+        <span className="text-sky-400 text-xs font-bold">Gran total: {granTotal.toLocaleString('es-PE')}</span>
       </div>
     </div>
   )
 }
 
-// ── Fila individual con controles +/- ────────────────────────────────────────
-function FilaCandidato({ candidato, accent, value, onDelta }: {
-  candidato: Candidato; accent: 'metro' | 'distrital'
-  value: number; onDelta: (delta: number) => void
+// ── Fila individual: nombre + un input numérico por nivel (o "No participa") ──
+function FilaActaFila({ label, esLista, niveles, porNivel, votos, onChange }: {
+  label: string; esLista: boolean; niveles: NivelCandidatura[]
+  porNivel: Partial<Record<NivelCandidatura, Candidato>>
+  votos: VotosPorNivel; onChange: (nivel: NivelCandidatura, id: string, valor: number) => void
 }) {
-  const activa = accent === 'metro'
-    ? 'bg-sky-500/[0.07] border-l-2 border-sky-500'
-    : 'bg-emerald-500/[0.07] border-l-2 border-emerald-500'
-  const mas = accent === 'metro' ? 'bg-sky-500 hover:bg-sky-400' : 'bg-emerald-500 hover:bg-emerald-400'
-  const esLista = candidato.id.startsWith('cand_')
+  const cualquiera = niveles.map(n => porNivel[n]).find(Boolean)
+  const activa = niveles.some(n => { const c = porNivel[n]; return c && (votos[n][c.id] || 0) > 0 })
   return (
-    <div className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${value > 0 ? activa : 'border-l-2 border-transparent'}`}>
-      <div className="relative w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden">
-        <span className="text-[0.55rem] font-black leading-none text-center px-0.5" style={{ color: candidato.color }}>
-          {candidato.letra}
+    <div className={`flex items-center gap-2 px-3 py-2 transition-colors ${activa ? 'bg-sky-500/[0.06] border-l-2 border-sky-500' : 'border-l-2 border-transparent'}`}>
+      <div className="relative w-7 h-7 rounded-md bg-white flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden">
+        <span className="text-[0.5rem] font-black leading-none text-center px-0.5" style={{ color: cualquiera?.color }}>
+          {cualquiera?.letra}
         </span>
-        {esLista ? (
-          <img
-            src={`/partidos/${slugPartido(candidato.partido)}.png`}
-            alt=""
-            loading="lazy"
+        {esLista && (
+          <img src={`/partidos/${slugPartido(label)}.png`} alt="" loading="lazy"
             className="absolute inset-0 w-full h-full object-contain p-0.5 bg-white"
-            onError={e => { e.currentTarget.style.display = 'none' }}
-          />
-        ) : null}
+            onError={e => { e.currentTarget.style.display = 'none' }} />
+        )}
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-white text-xs font-bold leading-tight truncate">{candidato.partido}</p>
-      </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <button type="button" onClick={() => onDelta(-1)} disabled={value === 0}
-          className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-white/60 disabled:opacity-30 flex items-center justify-center transition-all">
-          <Minus size={13} />
-        </button>
-        <span className="w-10 text-center text-sm font-extrabold tabular-nums text-white border border-white/10 rounded-lg py-1">{value}</span>
-        <button type="button" onClick={() => onDelta(1)}
-          className={`w-7 h-7 rounded-lg text-white flex items-center justify-center transition-all ${mas}`}>
-          <Plus size={13} />
-        </button>
-      </div>
+      <p className="flex-1 min-w-0 text-white text-[11px] font-bold leading-tight truncate">{label}</p>
+      {niveles.map(n => {
+        const c = porNivel[n]
+        if (!c) return (
+          <span key={n} className="w-[4.2rem] shrink-0 text-center text-white/25 text-[8px] font-semibold uppercase tracking-wide">
+            No participa
+          </span>
+        )
+        const valor = votos[n][c.id] || 0
+        return (
+          <input key={n} type="number" inputMode="numeric" min={0} value={valor === 0 ? '' : valor}
+            onFocus={e => e.target.select()}
+            onChange={e => onChange(n, c.id, e.target.value ? Math.max(0, parseInt(e.target.value.replace(/\D/g, ''), 10)) : 0)}
+            placeholder="0"
+            className={`w-[4.2rem] shrink-0 text-center rounded-lg py-1.5 text-white text-sm font-extrabold tabular-nums outline-none border focus:border-sky-500/60 ${
+              valor > 0 ? 'border-sky-500/40 bg-sky-500/[0.08]' : 'border-white/10 bg-white/5'}`} />
+        )
+      })}
     </div>
   )
 }
