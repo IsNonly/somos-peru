@@ -197,6 +197,22 @@ function construirFilasActa(bloques: BloqueCandidaturas[]): FilaActa[] {
       }
     }
   }
+  // Un partido sin candidatura registrada en un nivel ya no queda bloqueado
+  // ("no participa") ahí: la data de candidaturas puede estar incompleta y el
+  // acta real igual puede traer un número en esa columna, así que se
+  // sintetiza un candidato "placeholder" para poder contar en CUALQUIER
+  // columna, siempre (el id queda namespaced por nivel, así que nunca choca
+  // con un candidato real de otro nivel).
+  for (const fila of filas) {
+    for (const b of bloques) {
+      if (fila.porNivel[b.nivel]) continue
+      const referencia = Object.values(fila.porNivel)[0]!
+      fila.porNivel[b.nivel] = {
+        id: `synth_${b.nivel}_${normTxt(fila.partido)}`,
+        nombre: '', partido: fila.partido, color: referencia.color, letra: referencia.letra,
+      }
+    }
+  }
   return filas
 }
 
@@ -591,26 +607,33 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
 
       if (actaErr) throw actaErr
 
-      // Insertar votos de todos los niveles (filtrar ceros)
-      const filas = bloques.flatMap(b => {
-        const lista = [...b.candidatos, ...VOTOS_ESPECIALES]
-        return Object.entries(votos[b.nivel])
+      // Insertar votos de todos los niveles (filtrar ceros). Se resuelve el
+      // partido/candidato desde `filasActa` (no desde b.candidatos): ahora
+      // cualquier celda es contable aunque el partido no tuviera candidatura
+      // registrada en ese nivel (id "sintético", ver construirFilasActa), así
+      // que b.candidatos ya no basta para encontrarlo.
+      const infoPorId = new Map<string, { partido: string; nombre: string | null }>()
+      for (const f of filasActa) for (const c of Object.values(f.porNivel)) if (c) infoPorId.set(c.id, { partido: f.partido, nombre: c.nombre || null })
+      for (const e of VOTOS_ESPECIALES) infoPorId.set(e.id, { partido: e.partido, nombre: e.nombre || null })
+
+      const filas = NIVELES.flatMap(nivel =>
+        Object.entries(votos[nivel])
           .map(([id, cantidad]) => {
-            const c = lista.find(x => x.id === id)
+            const info = infoPorId.get(id)
             return {
               acta_id:      acta.id,
               mesa_numero:  mesa,
-              nivel:        b.nivel,
+              nivel,
               departamento: dep,
               provincia:    prov,
               distrito:     dist,
-              partido:      c?.partido ?? id,
-              candidato:    c?.nombre || null,
+              partido:      info?.partido ?? id,
+              candidato:    info?.nombre || null,
               cantidad,
             }
           })
           .filter(f => f.cantidad > 0)
-      })
+      )
 
       if (filas.length) await supabase.from('votos').insert(filas)
 
@@ -1125,7 +1148,7 @@ function TablaActaUnica({ bloques, filas, votos, onChange }: {
   )
 }
 
-// ── Fila individual: nombre + un input numérico por nivel (o "No participa") ──
+// ── Fila individual: nombre + un input numérico editable por cada nivel ──────
 function FilaActaFila({ label, esLista, niveles, porNivel, votos, onChange }: {
   label: string; esLista: boolean; niveles: NivelCandidatura[]
   porNivel: Partial<Record<NivelCandidatura, Candidato>>
@@ -1148,11 +1171,7 @@ function FilaActaFila({ label, esLista, niveles, porNivel, votos, onChange }: {
       <p className="flex-1 min-w-0 text-white text-[11px] font-bold leading-tight truncate">{label}</p>
       {niveles.map(n => {
         const c = porNivel[n]
-        if (!c) return (
-          <span key={n} className="w-[4.2rem] shrink-0 text-center text-white/25 text-[8px] font-semibold uppercase tracking-wide">
-            No participa
-          </span>
-        )
+        if (!c) return <span key={n} className="w-[4.2rem] shrink-0" />
         const valor = votos[n][c.id] || 0
         return (
           <input key={n} type="number" inputMode="numeric" min={0} value={valor === 0 ? '' : valor}
