@@ -12,7 +12,7 @@ import {
   Camera, Send, CheckCircle, AlertTriangle,
   Loader, MapPin, Key, ChevronDown, ChevronUp, Minus, Plus,
   Info, PencilLine, LogOut, UserCheck, Map as MapIcon,
-  Eye, Layers, ChevronLeft, X, UserCircle2, type LucideIcon,
+  Eye, Layers, ChevronLeft, X, UserCircle2, Image as ImageIcon, type LucideIcon,
 } from 'lucide-react'
 
 type Modo = 'MANUAL' | 'IMAGEN'
@@ -251,7 +251,8 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
   const [error, setError]             = useState('')
   const [geminiKey, setGeminiKey]     = useState('')
   const [showKeyInput, setShowKeyInput] = useState(false)
-  const fotoInputRef = useRef<HTMLInputElement>(null)
+  const fotoInputRef = useRef<HTMLInputElement>(null)      // abre la cámara
+  const galeriaInputRef = useRef<HTMLInputElement>(null)   // elige una foto ya tomada
 
   const setFotoPatch = (patch: Partial<FotoActaState>) =>
     setFoto(prev => ({ ...prev, ...patch }))
@@ -481,6 +482,8 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
   // ── Manejar la foto ÚNICA del acta de escrutinio (trae Provincial + Distrital) ──
   const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    // Se limpia el input para que elegir de nuevo la MISMA foto vuelva a disparar onChange.
+    e.target.value = ''
     if (!file) return
     const mime = file.type || 'image/jpeg'
 
@@ -930,13 +933,24 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
             </p>
           )}
           <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
-            <div onClick={() => fotoInputRef.current?.click()}
-              className="border-2 border-dashed border-white/15 rounded-2xl p-8 text-center cursor-pointer hover:border-sky-500/50 transition-all">
-              <Camera size={32} className="mx-auto text-white/25 mb-2" />
+            {/* Dos formas de cargar el acta: tomar la foto en el momento, o elegir
+                una que ya está en la galería del celular. Las dos pasan por el
+                mismo análisis con IA (handleFoto). */}
+            <div className="border-2 border-dashed border-white/15 rounded-2xl p-4 text-center space-y-3">
               <p className="text-white/50 text-sm">
-                {foto.imgSrc ? 'Toca para reemplazar la foto' : 'Toca para abrir la cámara / subir foto del acta'}
+                {foto.imgSrc ? 'Reemplaza la foto del acta' : 'Carga la foto del acta'}
               </p>
-              <p className="text-white/25 text-xs mt-1">Se procesa con IA automáticamente</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => fotoInputRef.current?.click()} disabled={foto.ocrLoading}
+                  className="flex flex-col items-center gap-1.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300 py-4 text-xs font-bold hover:bg-sky-500/25 disabled:opacity-40 transition-all">
+                  <Camera size={24} /> Tomar foto
+                </button>
+                <button type="button" onClick={() => galeriaInputRef.current?.click()} disabled={foto.ocrLoading}
+                  className="flex flex-col items-center gap-1.5 rounded-xl bg-violet-500/15 border border-violet-500/30 text-violet-300 py-4 text-xs font-bold hover:bg-violet-500/25 disabled:opacity-40 transition-all">
+                  <ImageIcon size={24} /> Subir de galería
+                </button>
+              </div>
+              <p className="text-white/25 text-xs">Se procesa con IA automáticamente</p>
             </div>
             {foto.imgSrc && (
               <div className="rounded-xl overflow-hidden border border-white/10">
@@ -967,6 +981,8 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
               )
             )}
             <input ref={fotoInputRef} type="file" accept="image/*" capture="environment"
+              className="hidden" onChange={handleFoto} />
+            <input ref={galeriaInputRef} type="file" accept="image/*"
               className="hidden" onChange={handleFoto} />
           </div>
           <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
