@@ -121,7 +121,7 @@ export default function EditarVotosModal({ personero, onClose, onSaved, onAnulad
           renglones.push({
             partido: f.partido,
             candidato: f.candidato || null,
-            nombre: f.candidato ? `${f.partido} — ${f.candidato}` : f.partido,
+            nombre: f.partido,
             color: f.color || '#6B7280',
             votoId: v?.id ?? null,
             original: v?.cantidad ?? 0,
@@ -134,7 +134,7 @@ export default function EditarVotosModal({ personero, onClose, onSaved, onAnulad
           if (vistos.has(v.partido) || VOTOS_ESPECIALES.some(e => e.partido === v.partido)) continue
           vistos.add(v.partido)
           renglones.push({
-            partido: v.partido, candidato: v.candidato, nombre: v.candidato ? `${v.partido} — ${v.candidato}` : v.partido,
+            partido: v.partido, candidato: v.candidato, nombre: v.partido,
             color: '#94a3b8', votoId: v.id, original: v.cantidad, valor: v.cantidad,
           })
         }
