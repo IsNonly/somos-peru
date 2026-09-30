@@ -204,9 +204,20 @@ export default function PanelGeneral() {
       'Personeros de Mesa': c.nPersoneros, 'Cobertura %': c.cobertura,
       Zonal: c.zonal?.nombre ?? '', 'Celular Zonal': c.zonal?.celular ?? '',
     }))
+    // Segunda hoja: una fila por persona (PCV y personeros de mesa) con su mesa designada.
+    const personas = filas.flatMap(c => [
+      ...(c.pcv ? [{ c, p: c.pcv, rol: 'Personero de Centro de Votación' }] : []),
+      ...c.personeros.map(p => ({ c, p, rol: 'Personero de Mesa' })),
+    ]).map(({ c, p, rol }) => ({
+      ...(USA_TERRITORIOS ? { Sector: territorioDe(c.distrito, c.nombre) ?? '' } : {}),
+      Distrito: c.distrito ?? '', Colegio: c.nombre, Rol: rol,
+      Nombre: p.nombre, DNI: p.dni ?? '', Celular: p.celular ?? '',
+      'Mesa Designada': p.mesa_asignada ?? '',
+    }))
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Centros y Mesas')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(personas), 'Personeros y Mesas')
     XLSX.writeFile(wb, `SomosPeru_${AMBITO_DEPARTAMENTO}_Centros_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 

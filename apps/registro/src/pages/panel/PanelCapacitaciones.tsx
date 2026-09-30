@@ -134,6 +134,7 @@ export default function PanelCapacitaciones() {
     const rows = filtrados.map(({ p, estado }) => ({
       DNI: p.dni ?? '', Nombre: p.nombre_completo, Rol: rolNorm(p.rol), Distrito: p.distrito_asignado ?? p.distrito_vota ?? '',
       'Local / Colegio': p.local_asignado ?? p.local_votacion ?? '',
+      'Mesa Designada': p.mesa_asignada ?? '',
       Celular: p.celular ?? '', 'Videos vistos': p.videos_vistos ?? 0, 'Cartilla leída': (p.pdfs_vistos ?? 0) >= 1 ? 'Sí' : 'No',
       Cuestionario: p.quiz_estado ?? 'Pendiente', Capacitación: estado === 'completo' ? 'Capacitado' : 'Sin capacitar',
     }))
