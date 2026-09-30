@@ -393,14 +393,14 @@ export default function RegisterPage() {
   // (registrados >= total_mesas) deja de aparecer en el buscador de locales.
   useEffect(() => {
     if (!esVES || !esPersonero || !form.distritoAsignado || colegiosAsignado.length === 0) { setColegiosCompletos(new Set()); return }
-    supabase.from('profiles').select('local_asignado')
-      .eq('rol', 'Personero de Mesa')
-      .eq('distrito_asignado', form.distritoAsignado)
+    // RPC (seguridad_roles.sql): el registro es anónimo y no puede leer `profiles`;
+    // esto devuelve solo cuántos inscritos hay por colegio, sin datos personales.
+    supabase.rpc('cupos_personeros_por_local', { p_distrito: form.distritoAsignado })
       .then(({ data }) => {
         const conteo = new Map<string, number>()
-        for (const row of data ?? []) {
-          const n = String((row as any).local_asignado ?? '').trim()
-          if (n) conteo.set(n, (conteo.get(n) ?? 0) + 1)
+        for (const row of (data ?? []) as { local: string; inscritos: number }[]) {
+          const n = String(row.local ?? '').trim()
+          if (n) conteo.set(n, (conteo.get(n) ?? 0) + Number(row.inscritos))
         }
         const completos = new Set<string>()
         for (const c of colegiosAsignado) {
@@ -416,9 +416,8 @@ export default function RegisterPage() {
   // Se busca por los 3 nombres que puede tener guardado el rol en la base (ver lib/panel.ts rolNorm).
   useEffect(() => {
     if (!esCoordDistrital || !form.distritoAsignado) { setColegiosReservados(new Set()); return }
-    supabase.from('profiles').select('local_asignado')
-      .in('rol', ['Coordinador Distrital', 'Coordinador de Distritos', 'Coordinador Zonal'])
-      .eq('distrito_asignado', form.distritoAsignado)
+    // RPC (seguridad_roles.sql): solo los colegios ya tomados, sin datos personales.
+    supabase.rpc('locales_con_coordinador_distrital', { p_distrito: form.distritoAsignado })
       .then(({ data }) => {
         const set = new Set<string>()
         for (const row of data ?? []) {

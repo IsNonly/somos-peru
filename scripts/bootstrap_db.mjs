@@ -26,13 +26,13 @@ const ARCHIVOS = [
   'migracion_personero_local.sql',
   'renombrar_personero_centro_votacion.sql',
   'renombrar_coordinador_distrital.sql',
-  'fix_colegios_rls.sql',
-  'fix_profiles_rls.sql',
   'rls_seguridad.sql',
   'candidaturas_multinivel.sql',
   'foto_instalacion_mesa.sql',
   'auditoria_edicion_perfiles.sql',
   'reset_clave_personero.sql',
+  // Siempre al final: deja los permisos por rol (reemplaza las policies anteriores).
+  'seguridad_roles.sql',
 ]
 
 async function main() {

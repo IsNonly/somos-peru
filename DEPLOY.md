@@ -98,6 +98,8 @@ En **Supabase → SQL Editor**, correr en este orden (todos son idempotentes):
    `node scripts/importar_candidaturas.mjs <excel>` (formato en el encabezado del script; `SUPABASE_SERVICE_ROLE` evita el bloqueo de RLS).
 9. `supabase/foto_instalacion_mesa.sql` — columnas `actas.foto_instalacion_url` / `actas.instalada_at` para la foto de "Instalación de Mesa de Sufragio" en la pantalla de inicio del personero.
 10. `supabase/seed_candidaturas_tumbes.sql` — candidatos reales a alcalde (nivel DISTRITAL) de los 13 distritos de Tumbes, de fuente prensa; desactiva los partidos de la plantilla CALI que no aparecen en esa lista.
+11. **`supabase/seguridad_roles.sql`** — ⚠️ **correr SIEMPRE AL FINAL** (y volver a correrlo si se corre cualquier otro script de esta lista). Deja los permisos por rol: anónimo no lee datos personales, cada Personero de Mesa solo ve lo suyo, el PCV solo su centro, y solo Admin/Coordinadores ven el padrón. Nadie puede hacerse Administrador por su cuenta ni tocar actas/votos ajenos. Reemplaza las policies de `rls_seguridad.sql`.
+    > Los viejos `fix_profiles_rls.sql` / `fix_colegios_rls.sql` se eliminaron del repo: dejaban el padrón completo legible **sin login**. No volver a usarlos.
 
 > `docs/somosperu_ambitos.md` lista en qué regiones/provincias compite Somos Perú (referencia para priorizar).
 
@@ -125,7 +127,8 @@ Pasos, en el SQL Editor / terminal del proyecto a reusar:
    `node scripts/importar_candidaturas.mjs <excel>`.
 5. `node scripts/crear_admin.mjs --env <.env de esa instancia> --dni ... --nombre "..." --password ...`
    para el primer Administrador General de esa instancia.
-6. En Vercel, apuntar los 3 proyectos de esa instancia (`registro`/`conteo-app`/
+6. `supabase/seguridad_roles.sql` — permisos por rol (ver paso 11 de arriba). Obligatorio.
+7. En Vercel, apuntar los 3 proyectos de esa instancia (`registro`/`conteo-app`/
    `conteo-web`) a `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` de este mismo
    proyecto reusado, y a las `VITE_AMBITO_*` del distrito correspondiente
    (ver `.env.example` de cada app).

@@ -80,8 +80,8 @@ Deno.serve(async req => {
   // mismo patrón que el resto de la app, porque en cuentas importadas
   // profiles.id no siempre coincide con auth.users.id.
   const dniLlamante = (user.email ?? '').split('@')[0]
-  let actor = (await admin.from('profiles').select('rol').eq('dni', dniLlamante).maybeSingle()).data
-  if (!actor) actor = (await admin.from('profiles').select('rol').eq('id', user.id).maybeSingle()).data
+  let actor = (await admin.from('profiles').select('rol, distrito_asignado').eq('dni', dniLlamante).maybeSingle()).data
+  if (!actor) actor = (await admin.from('profiles').select('rol, distrito_asignado').eq('id', user.id).maybeSingle()).data
 
   if (!actor || !ROLES_PUEDEN_ELIMINAR.has(actor.rol)) {
     return json({ error: 'No tienes permiso para eliminar personeros' }, 403)
@@ -91,7 +91,18 @@ Deno.serve(async req => {
   const id = body?.id as string | undefined
   if (!id) return json({ error: 'Falta el id del personero a eliminar' }, 400)
 
-  const objetivo = (await admin.from('profiles').select('id, dni').eq('id', id).maybeSingle()).data
+  const objetivo = (await admin.from('profiles').select('id, dni, rol, distrito_asignado').eq('id', id).maybeSingle()).data
+
+  // Solo el Administrador puede tocar a otro Administrador o a un Coordinador;
+  // un Coordinador solo a personeros de su propio distrito.
+  if (objetivo && actor.rol !== 'Administrador General') {
+    if (ROLES_PUEDEN_ELIMINAR.has(objetivo.rol) || String(objetivo.rol ?? '').includes('Administrador') || objetivo.rol === 'Coordinador Regional') {
+      return json({ error: 'Solo el Administrador puede eliminar a un coordinador' }, 403)
+    }
+    if (actor.rol !== 'Coordinador Provincial' && actor.distrito_asignado && objetivo.distrito_asignado !== actor.distrito_asignado) {
+      return json({ error: 'Esa persona no está en tu distrito' }, 403)
+    }
+  }
 
   const { error: delPerfilErr } = await admin.from('profiles').delete().eq('id', id)
   if (delPerfilErr) return json({ error: delPerfilErr.message }, 500)

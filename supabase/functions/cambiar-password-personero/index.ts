@@ -68,8 +68,8 @@ Deno.serve(async req => {
 
   // Resolver el perfil de quien llama para validar su rol.
   const dniLlamante = (user.email ?? '').split('@')[0]
-  let actor = (await admin.from('profiles').select('rol').eq('dni', dniLlamante).maybeSingle()).data
-  if (!actor) actor = (await admin.from('profiles').select('rol').eq('id', user.id).maybeSingle()).data
+  let actor = (await admin.from('profiles').select('rol, distrito_asignado').eq('dni', dniLlamante).maybeSingle()).data
+  if (!actor) actor = (await admin.from('profiles').select('rol, distrito_asignado').eq('id', user.id).maybeSingle()).data
 
   if (!actor || !ROLES_PUEDEN_CAMBIAR.has(actor.rol)) {
     return json({ error: 'No tienes permiso para cambiar contraseñas' }, 403)
@@ -84,8 +84,19 @@ Deno.serve(async req => {
   if (!id) return json({ error: 'Falta el id del personero' }, 400)
   if (!password || password.length < 6) return json({ error: 'La contraseña debe tener al menos 6 caracteres' }, 400)
 
-  const objetivo = (await admin.from('profiles').select('id, dni').eq('id', id).maybeSingle()).data
+  const objetivo = (await admin.from('profiles').select('id, dni, rol, distrito_asignado').eq('id', id).maybeSingle()).data
   if (!objetivo) return json({ error: 'No se encontró ese personero' }, 404)
+
+  // Solo el Administrador puede tocar a otro Administrador o a un Coordinador;
+  // un Coordinador solo a personeros de su propio distrito.
+  if (objetivo && actor.rol !== 'Administrador General') {
+    if (ROLES_PUEDEN_CAMBIAR.has(objetivo.rol) || String(objetivo.rol ?? '').includes('Administrador') || objetivo.rol === 'Coordinador Regional') {
+      return json({ error: 'Solo el Administrador puede cambiar la contraseña a un coordinador' }, 403)
+    }
+    if (actor.rol !== 'Coordinador Provincial' && actor.distrito_asignado && objetivo.distrito_asignado !== actor.distrito_asignado) {
+      return json({ error: 'Esa persona no está en tu distrito' }, 403)
+    }
+  }
 
   const authId = await resolverAuthId(supabaseUrl, serviceKey, id, objetivo.dni ?? null)
   if (!authId) return json({ error: 'Este personero no tiene una cuenta de acceso activa' }, 404)
