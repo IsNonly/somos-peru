@@ -18,7 +18,7 @@ Supabase** y sus propios 3 proyectos en Vercel (mismo código, distintas variabl
 |---|---|---|---|
 | Cercado de Lima | `Lima` | `CDL2026` | reusado (antes Arequipa) |
 | Villa El Salvador | `Villa El Salvador` | `VES2026` | reusado (antes Tumbes) |
-| San Isidro | `San Isidro` | `SI2026` *(confirmar en Vercel)* | propio |
+| San Isidro | `San Isidro` | `SANISIDRO2026` | propio |
 
 En las 3, `VITE_AMBITO_DEPARTAMENTO=Lima` y `VITE_AMBITO_PROVINCIAS=Lima`.
 
