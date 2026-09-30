@@ -197,7 +197,7 @@ export default function PanelGeneral() {
   const exportar = () => {
     const filas = vista === 'territorio' && USA_TERRITORIOS ? territorios.flatMap(g => g.centros) : centrosFlat
     const rows = filas.map(c => ({
-      ...(USA_TERRITORIOS ? { Territorio: territorioDe(c.distrito, c.nombre) ?? '' } : {}),
+      ...(USA_TERRITORIOS ? { Sector: territorioDe(c.distrito, c.nombre) ?? '' } : {}),
       Distrito: c.distrito ?? '', Colegio: c.nombre, Dirección: c.direccion ?? '',
       Mesas: c.total_mesas ?? 0, Electores: c.electores ?? 0,
       PCV: c.pcv?.nombre ?? '', 'Celular PCV': c.pcv?.celular ?? '',
@@ -266,8 +266,8 @@ export default function PanelGeneral() {
           <Sel v={fProv} set={setProv} all="Todas las provincias" opts={provincias} disabled={bloqueado('prov')} />
           <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={esProvincial ? distritosProvincia : distritos} disabled={bloqueado('dist')} />
           {USA_TERRITORIOS && (
-            <Sel v={fTerr} set={setFTerr} all="🧭 Todos los territorios"
-              opts={[...TERRITORIOS_VES.map(t => [String(t), `Territorio ${t}`] as [string, string]), ...(haySinTerritorio ? [['0', 'Sin territorio'] as [string, string]] : [])]} />
+            <Sel v={fTerr} set={setFTerr} all="🧭 Todos los sectores"
+              opts={[...TERRITORIOS_VES.map(t => [String(t), `Sector ${t}`] as [string, string]), ...(haySinTerritorio ? [['0', 'Sin sector'] as [string, string]] : [])]} />
           )}
           <Sel v={fRol} set={setFRol} all="🛡️ Todos los roles" opts={esAdmin ? ROLES_TODOS : ROLES_BASICO} />
           <Sel v={fExp} set={setFExp} all="⭐ Exp: Todos" opts={[['si', 'Con experiencia'], ['no', 'Sin experiencia']]} />
@@ -310,7 +310,7 @@ export default function PanelGeneral() {
             {USA_TERRITORIOS ? (
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="text-slate-500 mr-1">Agrupar por:</span>
-                {([['territorio', 'Territorio'], ['zona', 'Zona / Coordinador'], ['plano', 'Sin agrupar']] as const).map(([v, l]) => (
+                {([['territorio', 'Sector'], ['zona', 'Zona / Coordinador'], ['plano', 'Sin agrupar']] as const).map(([v, l]) => (
                   <button key={v} onClick={() => setVista(v)}
                     className={`rounded-lg px-2.5 py-1 font-bold border ${vista === v ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
                     {l}
@@ -539,7 +539,7 @@ function BloqueTerritorio({ t, centros, abierto, onPick }: { t: number; centros:
       <summary className="cursor-pointer list-none flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-indigo-50 border-b border-indigo-100">
         <p className="text-sm font-extrabold text-indigo-800 flex items-center gap-2">
           <span className="text-indigo-400 group-open:rotate-90 transition-transform">▶</span>
-          {t ? `Territorio ${t}` : 'Sin territorio'}
+          {t ? `Sector ${t}` : 'Sin sector'}
           <span className="text-xs font-semibold text-indigo-500">({centros.length} colegio{centros.length === 1 ? '' : 's'})</span>
         </p>
         <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
@@ -578,7 +578,7 @@ function Card({ c, borde, onClick }: {
         </span>
         {territorioDe(c.distrito, c.nombre) !== null && (
           <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 rounded px-2 py-0.5">
-            Territorio {territorioDe(c.distrito, c.nombre)}
+            Sector {territorioDe(c.distrito, c.nombre)}
           </span>
         )}
       </div>

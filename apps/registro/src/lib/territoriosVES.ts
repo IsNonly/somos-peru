@@ -1,4 +1,5 @@
-// Territorios de Villa El Salvador: a qué territorio pertenece cada centro de
+// Sectores de Villa El Salvador (en el Panel se muestran como "Sector N"; el
+// Excel los llama TERRITORIO N): a qué sector pertenece cada centro de
 // votación. Fuente: "CENTROS DE VOTACIÓN - VILLA EL SALVADOR.xlsx" (hoja
 // "CENTRO DE VOTACIÓN VES", columna TERRITORIOS) -73 centros, 9 territorios-.
 // La clave es el nombre del local normalizado con `norm()` (sin tildes ni
