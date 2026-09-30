@@ -22,7 +22,7 @@ interface Stats {
   actas_transmitidas: number
 }
 
-interface DistritoCount { distrito_asignado: string; count: number }
+interface CentroCount { centro: string; count: number }
 
 const KPI = ({ icon: Icon, label, value, color }: { icon: any; label: string; value: number | string; color: string }) => (
   <div className="bg-[#16162a] border border-white/8 rounded-2xl p-5">
@@ -37,13 +37,13 @@ const KPI = ({ icon: Icon, label, value, color }: { icon: any; label: string; va
 export default function DashboardPage() {
   const { esCoordRegional, departamento } = useOutletContext<AdminCtx>()
   const [stats, setStats] = useState<Stats | null>(null)
-  const [distDist, setDistDist] = useState<DistritoCount[]>([])
+  const [porCentro, setPorCentro] = useState<CentroCount[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetch = async () => {
       let pq = supabase.from('profiles')
-        .select('rol, quiz_estado, videos_vistos, pdfs_vistos, credencial_estado, distrito_asignado, acta_transmitida, departamento_asignado, departamento_vota')
+        .select('rol, quiz_estado, videos_vistos, pdfs_vistos, credencial_estado, distrito_asignado, local_asignado, local_votacion, acta_transmitida, departamento_asignado, departamento_vota')
       if (esCoordRegional && departamento) pq = pq.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
       const { data: profiles } = await pq
 
@@ -67,15 +67,18 @@ export default function DashboardPage() {
           actas_transmitidas: actas,
         })
 
-        const byDist: Record<string, number> = {}
+        // Cada instancia opera UN solo distrito, así que se desglosa por Centro de
+        // Votación (todos, no un top: el gráfico se desplaza si son muchos).
+        const byCentro: Record<string, number> = {}
         profiles.forEach(p => {
-          if (p.distrito_asignado) byDist[p.distrito_asignado] = (byDist[p.distrito_asignado] || 0) + 1
+          // Coordinadores pueden traer varios colegios ("A | B"): se cuentan una sola vez, en el primero.
+          const c = String(p.local_asignado || p.local_votacion || '').split(/[,|]/)[0].trim()
+          if (c) byCentro[c] = (byCentro[c] || 0) + 1
         })
-        setDistDist(
-          Object.entries(byDist)
-            .map(([distrito_asignado, count]) => ({ distrito_asignado, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 15)
+        setPorCentro(
+          Object.entries(byCentro)
+            .map(([centro, count]) => ({ centro, count }))
+            .sort((a, b) => b.count - a.count || a.centro.localeCompare(b.centro, 'es'))
         )
       }
       setLoading(false)
@@ -90,10 +93,10 @@ export default function DashboardPage() {
   )
 
   const chartData = {
-    labels: distDist.map(d => d.distrito_asignado.replace('Distrito', 'D.')),
+    labels: porCentro.map(d => d.centro.length > 34 ? d.centro.slice(0, 33) + '…' : d.centro),
     datasets: [{
       label: 'Personeros',
-      data: distDist.map(d => d.count),
+      data: porCentro.map(d => d.count),
       backgroundColor: '#E8534A99',
       borderColor: '#E8534A',
       borderWidth: 1,
@@ -102,11 +105,14 @@ export default function DashboardPage() {
   }
 
   const chartOpts: any = {
-    responsive: true,
-    plugins: { legend: { display: false } },
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { title: (items: any[]) => porCentro[items[0].dataIndex].centro } },
+    },
     scales: {
-      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#ffffff60', font: { size: 11 } } },
-      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#ffffff60' } },
+      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#ffffff60', precision: 0 } },
+      y: { grid: { display: false }, ticks: { color: '#ffffffa0', font: { size: 10 }, autoSkip: false } },
     },
   }
 
@@ -135,11 +141,15 @@ export default function DashboardPage() {
         <KPI icon={Target}    label="Actas transmitidas"  value={stats?.actas_transmitidas ?? 0}   color="#FB923C" />
       </div>
 
-      {/* Gráfica por distrito */}
-      {distDist.length > 0 && (
+      {/* Gráfica por centro de votación */}
+      {porCentro.length > 0 && (
         <div className="bg-[#16162a] border border-white/8 rounded-2xl p-6">
-          <h2 className="text-white font-semibold mb-4">Distribución por Distrito</h2>
-          <Bar data={chartData} options={chartOpts} />
+          <h2 className="text-white font-semibold mb-4">Personeros por Centro de Votación ({porCentro.length})</h2>
+          <div className="max-h-[32rem] overflow-y-auto pr-1">
+            <div style={{ height: Math.max(240, porCentro.length * 22 + 30) }}>
+              <Bar data={chartData} options={chartOpts} />
+            </div>
+          </div>
         </div>
       )}
 
