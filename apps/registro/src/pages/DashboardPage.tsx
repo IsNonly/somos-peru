@@ -7,7 +7,8 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   Title, Tooltip, Legend,
 } from 'chart.js'
-import { Users, UserCheck, Target, Award, BookOpen, FileCheck } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { Users, UserCheck, Target, Award, BookOpen, FileCheck, Download } from 'lucide-react'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -39,15 +40,24 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [porCentro, setPorCentro] = useState<CentroCount[]>([])
   const [loading, setLoading] = useState(true)
+  const [perfiles, setPerfiles] = useState<any[]>([])
 
   useEffect(() => {
     const fetch = async () => {
-      let pq = supabase.from('profiles')
-        .select('rol, quiz_estado, videos_vistos, pdfs_vistos, credencial_estado, distrito_asignado, local_asignado, local_votacion, acta_transmitida, departamento_asignado, departamento_vota')
-      if (esCoordRegional && departamento) pq = pq.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
-      const { data: profiles } = await pq
+      // Paginado: Supabase corta cada consulta en 1000 filas y VES ya tiene más.
+      const profiles: any[] = []
+      for (let desde = 0; ; desde += 1000) {
+        let pq = supabase.from('profiles')
+          .select('nombre_completo, dni, celular, rol, quiz_estado, videos_vistos, pdfs_vistos, credencial_estado, distrito_asignado, local_asignado, local_votacion, mesa_asignada, acta_transmitida, departamento_asignado, departamento_vota')
+          .order('nombre_completo').range(desde, desde + 999)
+        if (esCoordRegional && departamento) pq = pq.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
+        const { data } = await pq
+        profiles.push(...(data ?? []))
+        if (!data || data.length < 1000) break
+      }
+      setPerfiles(profiles)
 
-      if (profiles) {
+      if (profiles.length) {
         const personeros   = profiles.filter(p => p.rol === 'Personero de Mesa' || p.rol === 'Personero de Centro de Votación' || p.rol === 'Personero de Local de Votación').length
         const coordinadores = profiles.filter(p => p.rol?.includes('Coordinador')).length
         const credenciales = profiles.filter(p => p.credencial_estado === 'Confirmado').length
@@ -92,6 +102,25 @@ export default function DashboardPage() {
     </div>
   )
 
+  const centroDe = (p: any) => String(p.local_asignado || p.local_votacion || '').trim()
+  const descargarExcel = () => {
+    const filas = [...perfiles]
+      .sort((a, b) => centroDe(a).localeCompare(centroDe(b), 'es') || String(a.mesa_asignada ?? '').localeCompare(String(b.mesa_asignada ?? '')))
+      .map(p => ({
+        'Centro de Votación': centroDe(p),
+        'Mesa Designada': p.mesa_asignada ?? '',
+        Nombre: p.nombre_completo, DNI: p.dni ?? '', Celular: p.celular ?? '', Rol: p.rol,
+        Distrito: p.distrito_asignado ?? '',
+        Capacitación: p.quiz_estado === 'Aprobado' ? 'Aprobado' : 'Pendiente',
+        Credencial: p.credencial_estado ?? 'Pendiente',
+        'Acta transmitida': p.acta_transmitida ? 'Sí' : 'No',
+      }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), 'Personeros')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(porCentro.map(c => ({ 'Centro de Votación': c.centro, Personeros: c.count }))), 'Por Centro de Votación')
+    XLSX.writeFile(wb, `SomosPeru_Dashboard_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
   const chartData = {
     labels: porCentro.map(d => d.centro.length > 34 ? d.centro.slice(0, 33) + '…' : d.centro),
     datasets: [{
@@ -118,6 +147,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 fade-in">
+      <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Panel de Control</p>
         <h1 className="text-white text-2xl font-bold">Dashboard Electoral</h1>
@@ -125,6 +155,11 @@ export default function DashboardPage() {
           Avance meta total — Elecciones Regionales y Municipales 2026
           {esCoordRegional && departamento && <> · <span className="text-white/70 font-semibold">{departamento}</span></>}
         </p>
+      </div>
+        <button onClick={descargarExcel} disabled={!perfiles.length}
+          className="text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white px-3 py-2 flex items-center gap-1.5">
+          <Download size={13} /> Descargar Excel
+        </button>
       </div>
 
       {/* KPIs */}

@@ -3,6 +3,7 @@ import { LayoutDashboard, Users, CheckCircle2, Building2, Menu, RotateCcw, Downl
 import { useEffect, useState } from 'react'
 import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import { FiltrosProvider, useFiltros, type Filtros } from '../lib/filtros'
+import { exportarPersoneros } from '../lib/exportar'
 
 const NAV = [
   { to: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
@@ -70,7 +71,14 @@ function BarraFiltros() {
 function Shell({ esPCV }: { esPCV: boolean }) {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
-  const { ambitoLabel } = useFiltros()
+  const { ambitoLabel, distritosEfectivos, f } = useFiltros()
+  const [exportando, setExportando] = useState(false)
+  const exportar = async () => {
+    setExportando(true)
+    try { await exportarPersoneros(distritosEfectivos, f.colegio) }
+    catch (e: any) { alert('No se pudo exportar: ' + (e.message ?? 'error desconocido')) }
+    finally { setExportando(false) }
+  }
   const logout = async () => { await supabase.auth.signOut(); navigate('/login') }
   const nav = esPCV ? NAV_PCV : NAV
 
@@ -112,9 +120,12 @@ function Shell({ esPCV }: { esPCV: boolean }) {
             <span className="text-sky-600">{ambitoLabel.toUpperCase()}</span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-slate-600 border border-slate-300 rounded-md px-2.5 py-1.5">
-              <Download size={13} /> Exportar
-            </button>
+            {!esPCV && (
+              <button onClick={exportar} disabled={exportando} title="Descargar Excel de personeros con su mesa designada"
+                className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-slate-600 border border-slate-300 rounded-md px-2.5 py-1.5 hover:bg-slate-100 disabled:opacity-50">
+                <Download size={13} /> {exportando ? 'Exportando…' : 'Exportar'}
+              </button>
+            )}
             <span className="flex items-center gap-1.5 bg-sky-100 text-sky-700 text-xs font-bold rounded-full px-2.5 py-1">
               <span className="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[10px]">{esPCV ? 'P' : 'A'}</span>
               {esPCV ? 'Personero de Centro' : 'Administrador'}
