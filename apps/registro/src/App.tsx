@@ -30,6 +30,9 @@ export default function App() {
   // rutas (si no, el redirect de /login se evalúa con esAdmin viejo y manda
   // al admin a /capacitate).
   const [rolListo, setRolListo] = useState(false)
+  // Hay sesión guardada pero su perfil no existe (cuenta eliminada) o no se pudo
+  // verificar: en /login se muestra el formulario en vez de redirigir.
+  const [sinPerfil, setSinPerfil] = useState(false)
 
   useEffect(() => {
     let vivo = true
@@ -49,12 +52,17 @@ export default function App() {
       // resuelto, no hace falta volver a consultarlo ni bloquear la pantalla.
       if (!esCambioDeUsuario) return
       const dni = (u.email ?? '').split('@')[0]
-      let { data } = await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()
-      if (!data) {
-        const r = await supabase.from('profiles').select('rol').eq('id', u.id).maybeSingle()
-        data = r.data
+      let data: { rol: string } | null = null
+      try {
+        data = (await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()).data
+        if (!data) data = (await supabase.from('profiles').select('rol').eq('id', u.id).maybeSingle()).data
+      } catch (e) {
+        // Red caída o sesión inválida (p.ej. la cuenta fue eliminada desde otra
+        // PC): se sigue sin rol en vez de quedar colgado en el spinner.
+        console.error('No se pudo resolver el rol:', e)
       }
       if (!vivo) return
+      setSinPerfil(!data)
       const rol = data?.rol || ''
       setEsAdmin(rol.includes('Administrador') || rol.includes('Coordinador'))
       setEsCoordRegional(rol === 'Coordinador Regional')
@@ -71,9 +79,14 @@ export default function App() {
       const u = s?.user ?? null
       const cambio = (u?.id ?? null) !== userIdAnterior
       userIdAnterior = u?.id ?? null
-      resolver(u, cambio)
+      // Fuera del callback: consultar Supabase DENTRO de onAuthStateChange puede
+      // dejar a la librería esperándose a sí misma (spinner infinito, visto al
+      // renovar la sesión de una cuenta eliminada desde otra PC).
+      setTimeout(() => resolver(u, cambio), 0)
     })
-    return () => { vivo = false; subscription.unsubscribe() }
+    // Red de seguridad: nunca más de 10 s en "cargando"; en el peor caso se ve el login.
+    const tope = setTimeout(() => { if (vivo) { setRolListo(prev => { if (!prev) setSinPerfil(true); return true }) } }, 10_000)
+    return () => { vivo = false; clearTimeout(tope); subscription.unsubscribe() }
   }, [])
 
   const Spinner = (
@@ -95,7 +108,7 @@ export default function App() {
         {/* Rutas públicas */}
         <Route path="/" element={<RegisterPage />} />
         <Route path="/registro" element={<RegisterPage />} />
-        <Route path="/login" element={!rolListo ? Spinner : !user ? <LoginPage /> : <Navigate to={esCoordRegional ? '/admin' : (esAdmin || esPCV) ? '/panel' : '/capacitate'} />} />
+        <Route path="/login" element={!rolListo ? Spinner : (!user || sinPerfil) ? <LoginPage /> : <Navigate to={esCoordRegional ? '/admin' : (esAdmin || esPCV) ? '/panel' : '/capacitate'} />} />
 
         {/* Página de capacitación para personeros registrados */}
         <Route path="/capacitate" element={!rolListo ? Spinner : user ? <CapacitarPage /> : <Navigate to="/login" />} />

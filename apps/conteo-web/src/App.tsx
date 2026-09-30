@@ -32,10 +32,13 @@ export default function App() {
     // El perfil se resuelve por DNI (parte antes del @ del email de login):
     // en la base importada profiles.id no siempre coincide con auth.users.id.
     const dni = (u.email ?? '').split('@')[0]
-    let { data } = await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()
-    if (!data) {
-      const r = await supabase.from('profiles').select('rol').eq('id', u.id).maybeSingle()
-      data = r.data
+    let data: { rol: string } | null = null
+    try {
+      data = (await supabase.from('profiles').select('rol').eq('dni', dni).maybeSingle()).data
+      if (!data) data = (await supabase.from('profiles').select('rol').eq('id', u.id).maybeSingle()).data
+    } catch (e) {
+      // Red caída o sesión inválida (cuenta eliminada): sin rol, pero sin colgarse.
+      console.error('No se pudo resolver el rol:', e)
     }
 
     const rol = data?.rol || ''
@@ -66,9 +69,13 @@ export default function App() {
       const u = s?.user ?? null
       const cambio = (u?.id ?? null) !== userIdAnterior
       userIdAnterior = u?.id ?? null
-      if (cambio) checkRole(u)
+      // Fuera del callback: consultar Supabase dentro de onAuthStateChange puede
+      // dejar a la librería esperándose a sí misma (spinner infinito).
+      if (cambio) setTimeout(() => checkRole(u), 0)
     })
-    return () => subscription.unsubscribe()
+    // Red de seguridad: nunca más de 10 s en "cargando"; en el peor caso se ve el login.
+    const tope = setTimeout(() => setLoading(false), 10_000)
+    return () => { clearTimeout(tope); subscription.unsubscribe() }
   }, [])
 
   if (loading) return (
