@@ -8,7 +8,19 @@ El repo es un monorepo con **3 apps** independientes (Vite + React):
 | `apps/conteo-app` | App móvil del personero (conteo de votos / marcar asistencia del local) | 5174 |
 | `apps/conteo-web` | Panel web (superadmin + coordinadores) | 5175 |
 
-Las 3 comparten la misma base de datos Supabase.
+Las 3 apps de un mismo distrito comparten la misma base de datos Supabase.
+
+Hay **3 instancias separadas**, una por distrito, cada una con su **propio proyecto
+Supabase** y sus propios 3 proyectos en Vercel (mismo código, distintas variables
+`VITE_SUPABASE_*` y `VITE_AMBITO_*`):
+
+| Distrito | `VITE_AMBITO_DISTRITOS` | `VITE_AMBITO_TOKEN_PREFIX` | Proyecto Supabase |
+|---|---|---|---|
+| Cercado de Lima | `Lima` | `CDL2026` | reusado (antes Arequipa) |
+| Villa El Salvador | `Villa El Salvador` | `VES2026` | reusado (antes Tumbes) |
+| San Isidro | `San Isidro` | `SI2026` *(confirmar en Vercel)* | propio |
+
+En las 3, `VITE_AMBITO_DEPARTAMENTO=Lima` y `VITE_AMBITO_PROVINCIAS=Lima`.
 
 ---
 
@@ -98,6 +110,8 @@ operaba otra provincia/distrito una vez que esa etapa terminó. Mapeo actual:
 |---|---|
 | Tumbes | Villa El Salvador |
 | Arequipa | Cercado de Lima |
+
+(San Isidro no reusa nada: tiene su propio proyecto Supabase.)
 
 Pasos, en el SQL Editor / terminal del proyecto a reusar:
 1. `supabase/reset_instancia_para_reuso.sql` — ⚠️ **destructivo**: borra todas las
