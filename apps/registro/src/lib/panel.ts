@@ -157,7 +157,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
       const colegios = await traerTodo<Colegio>((f, t) => {
         let cq = supabase.from('colegios')
           .select('id, nombre, distrito, direccion, total_mesas, electores')
-          .eq('departamento', dep).order('distrito').order('nombre').range(f, t)
+          .eq('departamento', dep).order('distrito').order('nombre').order('id').range(f, t)
         if (prov) cq = cq.eq('provincia', prov)
         if (distritos) cq = cq.in('distrito', distritos)
         return cq
@@ -167,7 +167,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
       const perfilesRaw = await traerTodo<Perfil>((f, t) => {
         let pq = supabase.from('profiles')
           .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, credencial_estado, quiz_estado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos, modificado_por, modificado_at')
-          .order('nombre_completo').range(f, t)
+          .order('nombre_completo').order('id').range(f, t)
         if (distritos) pq = pq.in('distrito_asignado', distritos)
         return pq
       })

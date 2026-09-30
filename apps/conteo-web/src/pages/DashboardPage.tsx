@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
+import { supabase, traerTodo, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
 import { VOTOS_ESPECIALES, slugPartido } from '../lib/candidatos'
 import { Bar } from 'react-chartjs-2'
@@ -103,24 +103,41 @@ export default function DashboardPage() {
     let vivo = true
     ;(async () => {
       setLoading(true)
-      let aq = supabase.from('actas').select('id, metodo, distrito, colegio_nombre, mesa_numero').eq('estado', 'TRANSMITIDA')
-      if (distritosEfectivos) aq = aq.in('distrito', distritosEfectivos)
-      if (f.colegio) aq = aq.eq('colegio_nombre', f.colegio)
-      if (f.mesa)    aq = aq.eq('mesa_numero', f.mesa)
-      const { data: actas } = await aq
-      const ids = (actas ?? []).map((a: any) => a.id)
-      const metodoPorActa = new Map((actas ?? []).map((a: any) => [a.id, a.metodo]))
-      setMesas(ids.length)
-
+      // Todo paginado (Supabase corta en 1000 filas: con ~50 actas los votos ya
+      // superaban eso) y los votos se filtran por JOIN con su acta en vez de
+      // mandar la lista de ids en la URL (con cientos de actas la URL era
+      // demasiado larga y la consulta fallaba -> Dashboard en 0-).
       let rows: Voto[] = []
-      if (ids.length) {
-        const { data: vs } = await supabase.from('votos').select('acta_id, nivel, partido, cantidad').in('acta_id', ids)
-        rows = (vs ?? []).map((v: any) => ({
-          nivel: v.nivel, partido: v.partido, cantidad: v.cantidad,
-          metodo: metodoPorActa.get(v.acta_id) ?? 'MANUAL',
-        }))
+      let nActas = 0
+      try {
+        const actas = await traerTodo<{ id: string }>((a, b) => {
+          let q = supabase.from('actas').select('id').eq('estado', 'TRANSMITIDA')
+          if (distritosEfectivos) q = q.in('distrito', distritosEfectivos)
+          if (f.colegio) q = q.eq('colegio_nombre', f.colegio)
+          if (f.mesa)    q = q.eq('mesa_numero', f.mesa)
+          return q.order('id').range(a, b)
+        })
+        nActas = actas.length
+        if (nActas) {
+          const vs = await traerTodo<any>((a, b) => {
+            let q = supabase.from('votos')
+              .select('id, nivel, partido, cantidad, actas!inner(metodo, estado, distrito, colegio_nombre, mesa_numero)')
+              .eq('actas.estado', 'TRANSMITIDA')
+            if (distritosEfectivos) q = q.in('actas.distrito', distritosEfectivos)
+            if (f.colegio) q = q.eq('actas.colegio_nombre', f.colegio)
+            if (f.mesa)    q = q.eq('actas.mesa_numero', f.mesa)
+            return q.order('id').range(a, b)
+          })
+          rows = vs.map((v: any) => ({
+            nivel: v.nivel, partido: v.partido, cantidad: v.cantidad,
+            metodo: v.actas?.metodo ?? 'MANUAL',
+          }))
+        }
+      } catch (e) {
+        console.error('No se pudieron cargar los resultados:', e)
       }
       if (!vivo) return
+      setMesas(nActas)
       setVotos(rows)
       setLoading(false)
     })()

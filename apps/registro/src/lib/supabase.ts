@@ -72,3 +72,18 @@ export const generarClave = () => `SP${Math.floor(1000 + Math.random() * 9000)}`
 // pero Supabase Auth exige contraseñas de mínimo 6 caracteres y el signUp
 // fallaba silenciosamente para estos roles.
 export const generarClave4 = () => String(Math.floor(100000 + Math.random() * 900000))
+
+// Supabase corta cada consulta en 1000 filas (db-max-rows). Esto trae TODO
+// paginando; `build` debe ordenar por una columna única (p.ej. .order('id'))
+// para que las páginas no se salten ni repitan filas.
+export async function traerTodo<T>(build: (from: number, to: number) => any): Promise<T[]> {
+  const paso = 1000
+  let out: T[] = []
+  for (let from = 0; ; from += paso) {
+    const { data, error } = await build(from, from + paso - 1)
+    if (error) throw error
+    out = out.concat((data ?? []) as T[])
+    if (!data || data.length < paso) break
+  }
+  return out
+}

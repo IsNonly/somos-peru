@@ -49,7 +49,7 @@ export default function DashboardPage() {
       for (let desde = 0; ; desde += 1000) {
         let pq = supabase.from('profiles')
           .select('nombre_completo, dni, celular, rol, quiz_estado, videos_vistos, pdfs_vistos, credencial_estado, distrito_asignado, local_asignado, local_votacion, mesa_asignada, acta_transmitida, departamento_asignado, departamento_vota')
-          .order('nombre_completo').range(desde, desde + 999)
+          .order('nombre_completo').order('id').range(desde, desde + 999)
         if (esCoordRegional && departamento) pq = pq.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
         const { data } = await pq
         profiles.push(...(data ?? []))

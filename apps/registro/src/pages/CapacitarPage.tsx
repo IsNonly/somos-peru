@@ -233,10 +233,12 @@ export default function CapacitarPage() {
       // quedaba "Aprobado" solo en el estado local de React y nunca en la BD.
       await supabase.from('quiz_intentos').insert({ user_id: authId, puntaje, aprobado, respuestas: nuevas })
       // Al aprobar el quiz la capacitación queda completa -> cuenta habilitada
-      await supabase.from('profiles').update({
+      const { error: perfilErr } = await supabase.from('profiles').update({
         quiz_estado: aprobado ? 'Aprobado' : 'Reprobado',
         ...(aprobado ? { credencial_estado: 'Confirmado' } : {}),
       }).eq('id', userId)
+      // Si no se guardó, avisar: si no, se veía "Aprobado" aquí pero en el Panel seguía pendiente.
+      if (perfilErr) alert('No se pudo guardar el resultado del cuestionario. Revisa tu conexión y vuelve a intentarlo. (' + perfilErr.message + ')')
       setQuizEstado(aprobado ? 'Aprobado' : 'Reprobado')
     }
   }

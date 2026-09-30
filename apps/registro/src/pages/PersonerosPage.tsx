@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { supabase, AMBITO_DISTRITOS, ROLES, generarToken, generarClave } from '../lib/supabase'
+import { supabase, traerTodo, AMBITO_DISTRITOS, ROLES, generarToken, generarClave } from '../lib/supabase'
 import type { Profile, Rol } from '../lib/supabase'
 import type { AdminCtx } from '../components/Layout'
 import { rolNorm } from '../lib/panel'
@@ -50,9 +50,12 @@ export default function PersonerosPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    let q = supabase.from('profiles').select('*').order('fecha_registro', { ascending: false })
-    if (esCoordRegional && departamento) q = q.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
-    const { data } = await q
+    // Paginado: Supabase corta en 1000 filas y VES ya las supera.
+    const data = await traerTodo<Profile>((a, b) => {
+      let q = supabase.from('profiles').select('*').order('fecha_registro', { ascending: false }).order('id')
+      if (esCoordRegional && departamento) q = q.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
+      return q.range(a, b)
+    }).catch(e => { console.error(e); return [] as Profile[] })
     setProfiles((data ?? []) as Profile[])
     setLoading(false)
   }, [esCoordRegional, departamento])

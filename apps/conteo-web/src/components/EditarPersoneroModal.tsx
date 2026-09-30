@@ -83,7 +83,8 @@ export default function EditarPersoneroModal({ perfil, onClose, onSaved }: {
     if (esMesa) cambios.mesa_asignada = mesa.trim() || null
     const { error: err } = await supabase.from('profiles').update(cambios).eq('id', perfil.id)
     setGuardando(false)
-    if (err) { setError(err.message); return }
+    // Error técnico de permisos (RLS) -> mensaje entendible.
+    if (err) { setError(/row-level security/i.test(err.message) ? 'No tienes permiso para este cambio. Mover a un personero a otro colegio (o cambiarle el rol) lo hace un Coordinador o el Administrador.' : err.message); return }
     onSaved(cambios)
   }
 

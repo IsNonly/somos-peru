@@ -65,11 +65,15 @@ export default function CentrosPage() {
     let vivo = true
     ;(async () => {
       setLoading(true)
-      let cq = supabase.from('colegios')
-        .select('id, nombre, distrito, direccion, total_mesas, electores')
-        .eq('departamento', dep)
-      if (prov) cq = cq.eq('provincia', prov)
-      const colsData = await traerTodo<Colegio>((from, to) => cq.order('distrito').order('nombre').range(from, to))
+      // Se arma una consulta NUEVA por página: reusar el mismo builder acumulaba
+      // parámetros de orden en cada vuelta.
+      const colsData = await traerTodo<Colegio>((from, to) => {
+        let cq = supabase.from('colegios')
+          .select('id, nombre, distrito, direccion, total_mesas, electores')
+          .eq('departamento', dep)
+        if (prov) cq = cq.eq('provincia', prov)
+        return cq.order('distrito').order('nombre').order('id').range(from, to)
+      })
       if (!vivo) return
 
       const distritosAmbito = new Set(colsData.map(c => c.distrito).filter(Boolean) as string[])
@@ -79,11 +83,11 @@ export default function CentrosPage() {
         traerTodo<Perfil>((from, to) =>
           supabase.from('profiles')
             .select('nombre_completo, celular, rol, local_asignado, local_votacion, distrito_asignado, distrito_vota')
-            .in('rol', [...ROLES_LOCAL, ROL_MESA]).order('nombre_completo').range(from, to)),
+            .in('rol', [...ROLES_LOCAL, ROL_MESA]).order('nombre_completo').order('id').range(from, to)),
         traerTodo<Perfil>((from, to) =>
           supabase.from('profiles')
             .select('nombre_completo, celular, rol, local_asignado, local_votacion, distrito_asignado, distrito_vota')
-            .in('rol', [...ROLES_COORD_DIST, 'Coordinador Provincial']).range(from, to)),
+            .in('rol', [...ROLES_COORD_DIST, 'Coordinador Provincial']).order('id').range(from, to)),
       ])
       if (!vivo) return
       const enAmbito = (p: Perfil) => {

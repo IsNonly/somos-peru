@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, traerTodo } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
 import { Search, Camera, ImageOff, X, Building2 } from 'lucide-react'
 
@@ -60,15 +60,18 @@ export default function FotosPage() {
     let vivo = true
     ;(async () => {
       setLoading(true)
-      let pq = supabase.from('profiles')
-        .select('id, nombre_completo, dni, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada')
-        .eq('rol', 'Personero de Mesa')
-        .order('nombre_completo')
-      if (distritosEfectivos) pq = pq.in('distrito_asignado', distritosEfectivos)
-
-      const [{ data: p }, { data: actasData }] = await Promise.all([
-        pq,
-        supabase.from('actas').select('mesa_numero, metodo, foto_instalacion_url, imagen_url, imagenes_url'),
+      // Paginado: Supabase corta en 1000 filas y VES ya las supera.
+      const [p, actasData] = await Promise.all([
+        traerTodo<any>((a, b) => {
+          let pq = supabase.from('profiles')
+            .select('id, nombre_completo, dni, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada')
+            .eq('rol', 'Personero de Mesa')
+            .order('nombre_completo').order('id')
+          if (distritosEfectivos) pq = pq.in('distrito_asignado', distritosEfectivos)
+          return pq.range(a, b)
+        }).catch(e => { console.error(e); return [] as any[] }),
+        traerTodo<any>((a, b) => supabase.from('actas').select('id, mesa_numero, metodo, foto_instalacion_url, imagen_url, imagenes_url').order('id').range(a, b))
+          .catch(e => { console.error(e); return [] as any[] }),
       ])
       if (!vivo) return
 

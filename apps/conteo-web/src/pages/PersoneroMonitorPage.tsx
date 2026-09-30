@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react'
-import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
+import { supabase, traerTodo, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
 import { restablecerClavePersonero } from '../lib/personeroActions'
 import EditarPersoneroModal from '../components/EditarPersoneroModal'
@@ -43,15 +43,18 @@ export default function PersoneroMonitorPage() {
 
   const cargar = useCallback(async () => {
     setLoading(true)
-    let pq = supabase.from('profiles')
-      .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, asistencia_local_at')
-      .ilike('rol', 'Personero%')
-      .order('nombre_completo')
-    if (distritosEfectivos) pq = pq.in('distrito_asignado', distritosEfectivos)
-
-    const [{ data: p }, { data: actas }] = await Promise.all([
-      pq,
-      supabase.from('actas').select('personero_id, personero_dni, metodo, estado'),
+    // Paginado: VES ya supera los 1000 personeros (Supabase corta en 1000 filas).
+    const [p, actas] = await Promise.all([
+      traerTodo<Perfil>((a, b) => {
+        let pq = supabase.from('profiles')
+          .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, distrito_vota, local_asignado, local_votacion, mesa_asignada, asistencia_local_at')
+          .ilike('rol', 'Personero%')
+          .order('nombre_completo').order('id')
+        if (distritosEfectivos) pq = pq.in('distrito_asignado', distritosEfectivos)
+        return pq.range(a, b)
+      }).catch(e => { console.error(e); return [] as Perfil[] }),
+      traerTodo<any>((a, b) => supabase.from('actas').select('id, personero_id, personero_dni, metodo, estado').order('id').range(a, b))
+        .catch(e => { console.error(e); return [] as any[] }),
     ])
 
     // Estado de envío por personero: metodo MANUAL / IMAGEN (clave por id y por dni)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
+import { supabase, traerTodo, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import type { Profile } from '../lib/supabase'
 import type { AdminCtx } from '../components/Layout'
 import { Award, Download, Search, CheckCircle, FileText, File } from 'lucide-react'
@@ -99,13 +99,16 @@ export default function CredencialesPage() {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    let q = supabase.from('profiles')
-      .select('*')
-      .eq('credencial_estado', 'Confirmado')
-      .order('fecha_registro', { ascending: false })
-    if (esCoordRegional && departamento) q = q.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
-    q.then(({ data }) => {
-      setProfiles((data ?? []) as Profile[])
+    // Paginado: Supabase corta en 1000 filas y VES ya las supera.
+    traerTodo<Profile>((a, b) => {
+      let q = supabase.from('profiles')
+        .select('*')
+        .eq('credencial_estado', 'Confirmado')
+        .order('fecha_registro', { ascending: false }).order('id')
+      if (esCoordRegional && departamento) q = q.or(`departamento_asignado.eq.${departamento},departamento_vota.eq.${departamento}`)
+      return q.range(a, b)
+    }).catch(e => { console.error(e); return [] as Profile[] }).then(data => {
+      setProfiles(data)
       setLoading(false)
     })
   }, [esCoordRegional, departamento])

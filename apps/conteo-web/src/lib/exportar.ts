@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { supabase, AMBITO_DISTRITOS } from './supabase'
+import { supabase, traerTodo, AMBITO_DISTRITOS } from './supabase'
 
 // Excel del botón "Exportar" de la cabecera: una fila por personero / coordinador
 // del ámbito, con su centro de votación, mesa designada, asistencia y si ya
@@ -12,7 +12,7 @@ export async function exportarPersoneros(distritos: string[] | null, colegio: st
     let q = supabase.from('profiles')
       .select('id, nombre_completo, dni, celular, rol, distrito_asignado, local_asignado, local_votacion, mesa_asignada, asistencia_local_at, credencial_estado')
       .or('rol.ilike.Personero%,rol.ilike.Coordinador%')
-      .order('nombre_completo').range(desde, desde + PAGINA - 1)
+      .order('nombre_completo').order('id').range(desde, desde + PAGINA - 1)
     q = q.in('distrito_asignado', distritos ?? AMBITO_DISTRITOS)
     const { data, error } = await q
     if (error) throw error
@@ -20,7 +20,7 @@ export async function exportarPersoneros(distritos: string[] | null, colegio: st
     if (!data || data.length < PAGINA) break
   }
 
-  const { data: actas } = await supabase.from('actas').select('personero_id, personero_dni, metodo, estado')
+  const actas = await traerTodo<any>((a, b) => supabase.from('actas').select('id, personero_id, personero_dni, metodo, estado').order('id').range(a, b))
   // Mismo criterio que la página de Personeros: acta transmitida, por id o por DNI.
   const envio = new Map<string, string>()
   for (const a of (actas ?? []) as any[]) {

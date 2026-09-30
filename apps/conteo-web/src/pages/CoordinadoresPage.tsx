@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
+import { supabase, traerTodo, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
 import { restablecerClavePersonero } from '../lib/personeroActions'
 import EditarPersoneroModal from '../components/EditarPersoneroModal'
@@ -41,21 +41,26 @@ export default function CoordinadoresPage() {
       // al ámbito de la instancia cuando tampoco se eligió un departamento distinto.
       const dep = f.departamento || AMBITO_DEPARTAMENTO
       const prov = f.provincia || ''
-      let cq = supabase.from('colegios').select('nombre, distrito, total_mesas').eq('departamento', dep)
-      if (prov) cq = cq.eq('provincia', prov)
-      if (distritosEfectivos) cq = cq.in('distrito', distritosEfectivos)
-      const { data: c } = await cq
+      const c = await traerTodo<any>((a, b) => {
+        let cq = supabase.from('colegios').select('id, nombre, distrito, total_mesas').eq('departamento', dep)
+        if (prov) cq = cq.eq('provincia', prov)
+        if (distritosEfectivos) cq = cq.in('distrito', distritosEfectivos)
+        return cq.order('id').range(a, b)
+      }).catch(e => { console.error(e); return [] as any[] })
       if (!vivo) return
 
       // Los perfiles se acotan a los distritos del ámbito (explícito, o derivado de los
       // colegios ya filtrados por depto/provincia) — evita mezclar personas de otro
       // departamento cuando no se restringe a un distrito puntual.
       const distritosAmbito = distritosEfectivos ?? [...new Set((c ?? []).map((x: any) => x.distrito).filter(Boolean))]
-      let pq = supabase.from('profiles')
-        .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, local_asignado, asistencia_local_at, credencial_estado')
-        .order('nombre_completo')
-      if (distritosAmbito.length) pq = pq.in('distrito_asignado', distritosAmbito)
-      const { data: p } = await pq
+      // Paginado: VES ya supera las 1000 filas.
+      const p = await traerTodo<any>((a, b) => {
+        let pq = supabase.from('profiles')
+          .select('id, nombre_completo, dni, celular, correo, rol, distrito_asignado, local_asignado, asistencia_local_at, credencial_estado')
+          .order('nombre_completo').order('id')
+        if (distritosAmbito.length) pq = pq.in('distrito_asignado', distritosAmbito)
+        return pq.range(a, b)
+      }).catch(e => { console.error(e); return [] as any[] })
       if (!vivo) return
       setPerfiles((p ?? []) as Perfil[])
       setColegios((c ?? []) as Colegio[])

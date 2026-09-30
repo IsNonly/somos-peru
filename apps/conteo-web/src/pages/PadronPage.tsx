@@ -94,7 +94,7 @@ export default function PadronPage() {
         .select(
           'id, nombre_completo, dni, celular, correo, usa_whatsapp, rol, distrito_vota, mesa_sufragio, local_votacion, distrito_asignado, mesa_asignada, local_asignado, tiene_experiencia, cuenta_movilidad, se_compromete, videos_vistos, pdfs_vistos, quiz_estado, credencial_estado, token_verificacion, fecha_registro',
         )
-        .order('fecha_registro', { ascending: false })
+        .order('fecha_registro', { ascending: false }).order('id')
         .range(desde, desde + lote - 1)
       if (error || !data || data.length === 0) break
       todos.push(...(data as Perfil[]))

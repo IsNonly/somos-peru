@@ -77,7 +77,7 @@ export default function CentrosPage() {
         let cq = supabase.from('colegios')
           .select('id, nombre, distrito, direccion, total_mesas, electores')
           .eq('departamento', dep)
-          .order('distrito').order('nombre').range(from, to)
+          .order('distrito').order('nombre').order('id').range(from, to)
         if (prov) cq = cq.eq('provincia', prov)
         if (dists) cq = cq.in('distrito', dists)
         return cq
@@ -86,7 +86,7 @@ export default function CentrosPage() {
         supabase.from('profiles')
           .select('nombre_completo, celular, rol, local_asignado, local_votacion, distrito_asignado, distrito_vota')
           .in('rol', [...ROLES_LOCAL, ROL_MESA])
-          .order('nombre_completo').range(from, to))
+          .order('nombre_completo').order('id').range(from, to))
       if (!vivo) return
       // Acotar los perfiles a los distritos del departamento/provincia elegidos (derivado
       // de colsData, ya filtrado arriba) — evita mezclar personeros de otro departamento

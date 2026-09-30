@@ -463,12 +463,19 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
         const url = await subirImagenActa(mesa.trim(), dataUrl, mime)
         if (!url) { setError('No se pudo subir la foto. Inténtalo de nuevo.'); setSubiendoInstalacion(false); return }
 
-        await supabase.from('actas').upsert({
+        const { error: upErr } = await supabase.from('actas').upsert({
           mesa_numero:          mesa.trim(),
           ...datosBaseActa(),
           foto_instalacion_url: url,
           instalada_at:         new Date().toISOString(),
         }, { onConflict: 'mesa_numero' })
+        // Antes el error se ignoraba y la foto se veía como guardada aunque no lo estuviera.
+        if (upErr) {
+          setError(/row-level security/i.test(upErr.message)
+            ? `La mesa ${mesa.trim()} pertenece a otro personero o ya se transmitió. Verifica el número de mesa.`
+            : 'No se pudo guardar la foto de instalación. Inténtalo de nuevo.')
+          setSubiendoInstalacion(false); return
+        }
 
         setFotoInstalacion(url)
       } catch {
@@ -599,7 +606,9 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
       const { departamento: dep, provincia: prov, distrito: dist } = base
       const electores = electoresHabiles.trim() ? parseInt(electoresHabiles.replace(/\D/g, ''), 10) : null
 
-      // Crear/actualizar acta
+      // 1) Crear/actualizar el acta SIN bloquear todavía: si los votos fallan
+      //    (señal débil), el personero puede volver a intentar. Antes el acta
+      //    quedaba bloqueada aunque los votos no se guardaran -mesa perdida-.
       const { data: acta, error: actaErr } = await supabase.from('actas').upsert({
         mesa_numero:       mesa.trim(),
         ...base,
@@ -608,12 +617,11 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
         imagenes_url:      Object.keys(imagenesUrl).length ? imagenesUrl : null,
         metodo:            modo,
         ocr_raw:           ocrRaw,
-        estado:            'TRANSMITIDA',
-        bloqueada:         true,
+        estado:            'PENDIENTE',
+        bloqueada:         false,
         latitude:          gpsCoords?.lat ?? null,
         longitude:         gpsCoords?.lon ?? null,
         gps_valido:        gpsStatus === 'ok',
-        transmitida_at:    new Date().toISOString(),
       }, { onConflict: 'mesa_numero' }).select().single()
 
       if (actaErr) throw actaErr
@@ -646,12 +654,29 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
           .filter(f => f.cantidad > 0)
       )
 
-      if (filas.length) await supabase.from('votos').insert(filas)
+      // 2) Votos. Si un intento anterior ya los guardó (y falló solo el paso 3),
+      //    no se duplican: se pasa directo a bloquear.
+      const { count: yaGuardados } = await supabase.from('votos')
+        .select('id', { count: 'exact', head: true }).eq('acta_id', acta.id)
+      if (!yaGuardados && filas.length) {
+        const { error: votosErr } = await supabase.from('votos').insert(filas)
+        if (votosErr) throw new Error('No se pudieron guardar los votos. Revisa tu señal y vuelve a tocar "Transmitir". (' + votosErr.message + ')')
+      }
+
+      // 3) Recién ahora se bloquea y se marca como transmitida.
+      const { error: lockErr } = await supabase.from('actas')
+        .update({ estado: 'TRANSMITIDA', bloqueada: true, transmitida_at: new Date().toISOString() })
+        .eq('id', acta.id)
+      if (lockErr) throw new Error('Los votos se guardaron pero no se pudo cerrar el acta. Vuelve a tocar "Transmitir". (' + lockErr.message + ')')
 
       if (userId) await supabase.from('profiles').update({ acta_transmitida: true }).eq('id', userId)
       setFase('enviado')
     } catch (e: any) {
-      setError(e.message ?? 'Error al transmitir. Inténtalo de nuevo.')
+      const m: string = e?.message ?? ''
+      // RLS: la mesa ya tiene un acta de OTRO personero (o ya fue transmitida).
+      setError(/row-level security/i.test(m)
+        ? `La mesa ${mesa} ya fue registrada por otro personero o ya se transmitió. Verifica el número de mesa; si es correcto, avisa a tu PCV o coordinador.`
+        : (m || 'Error al transmitir. Inténtalo de nuevo.'))
     }
     setEnviando(false)
   }
