@@ -10,7 +10,7 @@ import { procesarActa } from '../lib/ocr'
 import { subirImagenActa } from '../lib/storage'
 import {
   Camera, Send, CheckCircle, AlertTriangle,
-  Loader, MapPin, Key, ChevronDown, ChevronUp,
+  Loader, MapPin, Key, ChevronDown, ChevronUp, Minus, Plus,
   Info, PencilLine, LogOut, UserCheck, Map as MapIcon,
   Eye, Layers, ChevronLeft, X, UserCircle2, type LucideIcon,
 } from 'lucide-react'
@@ -550,6 +550,14 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
   const setVoto = (nivel: NivelCandidatura, id: string, valor: number) => {
     setVotos(prev => ({ ...prev, [nivel]: { ...prev[nivel], [id]: Math.max(0, valor) } }))
   }
+  // Conteo Manual: +/- por candidato, dentro de la sección de SU PROPIO nivel
+  // (a diferencia del modo Foto, en Manual cada nivel se digita por separado).
+  const cambiarVoto = (nivel: NivelCandidatura, id: string, delta: number) => {
+    setVotos(prev => ({
+      ...prev,
+      [nivel]: { ...prev[nivel], [id]: Math.max(0, (prev[nivel][id] || 0) + delta) },
+    }))
+  }
 
   const totalNivel = (nivel: NivelCandidatura) =>
     Object.values(votos[nivel]).reduce((a, b) => a + b, 0)
@@ -1013,10 +1021,33 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
         </div>
       )}
 
-      {/* Acta única: una fila por organización política, una columna por nivel
-          presente (Provincial / Distrital) -igual que el acta física real-. */}
+      {/* Conteo Manual: cada nivel por separado (Provincial primero, Distrital
+          después), como antes. Conteo por Imagen: acta única combinada, igual
+          que la foto que se sube (una fila por partido, columna por nivel). */}
       {!candLoading && bloques.length > 0 && (
-        <TablaActaUnica bloques={bloques} filas={filasActa} votos={votos} onChange={setVoto} />
+        modo === 'MANUAL' ? (
+          <>
+            {bloques.map(b => (
+              <SeccionVotos key={b.nivel} bloque={b} total={totalNivel(b.nivel)}
+                votos={votos[b.nivel]} onDelta={(id, d) => cambiarVoto(b.nivel, id, d)} />
+            ))}
+            <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 grid gap-2 text-center"
+              style={{ gridTemplateColumns: `repeat(${bloques.length + 1}, minmax(0, 1fr))` }}>
+              {bloques.map(b => (
+                <div key={b.nivel}>
+                  <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">{b.nivel}</p>
+                  <p className="text-white text-lg font-extrabold tabular-nums">{totalNivel(b.nivel)}</p>
+                </div>
+              ))}
+              <div>
+                <p className="text-white/40 text-[10px] uppercase tracking-widest font-semibold">Total de Votos Emitidos</p>
+                <p className="text-sky-400 text-lg font-extrabold tabular-nums">{granTotal}</p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <TablaActaUnica bloques={bloques} filas={filasActa} votos={votos} onChange={setVoto} />
+        )
       )}
 
       {error && (
@@ -1121,7 +1152,7 @@ function TablaActaUnica({ bloques, filas, votos, onChange }: {
         <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold px-3 pt-2 pb-1">Votos Especiales</p>
         <div className="divide-y divide-white/[0.06]">
           {VOTOS_ESPECIALES.map(esp => (
-            <FilaActaFila key={esp.id} label={esp.partido} esLista={false} niveles={niveles}
+            <FilaActaFila key={esp.id} label={esp.nombre} esLista={false} niveles={niveles}
               porNivel={Object.fromEntries(niveles.map(n => [n, esp])) as Partial<Record<NivelCandidatura, Candidato>>}
               votos={votos} onChange={onChange} />
           ))}
@@ -1182,6 +1213,105 @@ function FilaActaFila({ label, esLista, niveles, porNivel, votos, onChange }: {
               valor > 0 ? 'border-sky-500/40 bg-sky-500/[0.08]' : 'border-white/10 bg-white/5'}`} />
         )
       })}
+    </div>
+  )
+}
+
+// ── Conteo Manual: sección de candidatos de un nivel, por separado ──────────
+// (Regional / Provincial / Distrital) — a diferencia del modo Foto/OCR (una
+// sola acta combinada), digitar a mano se hace nivel por nivel: primero toda
+// la lista de Provincial, después toda la de Distrital, cada una con su
+// propio conteo +/- y su propio total.
+function SeccionVotos({ bloque, total, votos, onDelta }: {
+  bloque: BloqueCandidaturas; total: number
+  votos: Record<string, number>; onDelta: (id: string, delta: number) => void
+}) {
+  const esProv = bloque.nivel === 'PROVINCIAL'
+  const barra   = esProv ? 'border-sky-500 bg-sky-500/5'   : 'border-emerald-500 bg-emerald-500/5'
+  const tinta   = esProv ? 'text-sky-300'                  : 'text-emerald-300'
+  const icono   = esProv ? 'text-sky-400'                  : 'text-emerald-400'
+  const accent: 'metro' | 'distrital' = esProv ? 'metro' : 'distrital'
+  return (
+    <div className="bg-[#131a2e] border border-white/8 rounded-2xl overflow-hidden">
+      {/* Cabecera de sección */}
+      <div className={`flex items-start justify-between gap-2 pl-4 pr-3 py-3 border-l-4 ${barra}`}>
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <MapIcon size={13} className={`${icono} flex-shrink-0`} />
+            <p className={`text-[11px] font-extrabold uppercase tracking-wide leading-tight ${tinta}`}>
+              {bloque.titulo} ({bloque.candidatos.length} listas)
+            </p>
+          </div>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold">Votos</p>
+          <p className="text-white text-xl font-black tabular-nums leading-none mt-0.5">{total}</p>
+        </div>
+      </div>
+      {/* Filas de candidatos */}
+      <div className="divide-y divide-white/[0.06] max-h-[60vh] overflow-y-auto">
+        {bloque.candidatos.map(c => (
+          <FilaCandidato key={c.id} candidato={c} accent={accent} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
+        ))}
+      </div>
+
+      {/* Votos especiales (blanco/nulo/impugnado): sección aparte y siempre
+          visible (no dentro del scroll), acotada a ESTE nivel — cada bloque
+          (Provincial/Distrital) lleva su propio conteo independiente. */}
+      <div className="border-t-2 border-white/10 bg-black/20 pt-1">
+        <p className="text-white/35 text-[9px] uppercase tracking-widest font-semibold px-4 pt-2 pb-1">
+          Votos Especiales · {bloque.titulo}
+        </p>
+        <div className="divide-y divide-white/[0.06]">
+          {VOTOS_ESPECIALES.map(c => (
+            <FilaCandidato key={c.id} candidato={c} accent={accent} value={votos[c.id] || 0} onDelta={d => onDelta(c.id, d)} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Fila individual con controles +/- (solo Conteo Manual) ───────────────────
+function FilaCandidato({ candidato, accent, value, onDelta }: {
+  candidato: Candidato; accent: 'metro' | 'distrital'
+  value: number; onDelta: (delta: number) => void
+}) {
+  const activa = accent === 'metro'
+    ? 'bg-sky-500/[0.07] border-l-2 border-sky-500'
+    : 'bg-emerald-500/[0.07] border-l-2 border-emerald-500'
+  const mas = accent === 'metro' ? 'bg-sky-500 hover:bg-sky-400' : 'bg-emerald-500 hover:bg-emerald-400'
+  const esLista = candidato.id.startsWith('cand_')
+  return (
+    <div className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${value > 0 ? activa : 'border-l-2 border-transparent'}`}>
+      <div className="relative w-9 h-9 rounded-lg bg-white flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden">
+        <span className="text-[0.55rem] font-black leading-none text-center px-0.5" style={{ color: candidato.color }}>
+          {candidato.letra}
+        </span>
+        {esLista ? (
+          <img
+            src={`/partidos/${slugPartido(candidato.partido)}.png`}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-contain p-0.5 bg-white"
+            onError={e => { e.currentTarget.style.display = 'none' }}
+          />
+        ) : null}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-xs font-bold leading-tight truncate">{candidato.partido}</p>
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <button type="button" onClick={() => onDelta(-1)} disabled={value === 0}
+          className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-white/60 disabled:opacity-30 flex items-center justify-center transition-all">
+          <Minus size={13} />
+        </button>
+        <span className="w-10 text-center text-sm font-extrabold tabular-nums text-white border border-white/10 rounded-lg py-1">{value}</span>
+        <button type="button" onClick={() => onDelta(1)}
+          className={`w-7 h-7 rounded-lg text-white flex items-center justify-center transition-all ${mas}`}>
+          <Plus size={13} />
+        </button>
+      </div>
     </div>
   )
 }
