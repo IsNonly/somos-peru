@@ -96,18 +96,21 @@ export default function PersoneroMonitorPage() {
   const stats = useMemo(() => {
     const asistio = pers.filter(p => p.asistencia_local_at).length
     let enviado = 0, sinEnvio = 0
-    const porDistrito: Record<string, number> = {}
-    const porDistritoEnvio: Record<string, number> = {}
+    // Cada instancia opera UN solo distrito (VES, Cercado o San Isidro), así que el
+    // desglose útil es por Centro de Votación, no por distrito.
+    const porCentro: Record<string, PorCentro> = {}
     for (const p of pers) {
-      const d = p.distrito_asignado
-      if (d && p.asistencia_local_at) porDistrito[d] = (porDistrito[d] ?? 0) + 1
+      const c = (p.local_asignado ?? p.local_votacion ?? '').trim() || 'Sin centro asignado'
+      const fila = porCentro[c] ??= { total: 0, asistio: 0, enviado: 0 }
+      fila.total++
+      if (p.asistencia_local_at) fila.asistio++
       const e = envioDe(p)
       // El personero elige UN solo método (Manual o Imagen, nunca los dos) al enviar
       // su acta -no hay "envío parcial" real: con cualquiera de los dos ya terminó-.
-      if (e.manual || e.imagen) { enviado++; if (d) porDistritoEnvio[d] = (porDistritoEnvio[d] ?? 0) + 1 }
+      if (e.manual || e.imagen) { enviado++; fila.enviado++ }
       else sinEnvio++
     }
-    return { total: pers.length, asistio, enviado, sinEnvio, porDistrito, porDistritoEnvio }
+    return { total: pers.length, asistio, enviado, sinEnvio, porCentro }
   }, [pers, envios])
 
   const donutAsistencia = {
@@ -118,19 +121,7 @@ export default function PersoneroMonitorPage() {
     labels: ['Enviado', 'Sin envío'],
     datasets: [{ data: [stats.enviado, stats.sinEnvio], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }],
   }
-  const barData = (por: Record<string, number>, color: string) => {
-    const labels = Object.keys(por)
-    return {
-      labels: labels.length ? labels : ['—'],
-      datasets: [{ data: labels.length ? labels.map(d => por[d]) : [0], backgroundColor: color, borderRadius: 4 }],
-    }
-  }
   const donutOpts: any = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-  const chartOpts: any = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: { x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } }, y: { grid: { color: '#f1f5f9' }, ticks: { color: '#64748b' } } },
-  }
 
   const onRestablecer = async (p: Perfil) => {
     if (!p.dni) return
@@ -165,18 +156,14 @@ export default function PersoneroMonitorPage() {
         <ChartCard icon={UserCheck} tint="#10b981" titulo="Asistencia Global" sub="Personeros que marcaron asistencia">
           <Doughnut data={donutAsistencia} options={donutOpts} />
         </ChartCard>
-        <ChartCard icon={UserCheck} tint="#10b981" titulo="Asistencia por Distrito" sub="Marcadas por distrito">
-          {Object.keys(stats.porDistrito).length
-            ? <Bar data={barData(stats.porDistrito, '#10b981')} options={chartOpts} />
-            : <SinRegistros />}
+        <ChartCard icon={UserCheck} tint="#10b981" titulo="Asistencia por Centro de Votación" sub="Marcaron / faltan, por colegio (los más atrasados arriba)">
+          <BarrasPorCentro por={stats.porCentro} campo="asistio" color="#10b981" etiquetas={['Marcaron', 'Faltan']} />
         </ChartCard>
         <ChartCard icon={FileCheck} tint="#0ea5e9" titulo="Envío de Actas Global" sub="Enviado (Manual o Imagen) o sin envío">
           <Doughnut data={donutEnvios} options={donutOpts} />
         </ChartCard>
-        <ChartCard icon={FileCheck} tint="#0ea5e9" titulo="Envíos por Distrito" sub="Personeros con al menos un envío recibido">
-          {Object.keys(stats.porDistritoEnvio).length
-            ? <Bar data={barData(stats.porDistritoEnvio, '#0ea5e9')} options={chartOpts} />
-            : <SinRegistros />}
+        <ChartCard icon={FileCheck} tint="#0ea5e9" titulo="Envíos por Centro de Votación" sub="Actas enviadas / pendientes, por colegio (los más atrasados arriba)">
+          <BarrasPorCentro por={stats.porCentro} campo="enviado" color="#0ea5e9" etiquetas={['Enviaron', 'Pendientes']} />
         </ChartCard>
       </div>
 
@@ -327,6 +314,51 @@ function ChartCard({ icon: Icon, tint, titulo, sub, children }: {
       </p>
       <p className="text-xs text-slate-500 mb-3">{sub}</p>
       <div className="h-56">{children}</div>
+    </div>
+  )
+}
+
+interface PorCentro { total: number; asistio: number; enviado: number }
+
+// Barra horizontal apilada por colegio: cumplieron (color) + faltan (rojo). Se
+// ordena por % de avance ascendente para que los centros atrasados queden
+// arriba; con muchos colegios (VES tiene ~73) el gráfico crece y se desplaza.
+function BarrasPorCentro({ por, campo, color, etiquetas }: {
+  por: Record<string, PorCentro>; campo: 'asistio' | 'enviado'; color: string; etiquetas: [string, string]
+}) {
+  const filas = Object.entries(por)
+    .sort(([na, a], [nb, b]) => a[campo] / a.total - b[campo] / b.total || b.total - a.total || na.localeCompare(nb, 'es'))
+  if (!filas.length) return <SinRegistros />
+  const corto = (n: string) => n.length > 32 ? n.slice(0, 31) + '…' : n
+  const data = {
+    labels: filas.map(([n]) => corto(n)),
+    datasets: [
+      { label: etiquetas[0], data: filas.map(([, v]) => v[campo]), backgroundColor: color, borderRadius: 3 },
+      { label: etiquetas[1], data: filas.map(([, v]) => v.total - v[campo]), backgroundColor: '#fca5a5', borderRadius: 3 },
+    ],
+  }
+  const opts: any = {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 10 } } },
+      tooltip: { callbacks: {
+        title: (items: any[]) => filas[items[0].dataIndex][0],
+        footer: (items: any[]) => {
+          const v = filas[items[0].dataIndex][1]
+          return `${v[campo]} de ${v.total} (${Math.round((v[campo] / v.total) * 100)}%)`
+        },
+      } },
+    },
+    scales: {
+      x: { stacked: true, grid: { color: '#f1f5f9' }, ticks: { color: '#64748b', precision: 0 } },
+      y: { stacked: true, grid: { display: false }, ticks: { color: '#475569', font: { size: 10 }, autoSkip: false } },
+    },
+  }
+  return (
+    <div className="h-full overflow-y-auto pr-1">
+      <div style={{ height: Math.max(224, filas.length * 22 + 40) }}>
+        <Bar data={data} options={opts} />
+      </div>
     </div>
   )
 }
