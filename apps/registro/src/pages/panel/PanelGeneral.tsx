@@ -11,6 +11,7 @@ import {
   AlertTriangle, MessageCircle, GraduationCap, Pencil,
 } from 'lucide-react'
 import EditarPersoneroModal, { type CambiosPersonero } from '../../components/EditarPersoneroModal'
+import { USA_TERRITORIOS, TERRITORIOS_VES, territorioDe } from '../../lib/territoriosVES'
 
 interface PanelCtx {
   rol: string
@@ -69,7 +70,10 @@ export default function PanelGeneral() {
   const [fDist, setFDist] = useState('')
   const [fRol, setFRol] = useState('')
   const [fExp, setFExp] = useState('')
-  const [agrupar, setAgrupar] = useState(true)
+  // Cómo se agrupan las tarjetas de centros. En VES arranca por Territorio (hay
+  // ~70 colegios); en las otras instancias sigue igual que antes (por Zona).
+  const [vista, setVista] = useState<'territorio' | 'zona' | 'plano'>(USA_TERRITORIOS ? 'territorio' : 'zona')
+  const [fTerr, setFTerr] = useState('')   // '' = todos, '0' = sin territorio, 'N' = Territorio N
 
   const [sel, setSel] = useState<CentroFila | null>(null)
 
@@ -163,17 +167,37 @@ export default function PanelGeneral() {
     if (s && !(c.nombre.toLowerCase().includes(s) || (c.distrito ?? '').toLowerCase().includes(s) ||
       (c.pcv?.nombre ?? '').toLowerCase().includes(s) || (c.zonal?.nombre ?? '').toLowerCase().includes(s))) return false
     if (fDist && c.distrito !== fDist) return false
+    if (fTerr && String(territorioDe(c.distrito, c.nombre) ?? 0) !== fTerr) return false
     return true
   }
 
-  const centrosFlat = useMemo(() => d.centros.filter(filtrarCentro), [d.centros, q, fDist])
+  const centrosFlat = useMemo(() => d.centros.filter(filtrarCentro), [d.centros, q, fDist, fTerr])
   const zonasFiltradas = useMemo<ZonaGrupo[]>(() =>
     d.zonas.map(z => ({ ...z, centros: z.centros.filter(filtrarCentro) })).filter(z => z.centros.length),
-    [d.zonas, q, fDist])
-  const sinZonalFiltrado = useMemo(() => d.sinZonal.filter(filtrarCentro), [d.sinZonal, q, fDist])
+    [d.zonas, q, fDist, fTerr])
+  const sinZonalFiltrado = useMemo(() => d.sinZonal.filter(filtrarCentro), [d.sinZonal, q, fDist, fTerr])
+
+  // Vista por Territorio (solo VES): TODOS los colegios del distrito -también los
+  // que aún no tienen a nadie-, para ver de un vistazo qué falta cubrir en cada uno.
+  const territorios = useMemo(() => {
+    if (!USA_TERRITORIOS) return []
+    const grupos = new Map<number, CentroFila[]>()
+    for (const c of d.todos.filter(filtrarCentro)) {
+      if (norm(c.distrito) !== 'VILLA EL SALVADOR') continue
+      const t = territorioDe(c.distrito, c.nombre) ?? 0
+      grupos.set(t, [...(grupos.get(t) ?? []), c])
+    }
+    return [...grupos.entries()]
+      .sort(([a], [b]) => (a || 99) - (b || 99))   // "sin territorio" al final
+      .map(([t, centros]) => ({ t, centros }))
+  }, [d.todos, q, fDist, fTerr])
+  const haySinTerritorio = USA_TERRITORIOS && d.todos.some(c =>
+    norm(c.distrito) === 'VILLA EL SALVADOR' && territorioDe(c.distrito, c.nombre) === null)
 
   const exportar = () => {
-    const rows = centrosFlat.map(c => ({
+    const filas = vista === 'territorio' && USA_TERRITORIOS ? territorios.flatMap(g => g.centros) : centrosFlat
+    const rows = filas.map(c => ({
+      ...(USA_TERRITORIOS ? { Territorio: territorioDe(c.distrito, c.nombre) ?? '' } : {}),
       Distrito: c.distrito ?? '', Colegio: c.nombre, Dirección: c.direccion ?? '',
       Mesas: c.total_mesas ?? 0, Electores: c.electores ?? 0,
       PCV: c.pcv?.nombre ?? '', 'Celular PCV': c.pcv?.celular ?? '',
@@ -241,6 +265,10 @@ export default function PanelGeneral() {
           <Sel v={fDepto} set={setDepto} all={`🗺️ ${AMBITO_DEPARTAMENTO}`} opts={departamentos} disabled={bloqueado('depto')} />
           <Sel v={fProv} set={setProv} all="Todas las provincias" opts={provincias} disabled={bloqueado('prov')} />
           <Sel v={fDist} set={setFDist} all="📍 Todos los distritos" opts={esProvincial ? distritosProvincia : distritos} disabled={bloqueado('dist')} />
+          {USA_TERRITORIOS && (
+            <Sel v={fTerr} set={setFTerr} all="🧭 Todos los territorios"
+              opts={[...TERRITORIOS_VES.map(t => [String(t), `Territorio ${t}`] as [string, string]), ...(haySinTerritorio ? [['0', 'Sin territorio'] as [string, string]] : [])]} />
+          )}
           <Sel v={fRol} set={setFRol} all="🛡️ Todos los roles" opts={esAdmin ? ROLES_TODOS : ROLES_BASICO} />
           <Sel v={fExp} set={setFExp} all="⭐ Exp: Todos" opts={[['si', 'Con experiencia'], ['no', 'Sin experiencia']]} />
         </div>
@@ -279,13 +307,31 @@ export default function PanelGeneral() {
       {tab === 'centros' && (
         <>
           <div className="flex items-center justify-end gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
-            <label className="text-xs text-slate-500 flex items-center gap-2">
-              <input type="checkbox" checked={agrupar} onChange={e => setAgrupar(e.target.checked)} />
-              Agrupar por Zona / Coordinador
-            </label>
+            {USA_TERRITORIOS ? (
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-slate-500 mr-1">Agrupar por:</span>
+                {([['territorio', 'Territorio'], ['zona', 'Zona / Coordinador'], ['plano', 'Sin agrupar']] as const).map(([v, l]) => (
+                  <button key={v} onClick={() => setVista(v)}
+                    className={`rounded-lg px-2.5 py-1 font-bold border ${vista === v ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <label className="text-xs text-slate-500 flex items-center gap-2">
+                <input type="checkbox" checked={vista === 'zona'} onChange={e => setVista(e.target.checked ? 'zona' : 'plano')} />
+                Agrupar por Zona / Coordinador
+              </label>
+            )}
           </div>
 
-          {agrupar ? (
+          {vista === 'territorio' && USA_TERRITORIOS ? (
+            territorios.length ? (
+              <div className="space-y-3">
+                {territorios.map(g => <BloqueTerritorio key={g.t} t={g.t} centros={g.centros} abierto={!!fTerr || !!q.trim()} onPick={setSel} />)}
+              </div>
+            ) : <p className="text-sm text-slate-400 py-10 text-center">Sin centros con esos filtros.</p>
+          ) : vista === 'zona' ? (
             <div className="space-y-4">
               {sinZonalFiltrado.length > 0 && (
                 <Grid centros={sinZonalFiltrado} onPick={setSel} />
@@ -479,6 +525,37 @@ function Tab({ active, onClick, icon: Icon, label }: { active: boolean; onClick:
   )
 }
 
+// Un territorio de VES: cabecera con el resumen (colegios, mesas, personeros, PCV,
+// cobertura) y, desplegable, las tarjetas de sus colegios. Arranca cerrado (se ve
+// primero el resumen de los 9) salvo que se esté filtrando o buscando.
+function BloqueTerritorio({ t, centros, abierto, onPick }: { t: number; centros: CentroFila[]; abierto: boolean; onPick: (c: CentroFila) => void }) {
+  const mesas = centros.reduce((s, c) => s + (c.total_mesas ?? 0), 0)
+  const pers = centros.reduce((s, c) => s + c.nPersoneros, 0)
+  const conPCV = centros.filter(c => c.pcv).length
+  const cob = mesas ? Math.round((pers / mesas) * 100) : 0
+  const color = cob >= 100 ? '#16a34a' : cob >= 40 ? '#d97706' : '#dc2626'
+  return (
+    <details open={abierto} className="group bg-white border border-slate-200 rounded-2xl overflow-hidden">
+      <summary className="cursor-pointer list-none flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-indigo-50 border-b border-indigo-100">
+        <p className="text-sm font-extrabold text-indigo-800 flex items-center gap-2">
+          <span className="text-indigo-400 group-open:rotate-90 transition-transform">▶</span>
+          {t ? `Territorio ${t}` : 'Sin territorio'}
+          <span className="text-xs font-semibold text-indigo-500">({centros.length} colegio{centros.length === 1 ? '' : 's'})</span>
+        </p>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+          <span><strong className="text-slate-900">{mesas}</strong> mesas</span>
+          <span><strong className="text-slate-900">{pers}</strong> personeros</span>
+          <span><strong className="text-slate-900">{conPCV}/{centros.length}</strong> con PCV</span>
+          <span className="font-bold" style={{ color }}>{cob}% cobertura</span>
+        </div>
+      </summary>
+      <div className="p-3">
+        <Grid centros={centros} onPick={onPick} />
+      </div>
+    </details>
+  )
+}
+
 function Grid({ centros, borde, onPick }: { centros: CentroFila[]; borde?: string; onPick: (c: CentroFila) => void }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
@@ -499,6 +576,11 @@ function Card({ c, borde, onClick }: {
         <span className="text-[11px] font-bold text-rose-600 bg-rose-50 rounded px-2 py-0.5 flex items-center gap-1">
           <MapPin size={11} /> {c.distrito ?? '—'}
         </span>
+        {territorioDe(c.distrito, c.nombre) !== null && (
+          <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 rounded px-2 py-0.5">
+            Territorio {territorioDe(c.distrito, c.nombre)}
+          </span>
+        )}
       </div>
 
       <div>

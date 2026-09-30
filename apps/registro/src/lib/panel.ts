@@ -102,6 +102,7 @@ export interface PanelData {
   perfiles: Perfil[]
   coordsDistritales: (Perfil & { acreditado: boolean })[]
   zonales: Perfil[]
+  todos: CentroFila[]              // TODOS los colegios del ámbito, con o sin personal asignado
   centros: CentroFila[]            // solo centros con alguna asignación (PCV / personeros / zonal)
   zonas: ZonaGrupo[]               // grupos multi-colegio (zonal con >1 colegio)
   sinZonal: CentroFila[]           // centros con asignación pero sin zonal
@@ -116,7 +117,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
   const distritos = scope?.distritos ?? null
   const [d, setD] = useState<PanelData>({
     loading: true, colegios: [], perfiles: [], coordsDistritales: [], zonales: [],
-    centros: [], zonas: [], sinZonal: [],
+    todos: [], centros: [], zonas: [], sinZonal: [],
     kpis: { personerosMesa: 0, centros: 0, centrosConPCV: 0, coordDistritales: 0, zonales: 0 },
   })
 
@@ -257,7 +258,7 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
 
       setD({
         loading: false, colegios, perfiles, coordsDistritales, zonales,
-        centros, zonas, sinZonal,
+        todos: todasFilas, centros, zonas, sinZonal,
         kpis: {
           personerosMesa: perfiles.filter(p => rolNorm(p.rol) === ROL_MESA).length,
           centros: centros.length,
