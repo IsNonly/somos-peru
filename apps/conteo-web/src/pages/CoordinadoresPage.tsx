@@ -38,6 +38,8 @@ export default function CoordinadoresPage() {
   const [editando, setEditando] = useState<Perfil | null>(null)
   const [envios, setEnvios] = useState<Map<string, Envio>>(new Map())
   const [fSector, setFSector] = useState('')
+  const [fEstado, setFEstado] = useState<'todos' | 'faltan' | 'enviaron'>('todos')
+  const filtroCol = f.colegio
 
   useEffect(() => {
     if (scopeLoading) return
@@ -129,44 +131,64 @@ export default function CoordinadoresPage() {
     return { coords, kpi, resumen }
   }, [perfiles, colegios, f.colegio])
 
-  // ── VES: coordinadores agrupados por Sector, cada uno con SUS personeros ──
-  // Un coordinador con varios colegios ("A | B") aparece una vez por colegio,
-  // dentro del sector de ese colegio, con los personeros de mesa de ese colegio.
+  // ── VES: los 9 sectores, cada uno con TODOS sus colegios ──────────────
+  // Cada colegio muestra su(s) coordinador(es)/PCV (o "sin coordinador") y TODOS
+  // sus personeros de mesa, separados en "faltan enviar" y "ya enviaron", para
+  // que no se escape nadie aunque su colegio no tenga coordinador.
   const sectores = useMemo(() => {
     if (!USA_SECTORES) return []
     const envioDe = (p: Perfil): Envio => envios.get(p.id) ?? (p.dni ? envios.get(p.dni) ?? null : null)
-    const persPorLocal = new Map<string, Perfil[]>()
-    for (const p of perfiles) {
-      if (p.rol !== 'Personero de Mesa') continue
-      const k = norm(p.local_asignado || p.local_votacion)
-      if (!k) continue
-      persPorLocal.set(k, [...(persPorLocal.get(k) ?? []), p])
+
+    const filas = new Map<string, FilaColegio>()   // clave: nombre de colegio normalizado
+    const fila = (colegio: string, distrito: string | null): FilaColegio => {
+      const k = norm(colegio)
+      if (!filas.has(k)) filas.set(k, { key: k, colegio, sector: sectorDe(distrito, colegio) ?? 0, coords: [], faltan: [], enviaron: [], asistieron: 0 })
+      return filas.get(k)!
     }
+    for (const c of colegios) fila(c.nombre, c.distrito)
+    for (const p of perfiles) {
+      if (esCoordinador(p.rol)) {
+        for (const col of String(p.local_asignado ?? '').split(/[,|]/).map(x => x.trim()).filter(Boolean))
+          fila(col, p.distrito_asignado).coords.push(p)
+      } else if (p.rol === 'Personero de Mesa') {
+        const col = (p.local_asignado || p.local_votacion || '').trim() || 'Sin colegio asignado'
+        const f = fila(col, p.distrito_asignado)
+        const e = envioDe(p)
+        if (e) f.enviaron.push({ p, envio: e }); else f.faltan.push({ p, envio: null })
+        if (p.asistencia_local_at) f.asistieron++
+      }
+    }
+
     const s = q.trim().toLowerCase()
-    const grupos = new Map<number, FilaCoord[]>()
-    for (const c of perfiles.filter(p => esCoordinador(p.rol))) {
-      const locales = String(c.local_asignado ?? '').split(/[,|]/).map(x => x.trim()).filter(Boolean)
-      for (const colegio of (locales.length ? locales : ['Sin colegio asignado'])) {
-        if (f.colegio && colegio !== f.colegio) continue
-        if (s && !c.nombre_completo.toLowerCase().includes(s) && !colegio.toLowerCase().includes(s)) continue
-        const sector = sectorDe(c.distrito_asignado, colegio) ?? 0
-        if (fSector && String(sector) !== fSector) continue
-        const personeros = (persPorLocal.get(norm(colegio)) ?? []).map(p => ({ p, envio: envioDe(p) }))
-          // primero los que faltan enviar, luego por mesa
-          .sort((a, b) => (a.envio ? 1 : 0) - (b.envio ? 1 : 0) || String(a.p.mesa_asignada ?? '').localeCompare(String(b.p.mesa_asignada ?? '')))
-        const fila: FilaCoord = {
-          key: c.id + '|' + colegio, coord: c, colegio, sector, personeros,
-          enviaron: personeros.filter(x => x.envio).length,
-          fotos: personeros.filter(x => x.envio === 'Foto').length,
-          asistieron: personeros.filter(x => x.p.asistencia_local_at).length,
-        }
-        grupos.set(sector, [...(grupos.get(sector) ?? []), fila])
+    const porMesa = (x: { p: Perfil }, y: { p: Perfil }) => String(x.p.mesa_asignada ?? '').localeCompare(String(y.p.mesa_asignada ?? ''))
+    const grupos = new Map<number, FilaColegio[]>()
+    for (let n = 1; n <= 9; n++) grupos.set(n, [])   // los 9 sectores SIEMPRE
+    for (const f of filas.values()) {
+      if (f.colegio === 'Sin colegio asignado' && !f.faltan.length && !f.enviaron.length) continue
+      // "Solo faltan" / "Solo enviaron": esconder colegios sin nada que mostrar.
+      if (fEstado === 'faltan' && !f.faltan.length) continue
+      if (fEstado === 'enviaron' && !f.enviaron.length) continue
+      if (fColegio(f, s, fSector)) {
+        f.faltan.sort(porMesa); f.enviaron.sort(porMesa)
+        grupos.set(f.sector, [...(grupos.get(f.sector) ?? []), f])
       }
     }
     return [...grupos.entries()]
-      .sort(([a], [b]) => (a || 99) - (b || 99))   // "sin sector" al final
-      .map(([sector, filas]) => ({ sector, filas: filas.sort((a, b) => a.colegio.localeCompare(b.colegio, 'es')) }))
-  }, [perfiles, envios, q, f.colegio, fSector])
+      .filter(([sector, fs]) => sector !== 0 || fs.length)          // "Sin sector" solo si tiene algo
+      .filter(([, fs]) => fs.length || (!s && !filtroCol && fEstado === 'todos'))  // al buscar/filtrar, sin sectores vacíos
+      .filter(([sector]) => !fSector || String(sector) === fSector)
+      .sort(([a], [b]) => (a || 99) - (b || 99))
+      .map(([sector, fs]) => ({ sector, filas: fs.sort((a, b) => a.colegio.localeCompare(b.colegio, 'es')) }))
+
+    function fColegio(f: FilaColegio, texto: string, sector: string) {
+      if (sector && String(f.sector) !== sector) return false
+      if (filtroCol && norm(f.colegio) !== norm(filtroCol)) return false
+      if (!texto) return true
+      return f.colegio.toLowerCase().includes(texto)
+        || f.coords.some(c => c.nombre_completo.toLowerCase().includes(texto))
+        || [...f.faltan, ...f.enviaron].some(x => x.p.nombre_completo.toLowerCase().includes(texto) || (x.p.mesa_asignada ?? '').includes(texto))
+    }
+  }, [perfiles, colegios, envios, q, filtroCol, fSector, fEstado])
 
   const coordsFiltrados = coords.filter(c =>
     !q || c.nombre.toLowerCase().includes(q.toLowerCase()) || c.colegio.toLowerCase().includes(q.toLowerCase()),
@@ -220,6 +242,14 @@ export default function CoordinadoresPage() {
               <option value="0">Sin sector</option>
             </select>
           )}
+          {USA_SECTORES && (
+            <div className="flex rounded-lg border border-slate-300 overflow-hidden text-sm font-semibold">
+              {([['todos', 'Todos'], ['faltan', '⏳ Solo faltan'], ['enviaron', '✅ Solo enviaron']] as const).map(([v, l]) => (
+                <button key={v} onClick={() => setFEstado(v)}
+                  className={`px-3 py-2 ${fEstado === v ? 'bg-sky-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>{l}</button>
+              ))}
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -229,7 +259,8 @@ export default function CoordinadoresPage() {
             ? <p className="py-10 text-center text-slate-400 text-sm">Sin coordinadores con esos filtros.</p>
             : <div className="space-y-3">
                 {sectores.map(g => (
-                  <BloqueSector key={g.sector} sector={g.sector} filas={g.filas} abierto={!!fSector || !!q.trim() || !!f.colegio}
+                  <BloqueSector key={g.sector} sector={g.sector} filas={g.filas} estado={fEstado}
+                    abierto={!!fSector || !!q.trim() || !!f.colegio}
                     onEditar={setEditando} onClave={onRestablecer} />
                 ))}
               </div>
@@ -288,111 +319,138 @@ export default function CoordinadoresPage() {
   )
 }
 
-interface FilaCoord {
+interface FilaColegio {
   key: string
-  coord: Perfil
   colegio: string
   sector: number
-  personeros: { p: Perfil; envio: Envio }[]
-  enviaron: number
-  fotos: number
+  coords: Perfil[]                       // coordinadores / PCV de este colegio
+  faltan: { p: Perfil; envio: Envio }[]  // personeros que todavía no envían su acta
+  enviaron: { p: Perfil; envio: Envio }[]
   asistieron: number
 }
 
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0)
 const colorPct = (n: number) => (n >= 100 ? '#16a34a' : n >= 40 ? '#d97706' : '#dc2626')
 
-// Un sector de VES: resumen (coordinadores, personeros, actas enviadas) y,
-// desplegable, la tarjeta de cada coordinador con sus personeros.
-function BloqueSector({ sector, filas, abierto, onEditar, onClave }: {
-  sector: number; filas: FilaCoord[]; abierto: boolean
+// Un sector de VES: resumen y, desplegable, la tarjeta de cada colegio.
+function BloqueSector({ sector, filas, estado, abierto, onEditar, onClave }: {
+  sector: number; filas: FilaColegio[]; estado: 'todos' | 'faltan' | 'enviaron'; abierto: boolean
   onEditar: (p: Perfil) => void; onClave: (p: Perfil) => void
 }) {
-  const pers = filas.reduce((s, f) => s + f.personeros.length, 0)
-  const env = filas.reduce((s, f) => s + f.enviaron, 0)
-  const coordsUnicos = new Set(filas.map(f => f.coord.id)).size
-  const pc = pct(env, pers)
+  const env = filas.reduce((s, f) => s + f.enviaron.length, 0)
+  const falt = filas.reduce((s, f) => s + f.faltan.length, 0)
+  const pc = pct(env, env + falt)
+  const sinCoord = filas.filter(f => !f.coords.length).length
   return (
     <details open={abierto} className="group border border-slate-200 rounded-2xl overflow-hidden">
       <summary className="cursor-pointer list-none flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-indigo-50 border-b border-indigo-100">
         <p className="text-sm font-extrabold text-indigo-800 flex items-center gap-2">
           <span className="text-indigo-400 group-open:rotate-90 transition-transform">▶</span>
           {sector ? `Sector ${sector}` : 'Sin sector'}
-          <span className="text-xs font-semibold text-indigo-500">({coordsUnicos} coordinador{coordsUnicos === 1 ? '' : 'es'})</span>
+          <span className="text-xs font-semibold text-indigo-500">({filas.length} colegio{filas.length === 1 ? '' : 's'}{sinCoord ? ` · ${sinCoord} sin coordinador` : ''})</span>
         </p>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-          <span><strong className="text-slate-900">{pers}</strong> personeros</span>
-          <span><strong className="text-slate-900">{env}/{pers}</strong> actas enviadas</span>
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <span className="text-emerald-700"><strong>{env}</strong> enviaron</span>
+          <span className="text-rose-600"><strong>{falt}</strong> faltan</span>
           <span className="font-bold" style={{ color: colorPct(pc) }}>{pc}%</span>
         </div>
       </summary>
-      <div className="p-3 grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 bg-white">
-        {filas.map(f => <TarjetaCoord key={f.key} f={f} onEditar={onEditar} onClave={onClave} />)}
+      <div className="p-3 bg-white">
+        {filas.length === 0 ? (
+          <p className="text-sm text-slate-400 py-4 text-center">Este sector no tiene colegios ni personeros registrados.</p>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
+            {filas.map(f => <TarjetaColegio key={f.key} f={f} estado={estado} onEditar={onEditar} onClave={onClave} />)}
+          </div>
+        )}
       </div>
     </details>
   )
 }
 
-function TarjetaCoord({ f, onEditar, onClave }: { f: FilaCoord; onEditar: (p: Perfil) => void; onClave: (p: Perfil) => void }) {
-  const total = f.personeros.length
-  const pc = pct(f.enviaron, total)
-  const esPCV = ROLES_PCV.includes(f.coord.rol)
+function FilaPersonero({ p, envio }: { p: Perfil; envio: Envio }) {
+  return (
+    <li className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px]">
+      <div className="min-w-0">
+        <p className="font-semibold text-slate-800 truncate">{p.nombre_completo}</p>
+        <p className="text-slate-400">Mesa {p.mesa_asignada || '—'}{p.celular ? ` · ${p.celular}` : ''}</p>
+      </div>
+      {envio === 'Foto' ? (
+        <span className="flex-shrink-0 flex items-center gap-1 font-bold text-sky-700 bg-sky-50 rounded px-1.5 py-0.5"><Camera size={11} /> Foto</span>
+      ) : envio === 'Manual' ? (
+        <span className="flex-shrink-0 flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5"><FileText size={11} /> Manual</span>
+      ) : (
+        <span className="flex-shrink-0 flex items-center gap-1 font-bold text-rose-600 bg-rose-50 rounded px-1.5 py-0.5"><Clock size={11} /> Sin envío</span>
+      )}
+    </li>
+  )
+}
+
+function TarjetaColegio({ f, estado, onEditar, onClave }: {
+  f: FilaColegio; estado: 'todos' | 'faltan' | 'enviaron'; onEditar: (p: Perfil) => void; onClave: (p: Perfil) => void
+}) {
+  const total = f.faltan.length + f.enviaron.length
+  const pc = pct(f.enviaron.length, total)
+  const fotos = f.enviaron.filter(x => x.envio === 'Foto').length
+  const verFaltan = estado !== 'enviaron', verEnviaron = estado !== 'faltan'
   return (
     <div className="border border-slate-200 rounded-xl p-3.5 flex flex-col gap-2" style={{ borderLeft: `4px solid ${colorPct(pc)}` }}>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-extrabold text-[13px] text-slate-900 uppercase leading-tight">{f.coord.nombre_completo}</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-0.5">{esPCV ? 'Personero de Centro de Votación' : f.coord.rol}</p>
-        </div>
+        <p className="font-extrabold text-[13px] text-slate-900 flex items-start gap-1.5 leading-tight">
+          <School size={14} className="text-slate-400 mt-0.5 flex-shrink-0" /> {f.colegio}
+        </p>
         {f.sector > 0 && <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 rounded px-1.5 py-0.5 flex-shrink-0">Sector {f.sector}</span>}
       </div>
-      <p className="text-[11px] text-slate-600 font-semibold flex items-center gap-1"><School size={12} className="text-slate-400" /> {f.colegio}</p>
+
+      {/* Coordinador(es) / PCV del colegio */}
+      {f.coords.length === 0 ? (
+        <p className="text-[11px] font-bold text-amber-700 bg-amber-50 rounded px-2 py-1">⚠️ Sin coordinador asignado</p>
+      ) : f.coords.map(c => (
+        <div key={c.id} className="flex items-center justify-between gap-2 bg-slate-50 rounded-lg px-2 py-1.5">
+          <div className="min-w-0">
+            <p className="text-[11px] font-extrabold text-slate-800 uppercase truncate">{c.nombre_completo}</p>
+            <p className="text-[10px] text-slate-400">{ROLES_PCV.includes(c.rol) ? 'PCV' : c.rol}{c.celular ? ` · ${c.celular}` : ''}</p>
+          </div>
+          <div className="flex gap-1 flex-shrink-0">
+            {ROLES_PCV.includes(c.rol) && (
+              <button onClick={() => onEditar(c)} title="Editar datos" className="p-1 rounded border border-slate-200 text-slate-400 hover:text-sky-600"><Pencil size={12} /></button>
+            )}
+            <button onClick={() => onClave(c)} title="Restablecer contraseña a su DNI" className="p-1 rounded border border-slate-200 text-slate-400 hover:text-amber-600"><KeyRound size={12} /></button>
+          </div>
+        </div>
+      ))}
 
       <div className="grid grid-cols-3 gap-1.5 text-center text-[11px] font-bold">
-        <span className="bg-emerald-50 text-emerald-700 rounded py-1">{f.enviaron}/{total} enviaron</span>
-        <span className="bg-sky-50 text-sky-700 rounded py-1">📷 {f.fotos} · 📝 {f.enviaron - f.fotos}</span>
+        <span className="bg-emerald-50 text-emerald-700 rounded py-1">{f.enviaron.length}/{total} enviaron</span>
+        <span className="bg-sky-50 text-sky-700 rounded py-1">📷 {fotos} · 📝 {f.enviaron.length - fotos}</span>
         <span className="bg-slate-50 text-slate-600 rounded py-1">{f.asistieron} asist.</span>
       </div>
 
-      <details className="group/p">
-        <summary className="cursor-pointer list-none text-[11px] font-bold text-sky-700 hover:underline">
-          <span className="inline-block group-open/p:rotate-90 transition-transform">▸</span> Ver personeros ({total})
-        </summary>
-        {total === 0 ? (
-          <p className="text-[11px] text-slate-400 py-2">Ningún personero de mesa inscrito en este colegio.</p>
-        ) : (
-          <ul className="mt-2 divide-y divide-slate-100 border border-slate-100 rounded-lg max-h-72 overflow-y-auto">
-            {f.personeros.map(({ p, envio }) => (
-              <li key={p.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px]">
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-800 truncate">{p.nombre_completo}</p>
-                  <p className="text-slate-400">Mesa {p.mesa_asignada || '—'}{p.celular ? ` · ${p.celular}` : ''}</p>
-                </div>
-                {envio === 'Foto' ? (
-                  <span className="flex-shrink-0 flex items-center gap-1 font-bold text-sky-700 bg-sky-50 rounded px-1.5 py-0.5"><Camera size={11} /> Foto</span>
-                ) : envio === 'Manual' ? (
-                  <span className="flex-shrink-0 flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5"><FileText size={11} /> Manual</span>
-                ) : (
-                  <span className="flex-shrink-0 flex items-center gap-1 font-bold text-rose-600 bg-rose-50 rounded px-1.5 py-0.5"><Clock size={11} /> Sin envío</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </details>
-
-      <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100">
-        {esPCV && (
-          <button onClick={() => onEditar(f.coord)} title="Editar datos"
-            className="flex-1 flex items-center justify-center gap-1 p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-sky-600 hover:border-sky-300 text-[11px] font-semibold">
-            <Pencil size={13} /> Editar
-          </button>
-        )}
-        <button onClick={() => onClave(f.coord)} title="Restablecer contraseña a su DNI"
-          className="flex-1 flex items-center justify-center gap-1 p-1.5 rounded-md border border-slate-200 text-slate-500 hover:text-amber-600 hover:border-amber-300 text-[11px] font-semibold">
-          <KeyRound size={13} /> Clave
-        </button>
-      </div>
+      {total === 0 ? (
+        <p className="text-[11px] text-slate-400">Ningún personero de mesa inscrito en este colegio.</p>
+      ) : (
+        <details open={estado !== 'todos'} className="group/p">
+          <summary className="cursor-pointer list-none text-[11px] font-bold text-sky-700 hover:underline">
+            <span className="inline-block group-open/p:rotate-90 transition-transform">▸</span> Ver personeros ({total})
+          </summary>
+          {verFaltan && (
+            <>
+              <p className="mt-2 text-[10px] font-extrabold uppercase tracking-wide text-rose-600">⏳ Faltan enviar ({f.faltan.length})</p>
+              {f.faltan.length
+                ? <ul className="mt-1 divide-y divide-slate-100 border border-rose-100 rounded-lg max-h-60 overflow-y-auto">{f.faltan.map(x => <FilaPersonero key={x.p.id} {...x} />)}</ul>
+                : <p className="text-[11px] text-emerald-600 py-1">¡Todos enviaron! 🎉</p>}
+            </>
+          )}
+          {verEnviaron && (
+            <>
+              <p className="mt-2 text-[10px] font-extrabold uppercase tracking-wide text-emerald-700">✅ Ya enviaron ({f.enviaron.length})</p>
+              {f.enviaron.length
+                ? <ul className="mt-1 divide-y divide-slate-100 border border-emerald-100 rounded-lg max-h-60 overflow-y-auto">{f.enviaron.map(x => <FilaPersonero key={x.p.id} {...x} />)}</ul>
+                : <p className="text-[11px] text-slate-400 py-1">Nadie envió todavía.</p>}
+            </>
+          )}
+        </details>
+      )}
     </div>
   )
 }
