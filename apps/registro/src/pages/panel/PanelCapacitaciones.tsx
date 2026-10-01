@@ -141,7 +141,10 @@ export default function PanelCapacitaciones() {
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Capacitaciones')
-    XLSX.writeFile(wb, `SomosPeru_${AMBITO_DEPARTAMENTO}_Capacitaciones_${new Date().toISOString().split('T')[0]}.xlsx`)
+    // El PCV descarga solo SU centro de votación (la lista ya viene acotada a él);
+    // el archivo lleva el nombre del colegio para que no se confunda.
+    const ambitoArchivo = esPCV && actorLocal ? actorLocal.replace(/[^\p{L}\p{N}]+/gu, '_') : AMBITO_DEPARTAMENTO
+    XLSX.writeFile(wb, `SomosPeru_${ambitoArchivo}_Capacitaciones_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
   if (d.loading) return <div className="py-20 text-center text-slate-400 text-sm">Cargando panel…</div>
@@ -241,7 +244,7 @@ export default function PanelCapacitaciones() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
-                {['#', 'Personero / DNI', 'Rol', 'Distrito Asignado', 'Local / Colegio', 'Progreso Video', 'Progreso PDF', 'Capacitación', 'WhatsApp Recordatorio', 'Acciones'].map(h => (
+                {['#', 'Personero / DNI', 'Rol', 'Distrito Asignado', 'Local / Colegio', 'Mesa', 'Progreso Video', 'Progreso PDF', 'Capacitación', 'WhatsApp Recordatorio', 'Acciones'].map(h => (
                   <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -264,6 +267,9 @@ export default function PanelCapacitaciones() {
                   </td>
                   <td className="px-4 py-2.5 text-slate-600">{p.distrito_asignado ?? p.distrito_vota ?? '—'}</td>
                   <td className="px-4 py-2.5 text-slate-600 max-w-[220px] truncate">{p.local_asignado ?? p.local_votacion ?? '—'}</td>
+                  <td className="px-4 py-2.5 font-mono font-semibold text-slate-700 whitespace-nowrap">
+                    {p.mesa_asignada || <span className="font-sans font-normal text-amber-600 text-xs">Sin mesa</span>}
+                  </td>
                   <td className="px-4 py-2.5">
                     <ProgresoBar value={p.videos_vistos ?? 0} total={1} color="#0ea5e9" />
                   </td>
