@@ -414,6 +414,11 @@ export default function RegisterPage() {
     if (esVES && form.rol === 'Personero de Centro de Votación') {
       setError('Los cupos de Personero de Centro de Votación ya están completos.'); return
     }
+    // Sin colegio el personero queda inscrito pero no aparece en ningún centro de
+    // votación del Panel: hay que elegirlo de la lista (no basta con escribirlo).
+    if (esPersonero && !form.localAsignado.trim()) {
+      setError('Elige tu Local de Votación de la lista antes de continuar.'); return
+    }
     setError('')
     setDniDuplicado(false)
     setShowModal(true)
