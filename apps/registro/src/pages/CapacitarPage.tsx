@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase, AMBITO_DEPARTAMENTO } from '../lib/supabase'
 import {
@@ -6,6 +6,8 @@ import {
   LayoutGrid, type LucideIcon,
 } from 'lucide-react'
 import Constancia from '../components/Constancia'
+
+const VisorPDF = lazy(() => import('../components/VisorPDF'))
 
 // Roles que tienen un Panel al que volver (a diferencia de un Personero de
 // Mesa, para quien esta página ES su pantalla principal tras el login).
@@ -450,12 +452,13 @@ export default function CapacitarPage() {
                   />
                 </div>
 
-                <iframe
-                  src={PDF_URL}
-                  className="w-full border-0"
-                  style={{ height: '65vh', minHeight: 420 }}
-                  title="Cartilla del Personero ERM 2026"
-                />
+                <Suspense fallback={<div style={{ height: '65vh', minHeight: 420 }} className="bg-slate-200" />}>
+                  <VisorPDF
+                    url={PDF_URL}
+                    titulo="Cartilla del Personero ERM 2026"
+                    style={{ height: '65vh', minHeight: 420 }}
+                  />
+                </Suspense>
 
                 <div className="p-4 sm:p-5">
                   {doneCartilla ? (
