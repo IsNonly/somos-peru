@@ -25,3 +25,4 @@ CALI.xlsx
 .vercel
 .env*
 supabase/.temp/
+!apps/registro/public/cartilla/*.pdf

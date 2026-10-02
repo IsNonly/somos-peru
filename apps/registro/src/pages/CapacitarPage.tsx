@@ -19,13 +19,16 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
 const fechaLarga = (d: Date) =>
   `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`
 
-// Servidos desde Supabase Storage (no empaquetados en el build): un video de
-// ~46MB dentro de /public hacía que CADA deployment de Vercel volviera a
-// guardar esa copia completa -con los pushes acumulados de esta sesión eso
-// eran varios GB de "Deployment Storage" solo en este proyecto-. El archivo
-// es el mismo contenido nacional para las 3 instancias, así que basta con
-// una sola copia hospedada acá en vez de una por instancia.
-const PDF_URL = 'https://zjwjipknkjgoeyyamzvf.supabase.co/storage/v1/object/public/capacitacion/Cartilla_Personero_ERM_2026.pdf'
+// La cartilla (~6MB) se sirve desde la propia app (public/cartilla): antes
+// estaba en Supabase Storage del proyecto VES y las descargas de las 3
+// instancias agotaban el "Cached Egress" del plan gratuito de Supabase.
+const PDF_URL = '/cartilla/Cartilla_Personero_ERM_2026.pdf'
+
+// El video sí sigue en Supabase Storage (no empaquetado en el build): un video
+// de ~46MB dentro de /public hacía que CADA deployment de Vercel volviera a
+// guardar esa copia completa -con los pushes acumulados eso eran varios GB de
+// "Deployment Storage" solo en este proyecto-. Es el mismo contenido nacional
+// para las 3 instancias, así que basta con una sola copia hospedada ahí.
 const PDF_TIEMPO_MIN = 60 // segundos requeridos de lectura
 
 const VIDEO_URL = 'https://zjwjipknkjgoeyyamzvf.supabase.co/storage/v1/object/public/capacitacion/Capacitacion_Personero_ERM_2026.mp4'
@@ -387,6 +390,7 @@ export default function CapacitarPage() {
                   <video
                     ref={videoRef}
                     src={VIDEO_URL}
+                    preload="metadata"
                     controls
                     controlsList="nodownload noplaybackrate"
                     disablePictureInPicture
