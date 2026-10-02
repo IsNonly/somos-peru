@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { supabase, AMBITO_DEPARTAMENTO, AMBITO_DISTRITOS } from '../../lib/supabase'
 import {
-  usePanelData, rolNorm, norm, type CentroFila, type ZonaGrupo, type Persona,
+  usePanelData, rolNorm, norm, claveLocal, type CentroFila, type ZonaGrupo, type Persona, type Perfil,
   ROL_MESA, ROL_LOCAL, ROL_COORD_DIST, ROL_ZONAL,
 } from '../../lib/panel'
 import {
@@ -76,6 +76,7 @@ export default function PanelGeneral() {
   const [fTerr, setFTerr] = useState('')   // '' = todos, '0' = sin territorio, 'N' = Territorio N
 
   const [sel, setSel] = useState<CentroFila | null>(null)
+  const [asignando, setAsignando] = useState<Perfil | null>(null)
 
   // Distritos de la provincia asignada (solo para Coordinador Provincial)
   const [distritosProvincia, setDistritosProvincia] = useState<string[]>([])
@@ -194,6 +195,27 @@ export default function PanelGeneral() {
   const haySinTerritorio = USA_TERRITORIOS && d.todos.some(c =>
     norm(c.distrito) === 'VILLA EL SALVADOR' && territorioDe(c.distrito, c.nombre) === null)
 
+  // Personeros (de mesa o PCV) inscritos cuyo colegio está vacío o no coincide con
+  // ningún colegio de la lista: no aparecen en ninguna tarjeta de centro, así que se
+  // listan aparte para poder asignarles su colegio.
+  const sinAsignar = useMemo(() => {
+    const llaves = new Set(d.colegios.map(c => claveLocal(c.distrito, c.nombre)))
+    const s = q.trim().toLowerCase()
+    return d.perfiles.filter(p => {
+      const r = rolNorm(p.rol)
+      if (r !== ROL_MESA && r !== ROL_LOCAL) return false
+      if (llaves.has(claveLocal(p.distrito_asignado || p.distrito_vota, p.local_asignado || p.local_votacion))) return false
+      if (s && !(p.nombre_completo?.toLowerCase().includes(s) || (p.dni ?? '').includes(s) ||
+        (p.local_asignado ?? '').toLowerCase().includes(s))) return false
+      if (fDist && p.distrito_asignado !== fDist && p.distrito_vota !== fDist) return false
+      return true
+    })
+  }, [d.colegios, d.perfiles, q, fDist])
+  // Mesas que ya tienen personero, para no ofrecerlas al asignar.
+  const mesasTomadas = useMemo(() => new Set(
+    d.perfiles.filter(p => rolNorm(p.rol) === ROL_MESA && p.mesa_asignada).map(p => p.mesa_asignada as string),
+  ), [d.perfiles])
+
   const exportar = () => {
     const filas = vista === 'territorio' && USA_TERRITORIOS ? territorios.flatMap(g => g.centros) : centrosFlat
     const rows = filas.map(c => ({
@@ -218,6 +240,12 @@ export default function PanelGeneral() {
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Centros y Mesas')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(personas), 'Personeros y Mesas')
+    if (sinAsignar.length) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sinAsignar.map(p => ({
+        Nombre: p.nombre_completo, DNI: p.dni ?? '', Celular: p.celular ?? '', Rol: rolNorm(p.rol),
+        Distrito: p.distrito_asignado ?? p.distrito_vota ?? '', 'Colegio escrito': p.local_asignado ?? p.local_votacion ?? '',
+      }))), 'Sin colegio asignado')
+    }
     XLSX.writeFile(wb, `SomosPeru_${AMBITO_DEPARTAMENTO}_Centros_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
@@ -317,6 +345,9 @@ export default function PanelGeneral() {
 
       {tab === 'centros' && (
         <>
+          {sinAsignar.length > 0 && (
+            <BloqueSinAsignar personas={sinAsignar} puedeAsignar={esAdmin || esProvincial || esDistrital} onAsignar={setAsignando} />
+          )}
           <div className="flex items-center justify-end gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
             {USA_TERRITORIOS ? (
               <div className="flex items-center gap-1.5 text-xs">
@@ -382,6 +413,22 @@ export default function PanelGeneral() {
         <CentroModal c={sel} puedeEditar={esAdmin || esProvincial || esDistrital} puedeEliminar={esAdmin}
           colegios={d.colegios.map(c => c.nombre)}
           onClose={() => setSel(null)} onActualizado={onPersoneroActualizado} onEliminado={onPersoneroEliminado} />
+      )}
+
+      {asignando && (
+        <EditarPersoneroModal
+          perfil={{
+            id: asignando.id, nombre: asignando.nombre_completo, celular: asignando.celular, correo: asignando.correo,
+            mesa_asignada: asignando.mesa_asignada, local_asignado: asignando.local_asignado,
+          }}
+          esMesa={rolNorm(asignando.rol) === ROL_MESA}
+          puedeEliminar={esAdmin}
+          mesasOcupadas={mesasTomadas}
+          colegiosOpciones={d.colegios.map(c => c.nombre)}
+          onClose={() => setAsignando(null)}
+          onSaved={() => { setAsignando(null); d.refetch() }}
+          onEliminado={() => { setAsignando(null); d.refetch() }}
+        />
       )}
     </div>
   )
@@ -539,6 +586,53 @@ function Tab({ active, onClick, icon: Icon, label }: { active: boolean; onClick:
 // Un territorio de VES: cabecera con el resumen (colegios, mesas, personeros, PCV,
 // cobertura) y, desplegable, las tarjetas de sus colegios. Arranca cerrado (se ve
 // primero el resumen de los 9) salvo que se esté filtrando o buscando.
+function BloqueSinAsignar({ personas, puedeAsignar, onAsignar }: {
+  personas: Perfil[]; puedeAsignar: boolean; onAsignar: (p: Perfil) => void
+}) {
+  return (
+    <details open className="group bg-white border border-amber-300 rounded-2xl overflow-hidden">
+      <summary className="cursor-pointer list-none flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-amber-50 border-b border-amber-200">
+        <p className="text-sm font-extrabold text-amber-800 flex items-center gap-2">
+          <span className="text-amber-500 group-open:rotate-90 transition-transform">▶</span>
+          <AlertTriangle size={15} /> Inscritos sin colegio asignado
+          <span className="text-xs font-semibold text-amber-600">({personas.length})</span>
+        </p>
+        <span className="text-xs text-amber-700">No aparecen en ningún centro de votación hasta que se les asigne uno.</span>
+      </summary>
+      <div className="p-3 grid grid-cols-1 lg:grid-cols-2 gap-2">
+        {personas.map(p => {
+          const escrito = (p.local_asignado || p.local_votacion || '').trim()
+          return (
+            <div key={p.id} className="flex items-center justify-between gap-2 border border-slate-200 rounded-xl px-3 py-2"
+              style={{ borderLeft: '4px solid #f59e0b' }}>
+              <div className="min-w-0">
+                <p className="font-bold text-slate-800 text-sm truncate">{p.nombre_completo}</p>
+                <p className="text-xs text-slate-500 truncate">
+                  <span className="font-semibold text-slate-600">{rolNorm(p.rol)}</span> · DNI: {p.dni ?? '—'}
+                  {escrito && <> · <span className="text-rose-500">Escribió: {escrito}</span></>}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {p.celular && (
+                  <a href={wa(p.celular)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                    <Phone size={12} /> {p.celular}
+                  </a>
+                )}
+                {puedeAsignar && (
+                  <button onClick={() => onAsignar(p)}
+                    className="text-xs font-bold rounded-lg bg-sky-600 hover:bg-sky-700 text-white px-2.5 py-1.5 flex items-center gap-1">
+                    <Pencil size={12} /> Asignar
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </details>
+  )
+}
+
 function BloqueTerritorio({ t, centros, abierto, onPick }: { t: number; centros: CentroFila[]; abierto: boolean; onPick: (c: CentroFila) => void }) {
   const mesas = centros.reduce((s, c) => s + (c.total_mesas ?? 0), 0)
   const pers = centros.reduce((s, c) => s + c.nPersoneros, 0)
