@@ -11,11 +11,24 @@ const TEMPLATE_SRC = '/constancia-template.jpg'
 // Relación de aspecto real de la plantilla (ancho / alto): 963 × 692.
 const RATIO = '963 / 692'
 
-// Posición vertical (%) de cada bloque sobre el lienzo. Ajustable a ojo.
+// Posición vertical (%) de cada bloque sobre el lienzo.
 const POS = {
-  nombreTop: 41.5, // el nombre se apoya sobre la línea azul, bajo "Se otorga la presente constancia a:"
-  infoTop: 86,      // fila FECHA · CARGO · DISTRITO, bajo el sello inferior
+  // La línea azul del nombre está al 45.5% de la altura (medido en la plantilla).
+  // El nombre se ancla por ABAJO justo encima de ella: así, sea cual sea el
+  // tamaño de letra, nunca la cruza (antes se anclaba por arriba y un nombre
+  // grande bajaba hasta quedar tachado por la línea).
+  nombreBottom: 55.2,
+  infoTop: 87.5,    // fila FECHA · CARGO · DISTRITO, bajo el sello inferior (sin tocarlo)
 }
+
+// Las medidas son relativas al ANCHO DE LA CONSTANCIA (unidades cqw del
+// contenedor), no al de la pantalla: en celular la constancia es angosta y los
+// tamaños en px/vw hacían que un nombre largo se saliera por los costados.
+const ANCHO_NOMBRE = 56      // % del ancho para el nombre: no debe tocar la columna izquierda (VIGILAMOS…)
+const NOMBRE_MAX = 3.2       // tamaño máximo (en % del ancho) para nombres cortos
+const EM_POR_LETRA = 0.74    // ancho aprox. de una mayúscula en negrita con tracking
+const usaCqw = typeof CSS !== 'undefined' && CSS.supports?.('width: 1cqw')
+const u = usaCqw ? 'cqw' : 'vw' // navegadores muy viejos: aproximación por pantalla
 
 interface ConstanciaProps {
   nombre: string
@@ -24,25 +37,19 @@ interface ConstanciaProps {
   fecha: string // ya formateada, ej. "2 de setiembre de 2026"
 }
 
-// El espacio entre la línea azul y el párrafo "Por su participación..." es
-// angosto: un nombre largo en 2 líneas se monta sobre ambos. Se reduce el
-// tamaño de letra según el largo del nombre para que entre en una sola línea
-// (con clamp() sigue siendo responsivo al ancho de pantalla).
-function tamanoNombre(nombre: string): { min: number; pref: number; max: number } {
-  const len = (nombre || '').trim().length
-  if (len <= 18) return { min: 13, pref: 3.0, max: 30 }
-  if (len <= 24) return { min: 12, pref: 2.6, max: 26 }
-  if (len <= 30) return { min: 11, pref: 2.2, max: 22 }
-  if (len <= 36) return { min: 10, pref: 1.9, max: 19 }
-  if (len <= 44) return { min: 9, pref: 1.6, max: 16 }
-  return { min: 8, pref: 1.3, max: 13 }
+// Tamaño del nombre para que SIEMPRE entre en una sola línea dentro de la
+// columna central: los cortos van grandes y los largos se achican lo justo.
+function tamanoNombre(nombre: string): string {
+  const len = Math.max(1, (nombre || '').trim().length)
+  const ajuste = ANCHO_NOMBRE / (len * EM_POR_LETRA)
+  return `${Math.min(NOMBRE_MAX, ajuste).toFixed(2)}${u}`
 }
 
 export default function Constancia({ nombre, cargo, distrito, fecha }: ConstanciaProps) {
   return (
     <div
       className="constancia-lienzo relative w-full bg-white shadow-lg select-none"
-      style={{ aspectRatio: RATIO, printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
+      style={{ aspectRatio: RATIO, printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact', containerType: 'inline-size' }}
     >
       <img
         src={TEMPLATE_SRC}
@@ -51,14 +58,14 @@ export default function Constancia({ nombre, cargo, distrito, fecha }: Constanci
         draggable={false}
       />
 
-      {/* NOMBRE — sobre la línea azul, en una sola línea (ver tamanoNombre) */}
+      {/* NOMBRE — apoyado sobre la línea azul, en una sola línea (ver tamanoNombre) */}
       <div
-        className="absolute left-1/2 -translate-x-1/2 w-[68%] text-center"
-        style={{ top: `${POS.nombreTop}%` }}
+        className="absolute left-1/2 -translate-x-1/2 text-center"
+        style={{ bottom: `${POS.nombreBottom}%`, width: `${ANCHO_NOMBRE}%` }}
       >
         <span
-          className="inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-extrabold uppercase tracking-wide text-[#1b2a4a] leading-tight"
-          style={(({ min, pref, max }) => ({ fontSize: `clamp(${min}px, ${pref}vw, ${max}px)` }))(tamanoNombre(nombre))}
+          className="block whitespace-nowrap font-extrabold uppercase tracking-wide text-[#1b2a4a] leading-none"
+          style={{ fontSize: tamanoNombre(nombre) }}
         >
           {nombre || '—'}
         </span>
@@ -77,13 +84,13 @@ export default function Constancia({ nombre, cargo, distrito, fecha }: Constanci
           <div key={label} className="flex-1 min-w-0">
             <p
               className="font-bold uppercase text-[#e2001a] tracking-[0.14em]"
-              style={{ fontSize: 'clamp(6px, 1vw, 11px)' }}
+              style={{ fontSize: `1.05${u}` }}
             >
               {label}
             </p>
             <p
               className="font-semibold text-[#1b2a4a] leading-tight break-words mt-0.5"
-              style={{ fontSize: 'clamp(8px, 1.35vw, 14px)' }}
+              style={{ fontSize: `1.45${u}` }}
             >
               {value || '—'}
             </p>
