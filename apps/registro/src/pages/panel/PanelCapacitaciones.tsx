@@ -61,6 +61,7 @@ export default function PanelCapacitaciones() {
   const [q, setQ] = useState('')
   const [fDist, setFDist] = useState('')
   const [fRol, setFRol] = useState('')
+  const [fCol, setFCol] = useState('')
   const [chip, setChip] = useState<'todos' | Estado>('todos')
   const [editPerfil, setEditPerfil] = useState<Perfil | null>(null)
 
@@ -80,6 +81,22 @@ export default function PanelCapacitaciones() {
   const distritos = useMemo(() =>
     [...new Set(cohorte.map(p => p.distrito_asignado || p.distrito_vota).filter(Boolean) as string[])]
       .sort((a, b) => a.localeCompare(b, 'es')), [cohorte])
+
+  // Colegios del filtro: los que tienen personeros, acotados al distrito elegido.
+  const localDe = (p: Perfil) => (p.local_asignado || p.local_votacion || '').trim()
+  const colegiosFiltro = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of cohorte) {
+      if (fDist && p.distrito_asignado !== fDist && p.distrito_vota !== fDist) continue
+      const l = localDe(p)
+      if (l && !m.has(norm(l))) m.set(norm(l), l)
+    }
+    return [...m.values()].sort((a, b) => a.localeCompare(b, 'es'))
+  }, [cohorte, fDist])
+
+  useEffect(() => {
+    if (fCol && !colegiosFiltro.some(c => norm(c) === norm(fCol))) setFCol('')
+  }, [colegiosFiltro, fCol])
 
   const distritosModal = useMemo(() =>
     [...new Set([...d.colegios.map(c => c.distrito), ...distritos].filter(Boolean) as string[])]
@@ -125,10 +142,11 @@ export default function PanelCapacitaciones() {
         (p.local_asignado ?? '').toLowerCase().includes(s))) return false
       if (fDist && p.distrito_asignado !== fDist && p.distrito_vota !== fDist) return false
       if (fRol && rolNorm(p.rol) !== fRol) return false
+      if (fCol && norm(localDe(p)) !== norm(fCol)) return false
       if (chip !== 'todos' && estado !== chip) return false
       return true
     }).sort((a, b) => (a.estado === b.estado ? 0 : a.estado === 'noiniciado' ? -1 : b.estado === 'noiniciado' ? 1 : a.estado === 'proceso' ? -1 : 1))
-  }, [conEstado, q, fDist, fRol, chip])
+  }, [conEstado, q, fDist, fRol, fCol, chip])
 
   const exportar = () => {
     const rows = filtrados.map(({ p, estado }) => ({
@@ -143,7 +161,9 @@ export default function PanelCapacitaciones() {
     XLSX.utils.book_append_sheet(wb, ws, 'Capacitaciones')
     // El PCV descarga solo SU centro de votación (la lista ya viene acotada a él);
     // el archivo lleva el nombre del colegio para que no se confunda.
-    const ambitoArchivo = esPCV && actorLocal ? actorLocal.replace(/[^\p{L}\p{N}]+/gu, '_') : AMBITO_DEPARTAMENTO
+    // Con un colegio elegido en el filtro, el archivo también lleva su nombre.
+    const colArchivo = esPCV ? actorLocal : fCol
+    const ambitoArchivo = colArchivo ? colArchivo.replace(/[^\p{L}\p{N}]+/gu, '_') : AMBITO_DEPARTAMENTO
     XLSX.writeFile(wb, `SomosPeru_${ambitoArchivo}_Capacitaciones_${new Date().toISOString().split('T')[0]}.xlsx`)
   }
 
@@ -205,6 +225,13 @@ export default function PanelCapacitaciones() {
               className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[12rem]">
               <option value="">📍 Todos los Distritos</option>
               {distritos.map(dist => <option key={dist} value={dist}>{dist}</option>)}
+            </select>
+          )}
+          {!esPCV && (
+            <select value={fCol} onChange={e => setFCol(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-600 outline-none max-w-[16rem]">
+              <option value="">🏫 Todos los Colegios</option>
+              {colegiosFiltro.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
           {!esPCV && (
