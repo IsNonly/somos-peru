@@ -277,7 +277,7 @@ export default function PanelCapacitaciones() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtrados.slice(0, 800).map(({ p, estado }, i) => (
+              {filtrados.map(({ p, estado }, i) => (
                 <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2.5 text-slate-400 font-semibold">#{i + 1}</td>
                   <td className="px-4 py-2.5">
@@ -330,7 +330,6 @@ export default function PanelCapacitaciones() {
               ))}
             </tbody>
           </table>
-          {filtrados.length > 800 && <p className="px-4 py-3 text-xs text-slate-400">Mostrando 800 de {filtrados.length}.</p>}
           {filtrados.length === 0 && <p className="px-4 py-10 text-sm text-slate-400 text-center">Sin personeros con esos filtros.</p>}
         </div>
       </div>

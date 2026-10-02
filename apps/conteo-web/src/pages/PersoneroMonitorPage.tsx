@@ -210,7 +210,7 @@ export default function PersoneroMonitorPage() {
                 <tr><td colSpan={9} className="px-4 py-10 text-center text-slate-400">Cargando…</td></tr>
               ) : filtrados.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-10 text-center text-slate-400">Sin personeros con esos filtros.</td></tr>
-              ) : filtrados.slice(0, 600).map(p => {
+              ) : filtrados.map(p => {
                 const asistio = !!p.asistencia_local_at
                 const e = envioDe(p)
                 const enviado = e.manual || e.imagen

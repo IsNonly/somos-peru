@@ -665,7 +665,7 @@ function TablaPadron({ perfiles }: { perfiles: ReturnType<typeof usePanelData>['
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {perfiles.slice(0, 800).map(p => (
+            {perfiles.map(p => (
               <tr key={p.id} className="hover:bg-slate-50">
                 <td className="px-4 py-2.5 font-mono font-semibold text-sky-700">{p.dni ?? '—'}</td>
                 <td className="px-4 py-2.5 font-medium text-slate-800">{p.nombre_completo}</td>
@@ -686,7 +686,6 @@ function TablaPadron({ perfiles }: { perfiles: ReturnType<typeof usePanelData>['
             ))}
           </tbody>
         </table>
-        {perfiles.length > 800 && <p className="px-4 py-3 text-xs text-slate-400">Mostrando 800 de {perfiles.length}.</p>}
       </div>
     </div>
   )
