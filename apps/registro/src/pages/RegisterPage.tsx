@@ -311,11 +311,8 @@ export default function RegisterPage() {
   const [colegiosReservados, setColegiosReservados] = useState<Set<string>>(new Set())
 
   // Solo para VES: los cupos de "Personero de Centro de Votación" ya están completos
-  // (se deshabilita ese rol) y los colegios cuyo cupo de Personeros de Mesa ya se
-  // llenó (personeros registrados >= total_mesas) dejan de aparecer en el buscador.
+  // (se deshabilita ese rol). Personero de Mesa no tiene límite de cupos.
   const esVES = AMBITO_TOKEN_PREFIX === 'VES2026'
-  const [capacidadColegios, setCapacidadColegios] = useState<Map<string, number>>(new Map())
-  const [colegiosCompletos, setColegiosCompletos] = useState<Set<string>>(new Set())
 
   // Ámbito fijo: solo se registra gente del ámbito de esta instancia por ahora,
   // así que el departamento nunca se pide — se fija directo a AMBITO_DEPARTAMENTO.
@@ -377,39 +374,16 @@ export default function RegisterPage() {
   }, [form.departamentoAsignado, form.provinciaAsignado])
 
   useEffect(() => {
-    if (!form.distritoAsignado) { setColegiosAsignado([]); setCapacidadColegios(new Map()); return }
+    if (!form.distritoAsignado) { setColegiosAsignado([]); return }
     setCargandoAsignado(true)
-    supabase.from('colegios').select('nombre, total_mesas')
+    supabase.from('colegios').select('nombre')
       .eq('departamento', form.departamentoAsignado).eq('provincia', form.provinciaAsignado).eq('distrito', form.distritoAsignado)
       .order('nombre')
       .then(({ data }) => {
         setColegiosAsignado((data || []).map(c => ({ nombre: c.nombre, checked: false })))
-        setCapacidadColegios(new Map((data || []).map(c => [c.nombre, c.total_mesas ?? 0])))
         setCargandoAsignado(false)
       })
   }, [form.distritoAsignado])
-
-  // VES: un colegio cuyo cupo de Personeros de Mesa ya está completo
-  // (registrados >= total_mesas) deja de aparecer en el buscador de locales.
-  useEffect(() => {
-    if (!esVES || !esPersonero || !form.distritoAsignado || colegiosAsignado.length === 0) { setColegiosCompletos(new Set()); return }
-    // RPC (seguridad_roles.sql): el registro es anónimo y no puede leer `profiles`;
-    // esto devuelve solo cuántos inscritos hay por colegio, sin datos personales.
-    supabase.rpc('cupos_personeros_por_local', { p_distrito: form.distritoAsignado })
-      .then(({ data }) => {
-        const conteo = new Map<string, number>()
-        for (const row of (data ?? []) as { local: string; inscritos: number }[]) {
-          const n = String(row.local ?? '').trim()
-          if (n) conteo.set(n, (conteo.get(n) ?? 0) + Number(row.inscritos))
-        }
-        const completos = new Set<string>()
-        for (const c of colegiosAsignado) {
-          const cap = capacidadColegios.get(c.nombre) ?? 0
-          if (cap > 0 && (conteo.get(c.nombre) ?? 0) >= cap) completos.add(c.nombre)
-        }
-        setColegiosCompletos(completos)
-      })
-  }, [esVES, esPersonero, form.distritoAsignado, colegiosAsignado, capacidadColegios])
 
   // Un colegio ya asignado a un Coordinador Distrital no debe aparecer para el siguiente registro
   // de ese mismo rol (solo aplica a "Coordinador Distrital", no a Personero ni Coordinador Provincial).
@@ -439,9 +413,6 @@ export default function RegisterPage() {
     if (!form.nombres || !form.dni || !form.celular) { setError('Complete los datos personales obligatorios.'); return }
     if (esVES && form.rol === 'Personero de Centro de Votación') {
       setError('Los cupos de Personero de Centro de Votación ya están completos.'); return
-    }
-    if (esVES && form.rol === 'Personero de Mesa' && colegiosCompletos.has(form.localAsignado)) {
-      setError('Ese colegio ya completó su cupo de Personeros de Mesa. Elige otro local de votación.'); return
     }
     setError('')
     setDniDuplicado(false)
@@ -635,14 +606,9 @@ export default function RegisterPage() {
                 {colegiosAsignado.length > 0 ? (
                   <>
                     <BuscadorColegios
-                      opciones={colegiosAsignado.filter(c => !colegiosCompletos.has(c.nombre)).map(c => c.nombre)}
+                      opciones={colegiosAsignado.map(c => c.nombre)}
                       onElegir={n => set('localAsignado', n)}
-                      placeholder={`Buscar entre ${colegiosAsignado.length - colegiosCompletos.size} locales...`} />
-                    {colegiosCompletos.size > 0 && (
-                      <p className="text-[11px] text-amber-600 mt-1.5">
-                        {colegiosCompletos.size} colegio{colegiosCompletos.size === 1 ? '' : 's'} ya completó{colegiosCompletos.size === 1 ? '' : 'aron'} su cupo de Personeros de Mesa y no aparece{colegiosCompletos.size === 1 ? '' : 'n'} en la lista.
-                      </p>
-                    )}
+                      placeholder={`Buscar entre ${colegiosAsignado.length} locales...`} />
                     {form.localAsignado && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-100 text-sky-700 text-xs font-semibold rounded-full">
