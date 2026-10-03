@@ -33,6 +33,8 @@ const ARCHIVOS = [
   'reset_clave_personero.sql',
   // Siempre al final: deja los permisos por rol (reemplaza las policies anteriores).
   'seguridad_roles.sql',
+  // Eliminar personeros aunque tengan actas/asistencias (se conservan, sin el enlace).
+  'permitir_eliminar_personero.sql',
 ]
 
 async function main() {
