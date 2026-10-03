@@ -172,7 +172,7 @@ export default function PanelGeneral() {
     return true
   }
 
-  const centrosFlat = useMemo(() => d.centros.filter(filtrarCentro), [d.centros, q, fDist, fTerr])
+  const centrosFlat = useMemo(() => d.todos.filter(filtrarCentro), [d.todos, q, fDist, fTerr])
   const zonasFiltradas = useMemo<ZonaGrupo[]>(() =>
     d.zonas.map(z => ({ ...z, centros: z.centros.filter(filtrarCentro) })).filter(z => z.centros.length),
     [d.zonas, q, fDist, fTerr])
@@ -264,7 +264,7 @@ export default function PanelGeneral() {
   // Personero de Centro de Votación: solo ve la tarjeta de SU propio local
   // (mismo componente que ven los coordinadores, pero acotado a un único centro).
   if (esPCV) {
-    const centroPropio = d.centros.find(c => norm(c.nombre) === norm(miLocal)) ?? null
+    const centroPropio = d.todos.find(c => norm(c.nombre) === norm(miLocal)) ?? null
     return (
       <div className="max-w-md mx-auto w-full space-y-4">
         <p className="text-sm font-extrabold text-slate-900 flex items-center gap-2">

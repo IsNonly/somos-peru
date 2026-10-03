@@ -91,8 +91,13 @@ export default function PanelCapacitaciones() {
       const l = localDe(p)
       if (l && !m.has(norm(l))) m.set(norm(l), l)
     }
+    // También los colegios del padrón que aún no tienen a nadie inscrito.
+    for (const c of d.colegios) {
+      if (fDist && c.distrito !== fDist) continue
+      if (c.nombre && !m.has(norm(c.nombre))) m.set(norm(c.nombre), c.nombre.trim())
+    }
     return [...m.values()].sort((a, b) => a.localeCompare(b, 'es'))
-  }, [cohorte, fDist])
+  }, [cohorte, fDist, d.colegios])
 
   useEffect(() => {
     if (fCol && !colegiosFiltro.some(c => norm(c) === norm(fCol))) setFCol('')

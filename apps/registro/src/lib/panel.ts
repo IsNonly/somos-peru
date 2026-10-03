@@ -242,7 +242,10 @@ export function usePanelData(scope?: { departamento?: string; provincia?: string
       // Agrupar por zonal multi-colegio
       const grupos = new Map<string, ZonaGrupo>()
       const sinZonal: CentroFila[] = []
-      for (const c of centros) {
+      // Se agrupan TODOS los colegios del ámbito (también los que aún no tienen a
+      // nadie), para que el Panel muestre el padrón completo de centros desde el
+      // inicio; `centros` (solo los que tienen personal) sigue para los indicadores.
+      for (const c of todasFilas) {
         if (c.zonal && c.zonal.nColegios > 1) {
           const key = c.zonal.nombre + '|' + (c.zonal.dni ?? '')
           if (!grupos.has(key)) grupos.set(key, {
