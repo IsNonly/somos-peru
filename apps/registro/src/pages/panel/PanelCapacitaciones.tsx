@@ -40,7 +40,7 @@ const LOGIN_SAN_ISIDRO = 'https://somosperu-sanisidro-registro.vercel.app/login'
 // Se arma al momento de presionar "Recordatorio", con el avance actual del personero.
 const recordatorio = (p: Perfil) => {
   const nombre = p.nombre_completo?.trim().split(/\s+/)[0] ?? ''
-  const paso = (listo: boolean, texto: string) => `${listo ? '✅' : '⬜'} ${texto}`
+  const paso = (listo: boolean, texto: string) => `- ${texto} (${listo ? 'listo' : 'pendiente'})`
   const lineas = [
     `Hola ${nombre}! Te recordamos completar tu capacitación de personero ERM 2026 (ingresa a tu cuenta → Capacítate).`,
     '',
@@ -55,9 +55,9 @@ const recordatorio = (p: Perfil) => {
     lineas.push(
       '',
       'Tus datos para ingresar:',
-      `👤 Usuario: ${p.nombre_completo?.trim() ?? ''}`,
-      `🔑 Contraseña: ${p.dni ?? ''}`,
-      `🔗 ${LOGIN_SAN_ISIDRO}`,
+      `Usuario: ${p.nombre_completo?.trim() ?? ''}`,
+      `Contraseña: ${p.dni ?? ''}`,
+      `Link: ${LOGIN_SAN_ISIDRO}`,
     )
   }
   lineas.push('', '¡Gracias por tu compromiso!')
