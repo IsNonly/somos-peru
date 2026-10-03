@@ -35,13 +35,33 @@ function estadoDe(p: Perfil): Estado {
   return 'proceso'
 }
 
+const LOGIN_SAN_ISIDRO = 'https://somosperu-sanisidro-registro.vercel.app/login'
+
+// Se arma al momento de presionar "Recordatorio", con el avance actual del personero.
 const recordatorio = (p: Perfil) => {
-  const v = p.videos_vistos ?? 0
-  const pdf = p.pdfs_vistos ?? 0
-  const nombre = p.nombre_completo?.split(' ')[0] ?? ''
-  return `Hola ${nombre}! Te recordamos completar tu capacitación de personero ERM 2026 (ingresa a tu cuenta → Capacítate). ` +
-    `Llevas: Video ${v}/2, Cartilla ${pdf >= 1 ? 'lista ✓' : 'pendiente'}, Cuestionario ${p.quiz_estado === 'Aprobado' ? 'aprobado ✓' : 'pendiente'}. ` +
-    `Sin estos 3 pasos tu cuenta no queda habilitada para el conteo. ¡Gracias por tu compromiso!`
+  const nombre = p.nombre_completo?.trim().split(/\s+/)[0] ?? ''
+  const paso = (listo: boolean, texto: string) => `${listo ? '✅' : '⬜'} ${texto}`
+  const lineas = [
+    `Hola ${nombre}! Te recordamos completar tu capacitación de personero ERM 2026 (ingresa a tu cuenta → Capacítate).`,
+    '',
+    'Tu avance:',
+    paso((p.videos_vistos ?? 0) >= 1, `Video ${Math.min(p.videos_vistos ?? 0, 1)}/1`),
+    paso((p.pdfs_vistos ?? 0) >= 1, `Cartilla ${Math.min(p.pdfs_vistos ?? 0, 1)}/1`),
+    paso(p.quiz_estado === 'Aprobado', `Evaluación ${p.quiz_estado === 'Aprobado' ? '1' : '0'}/1`),
+    '',
+    'Sin estos 3 pasos tu cuenta no queda habilitada para el conteo.',
+  ]
+  if (norm(p.distrito_asignado ?? '') === norm('San Isidro')) {
+    lineas.push(
+      '',
+      'Tus datos para ingresar:',
+      `👤 Usuario: ${p.nombre_completo?.trim() ?? ''}`,
+      `🔑 Contraseña: ${p.dni ?? ''}`,
+      `🔗 ${LOGIN_SAN_ISIDRO}`,
+    )
+  }
+  lineas.push('', '¡Gracias por tu compromiso!')
+  return lineas.join('\n')
 }
 
 const fechaCorta = (iso: string | null) =>
