@@ -129,11 +129,12 @@ export default function FotosPage() {
 
   // VES: Sector → Colegio → personeros (ordenados por mesa).
   const sectores = useMemo(() => {
-    if (!USA_SECTORES || esPCV) return []
+    if (esPCV) return []
     const grupos = new Map<number, Map<string, Perfil[]>>()
     for (const p of filtrados) {
       const colegio = (p.local_asignado ?? p.local_votacion ?? '').trim() || 'Sin colegio asignado'
-      const sector = sectorDe(p.distrito_asignado ?? p.distrito_vota, colegio) ?? 0
+      // VES: por sector; San Isidro y Cercado: un solo grupo (-1), solo por colegio.
+      const sector = USA_SECTORES ? (sectorDe(p.distrito_asignado ?? p.distrito_vota, colegio) ?? 0) : -1
       if (fSector && String(sector) !== fSector) continue
       if (!grupos.has(sector)) grupos.set(sector, new Map())
       const cols = grupos.get(sector)!
@@ -162,6 +163,38 @@ export default function FotosPage() {
   const toggleSector = (n: number) => setAbiertos(prev => {
     const x = new Set(prev); if (x.has(n)) x.delete(n); else x.add(n); return x
   })
+
+
+  // Colegios desplegables (cerrados por defecto) con sus personeros y fotos.
+  const listaColegios = (g: { sector: number; colegios: { colegio: string; personeros: Perfil[]; conFoto: number }[] }) =>
+    g.colegios.map(c => {
+                      const k = g.sector + '|' + c.colegio
+                      const ab = colAbierto(k)
+                      return (
+                      <div key={c.colegio} className="border border-slate-200 rounded-xl overflow-hidden">
+                        <button onClick={() => toggleCol(k)}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors">
+                          <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5 min-w-0">
+                            {ab ? <ChevronDown size={14} className="flex-shrink-0" /> : <ChevronRight size={14} className="flex-shrink-0" />}
+                            <Building2 size={14} className="text-slate-400 flex-shrink-0" />
+                            <span className="truncate">{c.colegio}</span>
+                          </span>
+                          <span className={`text-[11px] font-bold whitespace-nowrap rounded-full px-2 py-0.5 ${
+                            c.conFoto === c.personeros.length ? 'bg-emerald-50 text-emerald-700'
+                            : c.conFoto ? 'bg-amber-50 text-amber-700' : 'text-slate-400'}`}>
+                            {c.conFoto} / {c.personeros.length} con foto
+                          </span>
+                        </button>
+                        {ab && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
+                            {c.personeros.map(p => (
+                              <TarjetaFotos key={p.id} p={p} acta={actas.get(p.mesa_asignada ?? '')} onVer={setVerFoto} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      )
+                    })
 
   const conFotos = filtrados.filter(p => tieneFotos(actas.get(p.mesa_asignada ?? '')))
   const sinFotos = filtrados.filter(p => !tieneFotos(actas.get(p.mesa_asignada ?? '')))
@@ -218,39 +251,16 @@ export default function FotosPage() {
                 </button>
                 {abierto && (
                   <div className="border-t border-slate-100 p-3 space-y-2">
-                    {g.colegios.map(c => {
-                      const k = g.sector + '|' + c.colegio
-                      const ab = colAbierto(k)
-                      return (
-                      <div key={c.colegio} className="border border-slate-200 rounded-xl overflow-hidden">
-                        <button onClick={() => toggleCol(k)}
-                          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors">
-                          <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5 min-w-0">
-                            {ab ? <ChevronDown size={14} className="flex-shrink-0" /> : <ChevronRight size={14} className="flex-shrink-0" />}
-                            <Building2 size={14} className="text-slate-400 flex-shrink-0" />
-                            <span className="truncate">{c.colegio}</span>
-                          </span>
-                          <span className={`text-[11px] font-bold whitespace-nowrap rounded-full px-2 py-0.5 ${
-                            c.conFoto === c.personeros.length ? 'bg-emerald-50 text-emerald-700'
-                            : c.conFoto ? 'bg-amber-50 text-amber-700' : 'text-slate-400'}`}>
-                            {c.conFoto} / {c.personeros.length} con foto
-                          </span>
-                        </button>
-                        {ab && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
-                            {c.personeros.map(p => (
-                              <TarjetaFotos key={p.id} p={p} acta={actas.get(p.mesa_asignada ?? '')} onVer={setVerFoto} />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      )
-                    })}
+                    {listaColegios(g)}
                   </div>
                 )}
               </section>
             )
           })}
+        </div>
+      ) : !esPCV ? (
+        <div className="space-y-2">
+          {sectores.map(g => <div key={g.sector} className="space-y-2">{listaColegios(g)}</div>)}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
