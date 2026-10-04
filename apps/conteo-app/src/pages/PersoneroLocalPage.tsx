@@ -154,7 +154,11 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
   }, [personeros])
 
   // Mesas oficiales del local que nadie tiene asignadas: el PCV puede mandar su conteo.
-  const mesasSinPersonero = mesasOficiales.filter(m => !mesaOcupadaPor.has(m))
+  // SAN ISIDRO: hay mucho cambio de personal, así que el PCV ve TODAS las mesas
+  // de su local y envía el conteo de la que toque. En VES y Cercado, solo las
+  // mesas que quedaron sin personero.
+  const esSanIsidro = normTexto(perfil?.distrito_asignado ?? perfil?.distrito_vota ?? '') === 'san isidro'
+  const mesasSinPersonero = esSanIsidro ? mesasOficiales : mesasOficiales.filter(m => !mesaOcupadaPor.has(m))
   const sinPersoneroTransmitidas = mesasSinPersonero.filter(m => actasMesa.get(m)?.transmitida).length
 
   const marcados   = personeros.filter(p => p.marcadoAt).length
@@ -263,15 +267,17 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
           <div className="bg-[#131a2e] border border-amber-500/30 rounded-2xl overflow-hidden">
             <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/8">
               <span className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider">
-                <ClipboardList size={14} /> Mesas sin personero ({mesasSinPersonero.length})
+                <ClipboardList size={14} /> {esSanIsidro ? 'Mesas del local' : 'Mesas sin personero'} ({mesasSinPersonero.length})
               </span>
               <span className="text-[11px] font-bold text-emerald-400 whitespace-nowrap">
                 {sinPersoneroTransmitidas} / {mesasSinPersonero.length} enviadas
               </span>
             </div>
             <p className="px-4 pt-3 text-white/45 text-[11px] leading-snug">
-              Nadie cubre estas mesas. Toca una para registrar tú mismo su conteo; el acta queda a tu nombre.
-              Si un personero asignado no llegó, toca su nombre en la lista de abajo.
+              {esSanIsidro
+                ? 'Toca el número de la mesa para registrar y enviar su conteo (manual o foto del acta). El acta queda a tu nombre.'
+                : <>Nadie cubre estas mesas. Toca una para registrar tú mismo su conteo; el acta queda a tu nombre.
+                  Si un personero asignado no llegó, toca su nombre en la lista de abajo.</>}
             </p>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 p-3">
               {mesasSinPersonero.map(m => {
@@ -283,6 +289,9 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
                         ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
                         : 'bg-[#0b0f1d] border-amber-500/30 text-white hover:border-amber-400/60'}`}>
                     <p className="font-mono font-black text-sm tabular-nums">{m}</p>
+                    {esSanIsidro && mesaOcupadaPor.get(m) && (
+                      <p className="text-[9px] text-white/40 truncate">{mesaOcupadaPor.get(m)}</p>
+                    )}
                     <p className={`text-[10px] font-bold mt-0.5 flex items-center justify-center gap-1 ${acta?.transmitida ? 'text-emerald-400' : 'text-amber-400'}`}>
                       {acta?.transmitida
                         ? <><CheckCircle2 size={10} /> Enviada</>
