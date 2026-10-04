@@ -25,6 +25,15 @@ const ROLES_PUEDEN_ELIMINAR = new Set([
   'Coordinador Distrital', 'Coordinador de Distritos', 'Coordinador Zonal', // nombres viejos del mismo rol
 ])
 
+// Personero de Centro de Votación (y sus nombres viejos): solo puede eliminar a
+// Personeros de Mesa de SU propio centro de votación.
+const ROLES_PCV = new Set([
+  'Personero de Centro de Votación', 'Personero de Local de Votación', 'Coordinador de Local',
+])
+
+const norm = (t: unknown) =>
+  String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -80,10 +89,12 @@ Deno.serve(async req => {
   // mismo patrón que el resto de la app, porque en cuentas importadas
   // profiles.id no siempre coincide con auth.users.id.
   const dniLlamante = (user.email ?? '').split('@')[0]
-  let actor = (await admin.from('profiles').select('rol, distrito_asignado').eq('dni', dniLlamante).maybeSingle()).data
-  if (!actor) actor = (await admin.from('profiles').select('rol, distrito_asignado').eq('id', user.id).maybeSingle()).data
+  const colsActor = 'rol, distrito_asignado, local_asignado'
+  let actor = (await admin.from('profiles').select(colsActor).eq('dni', dniLlamante).maybeSingle()).data
+  if (!actor) actor = (await admin.from('profiles').select(colsActor).eq('id', user.id).maybeSingle()).data
 
-  if (!actor || !ROLES_PUEDEN_ELIMINAR.has(actor.rol)) {
+  const actorEsPCV = !!actor && ROLES_PCV.has(actor.rol)
+  if (!actor || (!ROLES_PUEDEN_ELIMINAR.has(actor.rol) && !actorEsPCV)) {
     return json({ error: 'No tienes permiso para eliminar personeros' }, 403)
   }
 
@@ -91,7 +102,16 @@ Deno.serve(async req => {
   const id = body?.id as string | undefined
   if (!id) return json({ error: 'Falta el id del personero a eliminar' }, 400)
 
-  const objetivo = (await admin.from('profiles').select('id, dni, rol, distrito_asignado').eq('id', id).maybeSingle()).data
+  const objetivo = (await admin.from('profiles').select('id, dni, rol, distrito_asignado, local_asignado').eq('id', id).maybeSingle()).data
+
+  if (actorEsPCV) {
+    if (!objetivo || objetivo.rol !== 'Personero de Mesa') {
+      return json({ error: 'Como PCV solo puedes eliminar Personeros de Mesa' }, 403)
+    }
+    if (!actor.local_asignado || norm(objetivo.local_asignado) !== norm(actor.local_asignado)) {
+      return json({ error: 'Esa persona no está en tu centro de votación' }, 403)
+    }
+  }
 
   // Solo el Administrador puede tocar a otro Administrador o a un Coordinador;
   // un Coordinador solo a personeros de su propio distrito.

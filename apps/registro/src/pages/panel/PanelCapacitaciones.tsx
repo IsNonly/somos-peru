@@ -84,6 +84,18 @@ export default function PanelCapacitaciones() {
   const [fCol, setFCol] = useState('')
   const [chip, setChip] = useState<'todos' | Estado>('todos')
   const [editPerfil, setEditPerfil] = useState<Perfil | null>(null)
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null)
+
+  // El PCV puede eliminar a los personeros de mesa de SU centro de votación
+  // (la Edge Function vuelve a verificar rol y local en el servidor).
+  const eliminarComoPCV = async (p: Perfil) => {
+    if (!window.confirm(`¿Eliminar definitivamente a ${p.nombre_completo}${p.mesa_asignada ? ` (mesa ${p.mesa_asignada})` : ''}? Esta acción no se puede deshacer.`)) return
+    setEliminandoId(p.id)
+    const { error } = await eliminarPersoneroCompleto(p.id)
+    setEliminandoId(null)
+    if (error) { alert('No se pudo eliminar: ' + error); return }
+    d.refetch()
+  }
 
   // El PCV solo ve la capacitación de SUS propios personeros de mesa (los del
   // centro de votación que tiene asignado) — no la del distrito completo.
@@ -280,7 +292,7 @@ export default function PanelCapacitaciones() {
           <div className="flex items-center gap-3">
             {!puedeModificar && (
               <span className="text-slate-400 flex items-center gap-1.5">
-                <Lock size={11} /> Modo solo lectura — tu rol no puede modificar registros
+                <Lock size={11} /> {esPCV ? 'Solo puedes eliminar personeros de mesa de tu local' : 'Modo solo lectura — tu rol no puede modificar registros'}
               </span>
             )}
             <span className="text-slate-400">
@@ -346,6 +358,11 @@ export default function PanelCapacitaciones() {
                       <button onClick={() => setEditPerfil(p)}
                         className="text-xs font-bold rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50 px-2.5 py-1.5 flex items-center gap-1.5 whitespace-nowrap">
                         <Pencil size={12} /> Modificar
+                      </button>
+                    ) : esPCV && rolNorm(p.rol) === ROL_MESA ? (
+                      <button onClick={() => eliminarComoPCV(p)} disabled={eliminandoId === p.id}
+                        className="text-xs font-bold rounded-lg border border-red-200 text-red-600 hover:bg-red-50 px-2.5 py-1.5 flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50">
+                        <Trash2 size={12} /> {eliminandoId === p.id ? 'Eliminando…' : 'Eliminar'}
                       </button>
                     ) : (
                       <span className="text-[11px] text-slate-300 flex items-center gap-1"><Lock size={11} /> Solo lectura</span>
