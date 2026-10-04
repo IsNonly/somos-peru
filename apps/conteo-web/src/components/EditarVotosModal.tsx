@@ -34,6 +34,7 @@ interface Acta {
   id: string; mesa_numero: string; colegio_nombre: string | null
   distrito: string | null; departamento: string | null; provincia: string | null
   estado: string | null; metodo: string | null; electores_habiles: number | null
+  imagen_url?: string | null; imagenes_url?: Record<string, string> | null
 }
 
 const norm = (s?: string | null) =>
@@ -68,7 +69,9 @@ export default function EditarVotosModal({ personero, onClose, onSaved, onAnulad
     ;(async () => {
       setLoading(true); setError('')
       const mesa = (personero.mesa_asignada ?? '').trim()
-      const cols = 'id, mesa_numero, colegio_nombre, distrito, departamento, provincia, estado, metodo, electores_habiles'
+      const cols = 'id, mesa_numero, colegio_nombre, distrito, departamento, provincia, estado, metodo, electores_habiles, imagen_url, imagenes_url'
+      // Abierto desde Fotos por MESA (San Isidro): se busca solo por el N° de mesa.
+      const soloPorMesa = personero.id.startsWith('mesa-')
 
       // Se busca el acta que ESTE personero envió (por su id o DNI) -igual que
       // el monitor, que lo marca como "Enviado"-; si no aparece, por su mesa.
@@ -77,7 +80,7 @@ export default function EditarVotosModal({ personero, onClose, onSaved, onAnulad
       let actaRow: any = null
       const filtroPersonero = [`personero_id.eq.${personero.id}`, personero.dni ? `personero_dni.eq.${personero.dni}` : null]
         .filter(Boolean).join(',')
-      const { data: propias } = await supabase.from('actas').select(cols).or(filtroPersonero)
+      const { data: propias } = soloPorMesa ? { data: [] as any[] } : await supabase.from('actas').select(cols).or(filtroPersonero)
         .order('transmitida_at', { ascending: false, nullsFirst: false }).limit(5)
       actaRow = (propias ?? []).find((a: any) => a.mesa_numero === mesa) ?? (propias ?? [])[0] ?? null
       if (!actaRow && mesa) {
@@ -224,8 +227,11 @@ export default function EditarVotosModal({ personero, onClose, onSaved, onAnulad
       if (errVotos) throw errVotos
       const { error: errActa } = await supabase.from('actas').delete().eq('id', acta.id)
       if (errActa) throw errActa
-      const { error: errPerfil } = await supabase.from('profiles').update({ acta_transmitida: false }).eq('id', personero.id)
-      if (errPerfil) throw errPerfil
+      // Abierto por mesa (San Isidro): no hay un perfil que destrabar.
+      if (!personero.id.startsWith('mesa-')) {
+        const { error: errPerfil } = await supabase.from('profiles').update({ acta_transmitida: false }).eq('id', personero.id)
+        if (errPerfil) throw errPerfil
+      }
       setActa(null)
       setBloques([])
       setAnulado(true)
@@ -257,6 +263,15 @@ export default function EditarVotosModal({ personero, onClose, onSaved, onAnulad
 
         <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {loading && <p className="text-sm text-slate-400 text-center py-10">Cargando acta…</p>}
+          {!loading && acta && (() => {
+            const foto = acta.imagen_url || Object.values(acta.imagenes_url ?? {}).find(Boolean)
+            return foto ? (
+              <a href={foto} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                <img src={foto} alt={`Acta mesa ${acta.mesa_numero}`} className="w-full max-h-72 object-contain" />
+                <p className="text-[11px] text-sky-600 font-semibold text-center py-1.5">Foto del acta · toca para verla en grande</p>
+              </a>
+            ) : null
+          })()}
 
           {!loading && error && (
             <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5 flex items-start gap-2">

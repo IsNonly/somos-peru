@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, traerTodo } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
-import { Search, Camera, ImageOff, X, Building2, ChevronDown, ChevronRight, MapPinned } from 'lucide-react'
+import { Search, Camera, ImageOff, X, Building2, ChevronDown, ChevronRight, MapPinned, Pencil } from 'lucide-react'
 import { USA_SECTORES, sectorDe, norm } from '../lib/sectoresVES'
 import { AMBITO_DISTRITOS } from '../lib/supabase'
+import EditarVotosModal from '../components/EditarVotosModal'
 
 // SAN ISIDRO: el PCV envía el acta tocando el N° de mesa, así que Fotos se
 // organiza por MESA (cada mesa oficial con su foto), no por personero.
@@ -46,6 +47,9 @@ export default function FotosPage() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [verFoto, setVerFoto] = useState<{ url: string; titulo: string } | null>(null)
+  // San Isidro: corregir / anular el acta de una mesa desde su tarjeta.
+  const [corrigiendo, setCorrigiendo] = useState<Perfil | null>(null)
+  const [recarga, setRecarga] = useState(0)
   // VES: filtro y sectores desplegados (cerrados por defecto: así no se cargan
   // las fotos de todo el distrito de golpe).
   const [fSector, setFSector] = useState('')
@@ -152,7 +156,7 @@ export default function FotosPage() {
       setLoading(false)
     })()
     return () => { vivo = false }
-  }, [scopeLoading, perfilListo, distritosEfectivos])
+  }, [scopeLoading, perfilListo, distritosEfectivos, recarga])
 
   const filtrados = useMemo(() => {
     let r = pers
@@ -226,7 +230,8 @@ export default function FotosPage() {
                         {ab && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
                             {c.personeros.map(p => (
-                              <TarjetaFotos key={p.id} p={p} acta={actas.get(p.mesa_asignada ?? '')} onVer={setVerFoto} />
+                              <TarjetaFotos key={p.id} p={p} acta={actas.get(p.mesa_asignada ?? '')} onVer={setVerFoto}
+                                onCorregir={!esPCV ? setCorrigiendo : undefined} />
                             ))}
                           </div>
                         )}
@@ -303,9 +308,20 @@ export default function FotosPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {[...conFotos, ...sinFotos].map(p => (
-            <TarjetaFotos key={p.id} p={p} acta={actas.get(p.mesa_asignada ?? '')} onVer={setVerFoto} />
+            <TarjetaFotos key={p.id} p={p} acta={actas.get(p.mesa_asignada ?? '')} onVer={setVerFoto}
+                                onCorregir={!esPCV ? setCorrigiendo : undefined} />
           ))}
         </div>
+      )}
+
+      {corrigiendo && (
+        <EditarVotosModal
+          personero={{ id: 'mesa-' + corrigiendo.mesa_asignada, nombre_completo: corrigiendo.porMesa?.enviadoPor ?? `Mesa ${corrigiendo.mesa_asignada}`,
+                       dni: null, mesa_asignada: corrigiendo.mesa_asignada, local_asignado: corrigiendo.local_asignado }}
+          onClose={() => setCorrigiendo(null)}
+          onSaved={() => setRecarga(n => n + 1)}
+          onAnulado={() => { setCorrigiendo(null); setRecarga(n => n + 1) }}
+        />
       )}
 
       {verFoto && (
@@ -329,8 +345,9 @@ function tieneFotos(a?: ActaFotos): boolean {
   return !!(a.imagen_url || (a.imagenes_url && Object.values(a.imagenes_url).some(Boolean)))
 }
 
-function TarjetaFotos({ p, acta, onVer }: {
+function TarjetaFotos({ p, acta, onVer, onCorregir }: {
   p: Perfil; acta?: ActaFotos; onVer: (v: { url: string; titulo: string }) => void
+  onCorregir?: (p: Perfil) => void
 }) {
   const fotos: { label: string; url: string }[] = []
   // El acta es UNA sola foto (Provincial + Distrital juntos): imagenes_url
@@ -348,7 +365,7 @@ function TarjetaFotos({ p, acta, onVer }: {
         <div className="flex items-start justify-between gap-2">
           <p className="font-mono font-black text-lg text-slate-900 leading-none">Mesa {p.mesa_asignada}</p>
           <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 whitespace-nowrap ${fo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-            {fo ? 'Acta enviada' : 'Sin acta'}
+            {fo ? 'Acta enviada' : acta ? 'Enviada sin foto' : 'Sin acta'}
           </span>
         </div>
         <p className="text-[11px] text-slate-500 truncate">
@@ -365,6 +382,12 @@ function TarjetaFotos({ p, acta, onVer }: {
           <p className="flex items-center gap-1.5 text-xs text-slate-400 py-3">
             <ImageOff size={13} /> Aún no se envió la foto del acta.
           </p>
+        )}
+        {acta && onCorregir && (
+          <button onClick={() => onCorregir(p)}
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-bold rounded-lg border border-sky-200 text-sky-700 hover:bg-sky-50 py-2">
+            <Pencil size={12} /> Corregir votos / anular envío
+          </button>
         )}
       </div>
     )
