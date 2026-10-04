@@ -263,7 +263,7 @@ export default function EditarVotosModal({ personero, onClose, onSaved, onAnulad
 
         <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {loading && <p className="text-sm text-slate-400 text-center py-10">Cargando acta…</p>}
-          {!loading && acta && (() => {
+          {!loading && acta && personero.id.startsWith('mesa-') && (() => {
             const foto = acta.imagen_url || Object.values(acta.imagenes_url ?? {}).find(Boolean)
             return foto ? (
               <a href={foto} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
