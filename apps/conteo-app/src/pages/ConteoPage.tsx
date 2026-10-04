@@ -1359,7 +1359,14 @@ function FilaCandidato({ candidato, accent, value, onDelta }: {
           className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-white/60 disabled:opacity-30 flex items-center justify-center transition-all">
           <Minus size={13} />
         </button>
-        <span className="w-10 text-center text-sm font-extrabold tabular-nums text-white border border-white/10 rounded-lg py-1">{value}</span>
+        {/* Se puede tocar y escribir el número directo, además de usar + / - */}
+        <input type="text" inputMode="numeric" pattern="[0-9]*" value={value === 0 ? '' : String(value)} placeholder="0"
+          onFocus={e => e.target.select()}
+          onChange={e => {
+            const n = parseInt(e.target.value.replace(/\D/g, '').slice(0, 4), 10) || 0
+            if (n !== value) onDelta(n - value)
+          }}
+          className="w-14 text-center text-sm font-extrabold tabular-nums text-white bg-white/5 border border-white/10 rounded-lg py-1 outline-none focus:border-sky-500/60 placeholder-white/40" />
         <button type="button" onClick={() => onDelta(1)}
           className={`w-7 h-7 rounded-lg text-white flex items-center justify-center transition-all ${mas}`}>
           <Plus size={13} />
