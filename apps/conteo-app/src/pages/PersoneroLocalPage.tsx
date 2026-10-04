@@ -336,6 +336,8 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
         </div>
         </>)}
 
+        {/* San Isidro: el PCV trabaja por mesa (arriba); no se muestra la lista de personeros */}
+        {!esSanIsidro && (<>
         {/* Buscador */}
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
@@ -418,6 +420,7 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
             </div>
           )}
         </div>
+        </>)}
 
         <p className="text-center text-white/25 text-[11px]">
           Última actualización: {lastSync.toLocaleTimeString('es-PE')} · Sistema Electoral 2026
