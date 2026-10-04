@@ -14,6 +14,8 @@ interface Perfil {
   local_asignado: string | null
   local_votacion: string | null
   mesa_asignada: string | null
+  // Mesa sin personero cuyo conteo lo envió el PCV (nombre del PCV).
+  enviadaPorPCV?: string
 }
 interface ActaFotos {
   mesa_numero: string
@@ -75,7 +77,7 @@ export default function FotosPage() {
           if (distritosEfectivos) pq = pq.in('distrito_asignado', distritosEfectivos)
           return pq.range(a, b)
         }).catch(e => { console.error(e); return [] as any[] }),
-        traerTodo<any>((a, b) => supabase.from('actas').select('id, mesa_numero, metodo, imagen_url, imagenes_url').order('id').range(a, b))
+        traerTodo<any>((a, b) => supabase.from('actas').select('id, mesa_numero, metodo, imagen_url, imagenes_url, colegio_nombre, distrito, personero_dni').order('id').range(a, b))
           .catch(e => { console.error(e); return [] as any[] }),
       ])
       if (!vivo) return
@@ -83,7 +85,31 @@ export default function FotosPage() {
       const map = new Map<string, ActaFotos>()
       for (const a of (actasData ?? []) as any[]) map.set(a.mesa_numero, a)
 
-      setPers((p ?? []) as Perfil[])
+      // Mesas que ningún personero de mesa tiene asignadas pero cuya acta sí se
+      // envió: las registró el PCV (ver "Mesas sin personero" en la app de
+      // conteo). Se agregan como una tarjeta más, a nombre del PCV.
+      const cubiertas = new Set(((p ?? []) as Perfil[]).map(x => x.mesa_asignada).filter(Boolean))
+      const huerfanas = ((actasData ?? []) as any[]).filter(a =>
+        a.mesa_numero && !cubiertas.has(a.mesa_numero) &&
+        (!distritosEfectivos || distritosEfectivos.includes(a.distrito)))
+      const dnis = [...new Set(huerfanas.map(a => a.personero_dni).filter(Boolean))] as string[]
+      const nombrePorDni = new Map<string, string>()
+      if (dnis.length) {
+        const { data: quienes } = await supabase.from('profiles').select('dni, nombre_completo').in('dni', dnis)
+        for (const x of quienes ?? []) nombrePorDni.set(x.dni, x.nombre_completo)
+      }
+      if (!vivo) return
+      const extra: Perfil[] = huerfanas.map(a => {
+        const quien = nombrePorDni.get(a.personero_dni) ?? (a.personero_dni ? `DNI ${a.personero_dni}` : 'PCV')
+        return {
+          id: 'acta-' + a.mesa_numero, nombre_completo: quien, dni: a.personero_dni ?? null,
+          rol: 'Personero de Centro de Votación', distrito_asignado: a.distrito ?? null, distrito_vota: null,
+          local_asignado: a.colegio_nombre ?? null, local_votacion: null, mesa_asignada: a.mesa_numero,
+          enviadaPorPCV: quien,
+        }
+      })
+
+      setPers([...((p ?? []) as Perfil[]), ...extra])
       setActas(map)
       setLoading(false)
     })()
@@ -253,6 +279,11 @@ function TarjetaFotos({ p, acta, onVer }: {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-3.5 space-y-2.5">
       <div>
+        {p.enviadaPorPCV && (
+          <span className="inline-block mb-1 text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
+            Mesa sin personero · enviada por PCV
+          </span>
+        )}
         <p className="font-bold text-slate-800 text-sm truncate">{p.nombre_completo}</p>
         <p className="text-xs text-slate-400">
           DNI: {p.dni ?? '—'} · Mesa: <span className="font-mono">{p.mesa_asignada ?? '—'}</span>
