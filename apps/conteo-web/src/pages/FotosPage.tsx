@@ -43,6 +43,7 @@ export default function FotosPage() {
   // las fotos de todo el distrito de golpe).
   const [fSector, setFSector] = useState('')
   const [abiertos, setAbiertos] = useState<Set<number>>(new Set())
+  const [colsAbiertos, setColsAbiertos] = useState<Set<string>>(new Set())
 
   const esPCV = ROLES_PCV.has(miRol)
 
@@ -154,6 +155,10 @@ export default function FotosPage() {
       })
   }, [filtrados, esPCV, fSector, actas])
   const sectorAbierto = (n: number) => abiertos.has(n) || !!fSector || !!q.trim() || !!f.colegio
+  const colAbierto = (k: string) => colsAbiertos.has(k) || !!q.trim() || !!f.colegio
+  const toggleCol = (k: string) => setColsAbiertos(prev => {
+    const x = new Set(prev); if (x.has(k)) x.delete(k); else x.add(k); return x
+  })
   const toggleSector = (n: number) => setAbiertos(prev => {
     const x = new Set(prev); if (x.has(n)) x.delete(n); else x.add(n); return x
   })
@@ -212,23 +217,35 @@ export default function FotosPage() {
                   </span>
                 </button>
                 {abierto && (
-                  <div className="border-t border-slate-100 p-3 space-y-4">
-                    {g.colegios.map(c => (
-                      <div key={c.colegio} className="space-y-2">
-                        <div className="flex items-center justify-between gap-2 px-1">
-                          <p className="text-sm font-bold text-slate-700 flex items-center gap-1.5 min-w-0">
+                  <div className="border-t border-slate-100 p-3 space-y-2">
+                    {g.colegios.map(c => {
+                      const k = g.sector + '|' + c.colegio
+                      const ab = colAbierto(k)
+                      return (
+                      <div key={c.colegio} className="border border-slate-200 rounded-xl overflow-hidden">
+                        <button onClick={() => toggleCol(k)}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors">
+                          <span className="text-sm font-bold text-slate-700 flex items-center gap-1.5 min-w-0">
+                            {ab ? <ChevronDown size={14} className="flex-shrink-0" /> : <ChevronRight size={14} className="flex-shrink-0" />}
                             <Building2 size={14} className="text-slate-400 flex-shrink-0" />
                             <span className="truncate">{c.colegio}</span>
-                          </p>
-                          <span className="text-[11px] font-semibold text-slate-400 whitespace-nowrap">{c.conFoto} / {c.personeros.length} con foto</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {c.personeros.map(p => (
-                            <TarjetaFotos key={p.id} p={p} acta={actas.get(p.mesa_asignada ?? '')} onVer={setVerFoto} />
-                          ))}
-                        </div>
+                          </span>
+                          <span className={`text-[11px] font-bold whitespace-nowrap rounded-full px-2 py-0.5 ${
+                            c.conFoto === c.personeros.length ? 'bg-emerald-50 text-emerald-700'
+                            : c.conFoto ? 'bg-amber-50 text-amber-700' : 'text-slate-400'}`}>
+                            {c.conFoto} / {c.personeros.length} con foto
+                          </span>
+                        </button>
+                        {ab && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
+                            {c.personeros.map(p => (
+                              <TarjetaFotos key={p.id} p={p} acta={actas.get(p.mesa_asignada ?? '')} onVer={setVerFoto} />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </section>
