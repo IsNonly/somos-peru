@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, getMiPerfil } from '../lib/supabase'
 import {
   Shield, School, MapPin, RefreshCw, LogOut, Search, Users,
-  CheckCircle2, Clock, Loader, Pencil, X, AlertTriangle, GraduationCap, MessageCircle, ChevronRight,
+  CheckCircle2, Clock, Loader, Pencil, X, AlertTriangle, GraduationCap, MessageCircle, ChevronRight, ClipboardList,
 } from 'lucide-react'
 
 type Personero = {
@@ -46,7 +46,11 @@ const horaPE = (iso: string) =>
   new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
 const normTexto = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
-export default function PersoneroLocalPage({ onAbrirConteo }: { onAbrirConteo?: (personeroId: string) => void }) {
+export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
+  onAbrirConteo?: (personeroId: string) => void
+  // Mesa del local sin personero: el PCV registra él mismo su conteo.
+  onAbrirMesa?: (mesa: string) => void
+}) {
   const [perfil, setPerfil]       = useState<any>(null)
   const [personeros, setPersoneros] = useState<Personero[]>([])
   const [totalMesas, setTotalMesas] = useState(0)
@@ -61,6 +65,8 @@ export default function PersoneroLocalPage({ onAbrirConteo }: { onAbrirConteo?: 
   const [mesasOficiales, setMesasOficiales] = useState<string[]>([])
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [qMesa, setQMesa]         = useState('')
+  // Estado del acta de cada mesa del local (para "Mesas sin personero").
+  const [actasMesa, setActasMesa] = useState<Map<string, { transmitida: boolean; porDni: string | null }>>(new Map())
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -102,6 +108,11 @@ export default function PersoneroLocalPage({ onAbrirConteo }: { onAbrirConteo?: 
       const { data: mesasCol } = await supabase
         .from('mesas').select('numero').eq('colegio_nombre', local).order('numero')
       setMesasOficiales((mesasCol ?? []).map((m: any) => m.numero))
+
+      const { data: actasCol } = await supabase
+        .from('actas').select('mesa_numero, estado, bloqueada, personero_dni').eq('colegio_nombre', local)
+      setActasMesa(new Map((actasCol ?? []).map((a: any) => [a.mesa_numero,
+        { transmitida: !!a.bloqueada || a.estado === 'TRANSMITIDA', porDni: a.personero_dni ?? null }])))
     }
 
     setLastSync(new Date())
@@ -141,6 +152,10 @@ export default function PersoneroLocalPage({ onAbrirConteo }: { onAbrirConteo?: 
     for (const p of personeros) if (p.mesa) m.set(p.mesa, p.nombre)
     return m
   }, [personeros])
+
+  // Mesas oficiales del local que nadie tiene asignadas: el PCV puede mandar su conteo.
+  const mesasSinPersonero = mesasOficiales.filter(m => !mesaOcupadaPor.has(m))
+  const sinPersoneroTransmitidas = mesasSinPersonero.filter(m => actasMesa.get(m)?.transmitida).length
 
   const marcados   = personeros.filter(p => p.marcadoAt).length
   const pendientes = personeros.length - marcados
@@ -242,6 +257,43 @@ export default function PersoneroLocalPage({ onAbrirConteo }: { onAbrirConteo?: 
             <Metrica label="Sin Iniciar" value={capSinIniciar} tone="bad" />
           </div>
         </div>
+
+        {/* Mesas sin personero: el PCV registra el conteo */}
+        {onAbrirMesa && mesasSinPersonero.length > 0 && (
+          <div className="bg-[#131a2e] border border-amber-500/30 rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/8">
+              <span className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider">
+                <ClipboardList size={14} /> Mesas sin personero ({mesasSinPersonero.length})
+              </span>
+              <span className="text-[11px] font-bold text-emerald-400 whitespace-nowrap">
+                {sinPersoneroTransmitidas} / {mesasSinPersonero.length} enviadas
+              </span>
+            </div>
+            <p className="px-4 pt-3 text-white/45 text-[11px] leading-snug">
+              Nadie cubre estas mesas. Toca una para registrar tú mismo su conteo; el acta queda a tu nombre.
+              Si un personero asignado no llegó, toca su nombre en la lista de abajo.
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 p-3">
+              {mesasSinPersonero.map(m => {
+                const acta = actasMesa.get(m)
+                return (
+                  <button key={m} onClick={() => onAbrirMesa(m)}
+                    className={`rounded-xl border px-2 py-2.5 text-center transition-colors ${
+                      acta?.transmitida
+                        ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                        : 'bg-[#0b0f1d] border-amber-500/30 text-white hover:border-amber-400/60'}`}>
+                    <p className="font-mono font-black text-sm tabular-nums">{m}</p>
+                    <p className={`text-[10px] font-bold mt-0.5 flex items-center justify-center gap-1 ${acta?.transmitida ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {acta?.transmitida
+                        ? <><CheckCircle2 size={10} /> Enviada</>
+                        : <>Registrar conteo</>}
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-2">

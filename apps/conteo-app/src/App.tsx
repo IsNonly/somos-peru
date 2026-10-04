@@ -30,6 +30,8 @@ export default function App() {
   // El PCV puede abrir el conteo de uno de sus personeros de mesa desde su propio
   // panel (PersoneroLocalPage) para registrar el acta en su nombre.
   const [asistidoId, setAsistidoId] = useState<string | null>(null)
+  // ...o el conteo de una mesa de su local que quedó SIN personero (lo firma él).
+  const [mesaPCV, setMesaPCV] = useState<string | null>(null)
 
   useEffect(() => {
     // Supabase dispara onAuthStateChange no solo en login/logout, sino
@@ -107,7 +109,7 @@ export default function App() {
     // Personero de Centro de Votación -> panel de asistencia de su local, salvo
     // que haya elegido registrar el acta de uno de sus personeros de mesa.
     if (ROLES_LOCAL.includes(rol)) {
-      if (asistidoId) return (
+      if (asistidoId || mesaPCV) return (
         <div className="fixed inset-0 flex flex-col overflow-hidden">
           <header className="flex items-center gap-2.5 px-4 py-3 bg-[#0b0f19] border-b border-white/8 flex-shrink-0">
             <div className="flex items-center gap-2 text-indigo-400">
@@ -121,11 +123,12 @@ export default function App() {
             </span>
           </header>
           <div className="flex-1 overflow-y-auto">
-            <ConteoPage asistidoPersoneroId={asistidoId} onSalirAsistido={() => setAsistidoId(null)} />
+            <ConteoPage asistidoPersoneroId={asistidoId ?? undefined} mesaPCV={mesaPCV ?? undefined}
+              onSalirAsistido={() => { setAsistidoId(null); setMesaPCV(null) }} />
           </div>
         </div>
       )
-      return <PersoneroLocalPage onAbrirConteo={setAsistidoId} />
+      return <PersoneroLocalPage onAbrirConteo={setAsistidoId} onAbrirMesa={setMesaPCV} />
     }
 
     // Coordinadores / Administrador -> su lugar es el panel web, no el conteo

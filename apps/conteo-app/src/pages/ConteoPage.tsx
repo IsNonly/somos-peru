@@ -88,19 +88,21 @@ async function saveGeminiKey(authId: string, key: string) {
   )
 }
 
-export default function ConteoPage({ asistidoPersoneroId, onSalirAsistido }: {
+export default function ConteoPage({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
   // El PCV puede abrir el conteo de UNO de sus personeros de mesa desde su propio
   // panel (PersoneroLocalPage) para registrar el acta en su nombre. En ese caso
   // se carga el perfil de ESE personero (no el del PCV autenticado) y se ocultan
   // los pasos que no aplican a un registro remoto/asistido (foto de instalación,
   // electores hábiles).
   asistidoPersoneroId?: string
+  // Mesa de su local que quedó sin personero: el PCV registra el acta él mismo.
+  mesaPCV?: string
   onSalirAsistido?: () => void
 }) {
   return (
     <>
       <IntroModal />
-      <ConteoPageInner asistidoPersoneroId={asistidoPersoneroId} onSalirAsistido={onSalirAsistido} />
+      <ConteoPageInner asistidoPersoneroId={asistidoPersoneroId} mesaPCV={mesaPCV} onSalirAsistido={onSalirAsistido} />
     </>
   )
 }
@@ -216,11 +218,13 @@ function construirFilasActa(bloques: BloqueCandidaturas[]): FilaActa[] {
   return filas
 }
 
-function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
+function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
   asistidoPersoneroId?: string
+  mesaPCV?: string
   onSalirAsistido?: () => void
 }) {
-  const esAsistido = !!asistidoPersoneroId
+  const esAsistido = !!asistidoPersoneroId || !!mesaPCV
+  const esMesaSinPersonero = !!mesaPCV
   const [perfil, setPerfil]           = useState<any>(null)
   const [userId, setUserId]           = useState('')   // id real del perfil (para escrituras)
   const [authId, setAuthId]           = useState('')   // id de auth (para app_config)
@@ -285,12 +289,19 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
       // Modo asistido: el PCV entra a registrar el acta de UNO de sus personeros
       // de mesa -se carga el perfil de ESE personero, no el del PCV autenticado-,
       // pero la clave de Gemini sigue siendo la del PCV (su propia sesión).
-      const [p, key] = await Promise.all([
+      const [p0, key] = await Promise.all([
         asistidoPersoneroId
           ? supabase.from('profiles').select('*').eq('id', asistidoPersoneroId).maybeSingle().then(r => r.data)
           : getMiPerfil('*'),
         getGeminiKey(user.id),
       ])
+      // Mesa sin personero: el acta la firma el propio PCV (su perfil), pero con
+      // la mesa elegida -sin tocar su mesa_asignada real ni su acta_transmitida-.
+      const p = mesaPCV && p0 ? { ...p0, mesa_asignada: mesaPCV, acta_transmitida: false } : p0
+      if (mesaPCV) {
+        const { data: ya } = await supabase.from('actas').select('bloqueada').eq('mesa_numero', mesaPCV).maybeSingle()
+        if (ya?.bloqueada) setFase('enviado')
+      }
       setUserId(p?.id ?? user.id)   // el id real del perfil, para escrituras
       setAuthId(user.id)
       setPerfil(p)
@@ -311,7 +322,7 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
       }
     }
     init()
-  }, [asistidoPersoneroId])
+  }, [asistidoPersoneroId, mesaPCV])
 
   // ── Cargar las candidaturas del ámbito del personero ───────────────────
   useEffect(() => {
@@ -669,7 +680,7 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
         .eq('id', acta.id)
       if (lockErr) throw new Error('Los votos se guardaron pero no se pudo cerrar el acta. Vuelve a tocar "Transmitir". (' + lockErr.message + ')')
 
-      if (userId) await supabase.from('profiles').update({ acta_transmitida: true }).eq('id', userId)
+      if (userId && !esMesaSinPersonero) await supabase.from('profiles').update({ acta_transmitida: true }).eq('id', userId)
       setFase('enviado')
     } catch (e: any) {
       const m: string = e?.message ?? ''
@@ -700,7 +711,7 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
       {esAsistido && (
         <button onClick={onSalirAsistido}
           className="flex items-center gap-2 text-sm font-bold text-sky-400 border border-sky-500/30 bg-sky-500/10 rounded-xl px-4 py-2.5">
-          <ChevronLeft size={16} /> Volver a mi panel — registrar otro personero
+          <ChevronLeft size={16} /> Volver a mi panel — {esMesaSinPersonero ? 'registrar otra mesa' : 'registrar otro personero'}
         </button>
       )}
     </div>
@@ -723,10 +734,11 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
       <UserCircle2 size={26} className="text-white/70 flex-shrink-0" strokeWidth={1.5} />
       <div className="flex-1 min-w-0">
         <p className="text-[10px] uppercase tracking-widest text-white/35 font-bold flex items-center gap-1.5">
-          Personero
+          {esMesaSinPersonero ? 'PCV' : 'Personero'}
           {esAsistido && (
-            <span className="text-[9px] normal-case tracking-normal font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30 rounded-full px-2 py-0.5">
-              Registrado por tu PCV
+            <span className={`text-[9px] normal-case tracking-normal font-bold rounded-full px-2 py-0.5 border ${
+              esMesaSinPersonero ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-sky-500/15 text-sky-300 border-sky-500/30'}`}>
+              {esMesaSinPersonero ? `Mesa ${mesaPCV} sin personero` : 'Registrado por tu PCV'}
             </span>
           )}
         </p>
@@ -785,7 +797,7 @@ function ConteoPageInner({ asistidoPersoneroId, onSalirAsistido }: {
                   : 'bg-[#0b0f1d] border-white/10 text-white focus:border-sky-500/50'}`} />
             {mesaAsignadaOficialmente ? (
               <p className="text-emerald-400 text-[10px] mt-1 flex items-center gap-1">
-                <CheckCircle size={11} /> Asignada por tu Personero de Centro de Votación
+                <CheckCircle size={11} /> {esMesaSinPersonero ? 'Mesa de tu local sin personero: el acta queda a tu nombre' : 'Asignada por tu Personero de Centro de Votación'}
               </p>
             ) : (
               <>
