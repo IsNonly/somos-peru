@@ -136,10 +136,18 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
                 onChange={e => { setQLocal(e.target.value); setAbiertoLocal(true) }}
                 onFocus={() => { setQLocal(''); setAbiertoLocal(true) }}
                 onBlur={() => setTimeout(() => setAbiertoLocal(false), 150)}
-                placeholder="Buscar colegio..."
+                placeholder={local.trim() ? 'Buscar colegio...' : 'Sin colegio asignado — buscar colegio...'}
                 className="text-sm rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-500 w-full" />
               {abiertoLocal && (
                 <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+                  {!qLocal.trim() && (
+                    <button type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => { setLocal(''); setMesa(''); setQLocal(''); setAbiertoLocal(false) }}
+                      className="w-full text-left px-3 py-2 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border-b border-amber-100 transition-colors">
+                      Dejar sin colegio (ponerlo aparte)
+                    </button>
+                  )}
                   {filtradosLocal.length > 0 ? filtradosLocal.slice(0, 100).map(c => (
                     <button key={c} type="button"
                       onMouseDown={e => e.preventDefault()}
@@ -191,7 +199,9 @@ export default function EditarPersoneroModal({ perfil, esMesa, puedeEliminar, me
         )}
         {local.trim() !== (perfil.local_asignado ?? '').trim() && (
           <p className="text-[11px] text-amber-600">
-            Al cambiar el local, este personero se moverá a la tarjeta de su nuevo centro de votación.
+            {local.trim()
+              ? 'Al cambiar el local, este personero se moverá a la tarjeta de su nuevo centro de votación.'
+              : 'Quedará sin colegio ni mesa, en la sección "Sin colegio asignado" del Panel General, hasta que le asignes uno.'}
           </p>
         )}
         {puedeEliminar && (
