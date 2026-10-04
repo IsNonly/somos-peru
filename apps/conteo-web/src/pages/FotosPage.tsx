@@ -242,10 +242,12 @@ function TarjetaFotos({ p, acta, onVer }: {
 }) {
   const fotos: { label: string; url: string }[] = []
   if (acta?.foto_instalacion_url) fotos.push({ label: 'Instalación de mesa', url: acta.foto_instalacion_url })
-  if (acta?.imagenes_url) {
-    for (const [nivel, url] of Object.entries(acta.imagenes_url)) if (url) fotos.push({ label: `Acta ${nivel}`, url })
-  } else if (acta?.imagen_url) {
-    fotos.push({ label: 'Acta', url: acta.imagen_url })
+  // El acta es UNA sola foto (Provincial + Distrital juntos): imagenes_url
+  // repite la misma URL por nivel, así que se muestra una sola vez.
+  const urlActa = acta?.imagen_url || Object.values(acta?.imagenes_url ?? {}).find(Boolean)
+  if (urlActa) fotos.push({ label: 'Acta', url: urlActa })
+  for (const [nivel, url] of Object.entries(acta?.imagenes_url ?? {})) {
+    if (url && !fotos.some(fo => fo.url === url)) fotos.push({ label: `Acta ${nivel}`, url })
   }
 
   return (
