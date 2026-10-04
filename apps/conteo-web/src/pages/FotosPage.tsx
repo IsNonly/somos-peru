@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, traerTodo } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
 import { Search, Camera, ImageOff, X, Building2, ChevronDown, ChevronRight, MapPinned } from 'lucide-react'
-import { USA_SECTORES, sectorDe } from '../lib/sectoresVES'
+import { USA_SECTORES, sectorDe, norm } from '../lib/sectoresVES'
+import { AMBITO_DISTRITOS } from '../lib/supabase'
+
+// SAN ISIDRO: el PCV envía el acta tocando el N° de mesa, así que Fotos se
+// organiza por MESA (cada mesa oficial con su foto), no por personero.
+const POR_MESA = AMBITO_DISTRITOS.some(d => norm(d) === 'SAN ISIDRO')
 
 interface Perfil {
   id: string
@@ -16,6 +21,8 @@ interface Perfil {
   mesa_asignada: string | null
   // Mesa sin personero cuyo conteo lo envió el PCV (nombre del PCV).
   enviadaPorPCV?: string
+  // San Isidro (POR_MESA): tarjeta de una mesa oficial.
+  porMesa?: { asignado: string | null; enviadoPor: string | null }
 }
 interface ActaFotos {
   mesa_numero: string
@@ -110,7 +117,37 @@ export default function FotosPage() {
         }
       })
 
-      setPers([...((p ?? []) as Perfil[]), ...extra])
+      if (POR_MESA) {
+        // Una tarjeta por cada mesa oficial del padrón, con quién la tiene
+        // asignada y quién envió su acta.
+        const mesasPadron = await traerTodo<any>((a, b) =>
+          supabase.from('mesas').select('numero, colegio_nombre').order('numero').range(a, b)).catch(() => [] as any[])
+        const enviadores = [...new Set(((actasData ?? []) as any[]).map(a => a.personero_dni).filter(Boolean))] as string[]
+        const nombres = new Map<string, string>()
+        for (const x of (p ?? []) as Perfil[]) if (x.dni) nombres.set(x.dni, x.nombre_completo)
+        const faltan = enviadores.filter(d => !nombres.has(d))
+        if (faltan.length) {
+          const { data: quienes } = await supabase.from('profiles').select('dni, nombre_completo').in('dni', faltan)
+          for (const x of quienes ?? []) nombres.set(x.dni, x.nombre_completo)
+        }
+        if (!vivo) return
+        const asignadoPorMesa = new Map<string, string>()
+        for (const x of (p ?? []) as Perfil[]) if (x.mesa_asignada) asignadoPorMesa.set(x.mesa_asignada, x.nombre_completo)
+        const filas: Perfil[] = mesasPadron.map((m: any) => {
+          const acta = map.get(m.numero) as any
+          const enviadoPor = acta ? (nombres.get(acta.personero_dni) ?? (acta.personero_dni ? `DNI ${acta.personero_dni}` : null)) : null
+          const asignado = asignadoPorMesa.get(m.numero) ?? null
+          return {
+            id: 'mesa-' + m.numero, nombre_completo: enviadoPor ?? asignado ?? '', dni: null,
+            rol: 'Mesa', distrito_asignado: null, distrito_vota: null,
+            local_asignado: m.colegio_nombre ?? null, local_votacion: null, mesa_asignada: m.numero,
+            porMesa: { asignado, enviadoPor },
+          }
+        })
+        setPers(filas)
+      } else {
+        setPers([...((p ?? []) as Perfil[]), ...extra])
+      }
       setActas(map)
       setLoading(false)
     })()
@@ -123,7 +160,8 @@ export default function FotosPage() {
     else if (f.colegio) r = r.filter(p => (p.local_asignado ?? p.local_votacion) === f.colegio)
     const s = q.trim().toLowerCase()
     if (s) r = r.filter(p =>
-      p.nombre_completo?.toLowerCase().includes(s) || (p.dni ?? '').includes(s) || (p.mesa_asignada ?? '').includes(s))
+      p.nombre_completo?.toLowerCase().includes(s) || (p.dni ?? '').includes(s) || (p.mesa_asignada ?? '').includes(s)
+      || (p.porMesa?.asignado ?? '').toLowerCase().includes(s))
     return r
   }, [pers, esPCV, miLocal, f.colegio, q])
 
@@ -301,6 +339,35 @@ function TarjetaFotos({ p, acta, onVer }: {
   if (urlActa) fotos.push({ label: 'Acta', url: urlActa })
   for (const [nivel, url] of Object.entries(acta?.imagenes_url ?? {})) {
     if (url && !fotos.some(fo => fo.url === url)) fotos.push({ label: `Acta ${nivel}`, url })
+  }
+
+  if (p.porMesa) {
+    const fo = fotos.find(x => x.label !== 'Instalación de mesa')
+    return (
+      <div className={`bg-white rounded-2xl border p-3.5 space-y-2.5 ${fo ? 'border-emerald-300' : 'border-slate-200'}`}>
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-mono font-black text-lg text-slate-900 leading-none">Mesa {p.mesa_asignada}</p>
+          <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 whitespace-nowrap ${fo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+            {fo ? 'Acta enviada' : 'Sin acta'}
+          </span>
+        </div>
+        <p className="text-[11px] text-slate-500 truncate">
+          {p.porMesa.enviadoPor
+            ? <>Enviada por: <b className="text-slate-700">{p.porMesa.enviadoPor}</b></>
+            : p.porMesa.asignado ? <>Personero: {p.porMesa.asignado}</> : 'Sin personero asignado'}
+        </p>
+        {fo ? (
+          <button onClick={() => onVer({ url: fo.url, titulo: `Mesa ${p.mesa_asignada} — Acta` })}
+            className="block w-full h-44 rounded-xl overflow-hidden border border-slate-200 hover:opacity-90 transition-opacity bg-slate-50">
+            <img src={fo.url} alt={`Acta mesa ${p.mesa_asignada}`} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+          </button>
+        ) : (
+          <p className="flex items-center gap-1.5 text-xs text-slate-400 py-3">
+            <ImageOff size={13} /> Aún no se envió la foto del acta.
+          </p>
+        )}
+      </div>
+    )
   }
 
   return (
