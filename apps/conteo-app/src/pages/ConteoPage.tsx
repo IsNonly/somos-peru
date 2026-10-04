@@ -310,16 +310,18 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
       // sin que cada uno tenga que pegarla a mano.
       setGeminiKey(key || (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) || '')
       if (p?.mesa_asignada) setMesa(p.mesa_asignada)
-      if (p?.acta_transmitida) setFase('enviado')
-
-      // Si ya se tomó la foto de instalación o se guardaron electores hábiles
-      // antes (ej. se cerró el navegador a medio llenar), recuperarlos.
+      // "Acta ya Transmitida" solo si de verdad existe un acta enviada de su
+      // mesa. Antes bastaba la marca acta_transmitida del perfil, que quedaba
+      // en true aunque se borraran las actas de prueba -y bloqueaba a la gente-.
       if (p?.mesa_asignada) {
         const { data: acta } = await supabase.from('actas')
-          .select('foto_instalacion_url, electores_habiles').eq('mesa_numero', p.mesa_asignada).maybeSingle()
+          .select('foto_instalacion_url, electores_habiles, bloqueada, estado').eq('mesa_numero', p.mesa_asignada).maybeSingle()
+        if (acta?.bloqueada || acta?.estado === 'TRANSMITIDA') setFase('enviado')
+        // Si ya se tomó la foto de instalación o se guardaron electores hábiles
+        // antes (ej. se cerró el navegador a medio llenar), recuperarlos.
         if (acta?.foto_instalacion_url) setFotoInstalacion(acta.foto_instalacion_url)
         if (acta?.electores_habiles != null) setElectoresHabiles(String(acta.electores_habiles))
-      }
+      } else if (p?.acta_transmitida) setFase('enviado')
     }
     init()
   }, [asistidoPersoneroId, mesaPCV])
