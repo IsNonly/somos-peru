@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, traerTodo } from '../lib/supabase'
 import { useFiltros } from '../lib/filtros'
-import { Search, Camera, ImageOff, X, Building2 } from 'lucide-react'
+import { Search, Camera, ImageOff, X, Building2, ChevronDown, ChevronRight, MapPinned } from 'lucide-react'
+import { USA_SECTORES, sectorDe } from '../lib/sectoresVES'
 
 interface Perfil {
   id: string
@@ -36,6 +37,10 @@ export default function FotosPage() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [verFoto, setVerFoto] = useState<{ url: string; titulo: string } | null>(null)
+  // VES: filtro y sectores desplegados (cerrados por defecto: así no se cargan
+  // las fotos de todo el distrito de golpe).
+  const [fSector, setFSector] = useState('')
+  const [abiertos, setAbiertos] = useState<Set<number>>(new Set())
 
   const esPCV = ROLES_PCV.has(miRol)
 
@@ -95,6 +100,38 @@ export default function FotosPage() {
     return r
   }, [pers, esPCV, miLocal, f.colegio, q])
 
+  // VES: Sector → Colegio → personeros (ordenados por mesa).
+  const sectores = useMemo(() => {
+    if (!USA_SECTORES || esPCV) return []
+    const grupos = new Map<number, Map<string, Perfil[]>>()
+    for (const p of filtrados) {
+      const colegio = (p.local_asignado ?? p.local_votacion ?? '').trim() || 'Sin colegio asignado'
+      const sector = sectorDe(p.distrito_asignado ?? p.distrito_vota, colegio) ?? 0
+      if (fSector && String(sector) !== fSector) continue
+      if (!grupos.has(sector)) grupos.set(sector, new Map())
+      const cols = grupos.get(sector)!
+      cols.set(colegio, [...(cols.get(colegio) ?? []), p])
+    }
+    return [...grupos.entries()]
+      .sort(([a], [b]) => (a || 99) - (b || 99))
+      .map(([sector, cols]) => {
+        const colegios = [...cols.entries()]
+          .sort(([a], [b]) => a.localeCompare(b, 'es'))
+          .map(([colegio, ps]) => ({
+            colegio,
+            personeros: ps.sort((a, b) => (a.mesa_asignada ?? '999999').localeCompare(b.mesa_asignada ?? '999999')),
+            conFoto: ps.filter(p => tieneFotos(actas.get(p.mesa_asignada ?? ''))).length,
+          }))
+        const total = colegios.reduce((n, c) => n + c.personeros.length, 0)
+        const conFoto = colegios.reduce((n, c) => n + c.conFoto, 0)
+        return { sector, colegios, total, conFoto }
+      })
+  }, [filtrados, esPCV, fSector, actas])
+  const sectorAbierto = (n: number) => abiertos.has(n) || !!fSector || !!q.trim() || !!f.colegio
+  const toggleSector = (n: number) => setAbiertos(prev => {
+    const x = new Set(prev); if (x.has(n)) x.delete(n); else x.add(n); return x
+  })
+
   const conFotos = filtrados.filter(p => tieneFotos(actas.get(p.mesa_asignada ?? '')))
   const sinFotos = filtrados.filter(p => !tieneFotos(actas.get(p.mesa_asignada ?? '')))
 
@@ -108,10 +145,18 @@ export default function FotosPage() {
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar personero por nombre, DNI o mesa…"
             className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-sky-500" />
         </div>
-        <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
           <span className="bg-sky-50 text-sky-700 font-bold rounded-full px-3 py-1 flex items-center gap-1.5">
             <Camera size={12} /> {conFotos.length} con foto · {sinFotos.length} sin foto
           </span>
+          {USA_SECTORES && !esPCV && (
+            <select value={fSector} onChange={e => setFSector(e.target.value)}
+              className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-600 outline-none focus:border-sky-500">
+              <option value="">Todos los sectores</option>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => <option key={n} value={n}>Sector {n}</option>)}
+              <option value="0">Sin sector</option>
+            </select>
+          )}
           {esPCV && miLocal && (
             <span className="text-slate-400 flex items-center gap-1.5">
               <Building2 size={12} /> Solo tus personeros — {miLocal}
@@ -122,6 +167,48 @@ export default function FotosPage() {
 
       {filtrados.length === 0 ? (
         <p className="text-sm text-slate-400 py-16 text-center">Sin personeros con esos filtros.</p>
+      ) : USA_SECTORES && !esPCV ? (
+        <div className="space-y-3">
+          {sectores.map(g => {
+            const abierto = sectorAbierto(g.sector)
+            return (
+              <section key={g.sector} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <button onClick={() => toggleSector(g.sector)}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                  <span className="flex items-center gap-2 font-extrabold text-slate-800">
+                    {abierto ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <MapPinned size={16} className="text-sky-600" />
+                    {g.sector ? `Sector ${g.sector}` : 'Sin sector'}
+                    <span className="text-xs font-semibold text-slate-400">· {g.colegios.length} colegios · {g.total} personeros</span>
+                  </span>
+                  <span className={`text-xs font-bold rounded-full px-2.5 py-1 ${g.conFoto ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                    <Camera size={11} className="inline -mt-0.5 mr-1" />{g.conFoto} / {g.total} con foto
+                  </span>
+                </button>
+                {abierto && (
+                  <div className="border-t border-slate-100 p-3 space-y-4">
+                    {g.colegios.map(c => (
+                      <div key={c.colegio} className="space-y-2">
+                        <div className="flex items-center justify-between gap-2 px-1">
+                          <p className="text-sm font-bold text-slate-700 flex items-center gap-1.5 min-w-0">
+                            <Building2 size={14} className="text-slate-400 flex-shrink-0" />
+                            <span className="truncate">{c.colegio}</span>
+                          </p>
+                          <span className="text-[11px] font-semibold text-slate-400 whitespace-nowrap">{c.conFoto} / {c.personeros.length} con foto</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {c.personeros.map(p => (
+                            <TarjetaFotos key={p.id} p={p} acta={actas.get(p.mesa_asignada ?? '')} onVer={setVerFoto} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )
+          })}
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {[...conFotos, ...sinFotos].map(p => (
