@@ -161,6 +161,9 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
   const mesasSinPersonero = esSanIsidro ? mesasOficiales : mesasOficiales.filter(m => !mesaOcupadaPor.has(m))
   const sinPersoneroTransmitidas = mesasSinPersonero.filter(m => actasMesa.get(m)?.transmitida).length
 
+  // Actas enviadas de las mesas oficiales del local (San Isidro las muestra en vez de asistencias).
+  const actasEnviadas = mesasOficiales.filter(m => actasMesa.get(m)?.transmitida).length
+
   const marcados   = personeros.filter(p => p.marcadoAt).length
   const pendientes = personeros.length - marcados
   const faltan     = Math.max(0, totalMesas - marcados)
@@ -170,7 +173,7 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
   const capSinIniciar = personeros.filter(p => estadoCapDe(p) === 'noiniciado').length
 
   const filtrados = personeros.filter(p => {
-    const okTab = tab === 'todos' ? true : tab === 'marcados' ? !!p.marcadoAt : !p.marcadoAt
+    const okTab = esSanIsidro || tab === 'todos' ? true : tab === 'marcados' ? !!p.marcadoAt : !p.marcadoAt
     const s = q.trim().toLowerCase()
     const okQ = !s || p.nombre.toLowerCase().includes(s) || p.dni.includes(s) || (p.mesa ?? '').includes(s)
     return okTab && okQ
@@ -245,11 +248,17 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
 
           <div className="grid grid-cols-3 gap-2">
             <Metrica label="Total Mesas Oficiales" value={totalMesas} tone="plain" />
-            <Metrica label="Asistencias Marcadas" value={marcados} tone="ok" />
-            <Metrica label="Faltan por Marcar" value={faltan} tone="warn" />
+            {esSanIsidro ? <>
+              <Metrica label="Actas Enviadas" value={actasEnviadas} tone="ok" />
+              <Metrica label="Faltan Enviar" value={Math.max(0, totalMesas - actasEnviadas)} tone="warn" />
+            </> : <>
+              <Metrica label="Asistencias Marcadas" value={marcados} tone="ok" />
+              <Metrica label="Faltan por Marcar" value={faltan} tone="warn" />
+            </>}
           </div>
         </div>
 
+        {!esSanIsidro && (<>
         {/* Capacitación de mis personeros */}
         <div className="bg-[#131a2e] border border-white/8 rounded-2xl p-4 space-y-3">
           <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 flex items-center gap-1.5">
@@ -261,6 +270,7 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
             <Metrica label="Sin Iniciar" value={capSinIniciar} tone="bad" />
           </div>
         </div>
+        </>)}
 
         {/* Mesas sin personero: el PCV registra el conteo */}
         {onAbrirMesa && mesasSinPersonero.length > 0 && (
@@ -304,6 +314,7 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
           </div>
         )}
 
+        {!esSanIsidro && (<>
         {/* Tabs */}
         <div className="flex gap-2">
           {([
@@ -323,6 +334,7 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
             </button>
           ))}
         </div>
+        </>)}
 
         {/* Buscador */}
         <div className="relative">
@@ -338,9 +350,11 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
             <span className="flex items-center gap-2 text-sky-300 text-xs font-bold uppercase tracking-wider">
               <Users size={14} /> Mesas y personeros asignados ({filtrados.length})
             </span>
-            <span className="text-amber-400 text-[11px] font-bold tracking-wide">
-              FALTAN {faltan} MESAS POR MARCAR
-            </span>
+            {!esSanIsidro && (
+              <span className="text-amber-400 text-[11px] font-bold tracking-wide">
+                FALTAN {faltan} MESAS POR MARCAR
+              </span>
+            )}
           </div>
 
           {filtrados.length === 0 ? (
@@ -368,6 +382,7 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
                     <p className="text-white/40 text-[11px] mt-0.5 truncate">
                       DNI: {p.dni}{p.celular ? ` · ${p.celular}` : ''}
                     </p>
+                    {!esSanIsidro && (<>
                     <p className={`text-[11px] mt-0.5 flex items-center gap-1 ${p.marcadoAt ? 'text-emerald-400' : 'text-amber-400'}`}>
                       {p.marcadoAt
                         ? <><CheckCircle2 size={11} /> Marcado {horaPE(p.marcadoAt)}</>
@@ -383,7 +398,9 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
                         </a>
                       )}
                     </p>
+                    </>)}
                   </div>
+                  {!esSanIsidro && (
                   <button onClick={e => { e.stopPropagation(); marcar(p) }} disabled={savingId === p.id}
                     className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center gap-1.5 flex-shrink-0 transition-all disabled:opacity-50 ${
                       p.marcadoAt
@@ -394,6 +411,7 @@ export default function PersoneroLocalPage({ onAbrirConteo, onAbrirMesa }: {
                       ? <Loader size={13} className="animate-spin" />
                       : p.marcadoAt ? 'Quitar' : 'Marcar Asistencia'}
                   </button>
+                  )}
                   {onAbrirConteo && <ChevronRight size={16} className="text-white/20 flex-shrink-0" />}
                 </div>
               ))}
