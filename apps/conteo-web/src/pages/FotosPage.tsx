@@ -316,7 +316,7 @@ export default function FotosPage() {
 
       {corrigiendo && (
         <EditarVotosModal
-          personero={{ id: 'mesa-' + corrigiendo.mesa_asignada, nombre_completo: corrigiendo.porMesa?.enviadoPor ?? `Mesa ${corrigiendo.mesa_asignada}`,
+          personero={{ id: 'mesa-' + corrigiendo.mesa_asignada, nombre_completo: corrigiendo.porMesa?.enviadoPor ?? corrigiendo.porMesa?.asignado ?? 'Acta',
                        dni: null, mesa_asignada: corrigiendo.mesa_asignada, local_asignado: corrigiendo.local_asignado }}
           onClose={() => setCorrigiendo(null)}
           onSaved={() => setRecarga(n => n + 1)}
