@@ -75,7 +75,7 @@ export default function FotosPage() {
           if (distritosEfectivos) pq = pq.in('distrito_asignado', distritosEfectivos)
           return pq.range(a, b)
         }).catch(e => { console.error(e); return [] as any[] }),
-        traerTodo<any>((a, b) => supabase.from('actas').select('id, mesa_numero, metodo, foto_instalacion_url, imagen_url, imagenes_url').order('id').range(a, b))
+        traerTodo<any>((a, b) => supabase.from('actas').select('id, mesa_numero, metodo, imagen_url, imagenes_url').order('id').range(a, b))
           .catch(e => { console.error(e); return [] as any[] }),
       ])
       if (!vivo) return
@@ -234,14 +234,14 @@ export default function FotosPage() {
 
 function tieneFotos(a?: ActaFotos): boolean {
   if (!a) return false
-  return !!(a.foto_instalacion_url || a.imagen_url || (a.imagenes_url && Object.keys(a.imagenes_url).length))
+  // Solo cuenta la foto del acta (la de instalación de mesa ya no se muestra).
+  return !!(a.imagen_url || (a.imagenes_url && Object.values(a.imagenes_url).some(Boolean)))
 }
 
 function TarjetaFotos({ p, acta, onVer }: {
   p: Perfil; acta?: ActaFotos; onVer: (v: { url: string; titulo: string }) => void
 }) {
   const fotos: { label: string; url: string }[] = []
-  if (acta?.foto_instalacion_url) fotos.push({ label: 'Instalación de mesa', url: acta.foto_instalacion_url })
   // El acta es UNA sola foto (Provincial + Distrital juntos): imagenes_url
   // repite la misma URL por nivel, así que se muestra una sola vez.
   const urlActa = acta?.imagen_url || Object.values(acta?.imagenes_url ?? {}).find(Boolean)
@@ -270,7 +270,7 @@ function TarjetaFotos({ p, acta, onVer }: {
         </div>
       ) : (
         <p className="flex items-center gap-1.5 text-xs text-slate-400 py-3">
-          <ImageOff size={13} /> Aún no envió ninguna foto.
+          <ImageOff size={13} /> Aún no envió la foto del acta.
         </p>
       )}
     </div>
