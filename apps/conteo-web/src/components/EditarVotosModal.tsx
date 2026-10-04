@@ -68,15 +68,28 @@ export default function EditarVotosModal({ personero, onClose, onSaved, onAnulad
     ;(async () => {
       setLoading(true); setError('')
       const mesa = (personero.mesa_asignada ?? '').trim()
-      if (!mesa) {
-        if (vivo) { setError('Este personero no tiene mesa asignada.'); setLoading(false) }
+      const cols = 'id, mesa_numero, colegio_nombre, distrito, departamento, provincia, estado, metodo, electores_habiles'
+
+      // Se busca el acta que ESTE personero envió (por su id o DNI) -igual que
+      // el monitor, que lo marca como "Enviado"-; si no aparece, por su mesa.
+      // Antes solo se buscaba por mesa_asignada: si el acta quedó con otro
+      // número de mesa (ej. escrito distinto), decía "aún no ha transmitido".
+      let actaRow: any = null
+      const filtroPersonero = [`personero_id.eq.${personero.id}`, personero.dni ? `personero_dni.eq.${personero.dni}` : null]
+        .filter(Boolean).join(',')
+      const { data: propias } = await supabase.from('actas').select(cols).or(filtroPersonero)
+        .order('transmitida_at', { ascending: false, nullsFirst: false }).limit(5)
+      actaRow = (propias ?? []).find((a: any) => a.mesa_numero === mesa) ?? (propias ?? [])[0] ?? null
+      if (!actaRow && mesa) {
+        const r = await supabase.from('actas').select(cols).eq('mesa_numero', mesa).maybeSingle()
+        actaRow = r.data
+      }
+      if (!vivo) return
+      if (!actaRow && !mesa) {
+        setError('Este personero no tiene mesa asignada.')
+        setLoading(false)
         return
       }
-
-      const { data: actaRow } = await supabase.from('actas')
-        .select('id, mesa_numero, colegio_nombre, distrito, departamento, provincia, estado, metodo, electores_habiles')
-        .eq('mesa_numero', mesa).maybeSingle()
-      if (!vivo) return
       if (!actaRow) {
         setError('Este personero aún no ha transmitido su acta — todavía no hay votos que corregir.')
         setLoading(false)
@@ -233,6 +246,11 @@ export default function EditarVotosModal({ personero, onClose, onSaved, onAnulad
               {personero.nombre_completo} · Mesa {personero.mesa_asignada ?? '—'}
               {acta?.colegio_nombre && <> · {acta.colegio_nombre}</>}
             </p>
+            {acta && personero.mesa_asignada && acta.mesa_numero !== personero.mesa_asignada.trim() && (
+              <p className="text-[11px] font-semibold text-amber-600 mt-1">
+                Ojo: el acta se envió con la mesa {acta.mesa_numero}, distinta a su mesa asignada ({personero.mesa_asignada}).
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
         </div>
