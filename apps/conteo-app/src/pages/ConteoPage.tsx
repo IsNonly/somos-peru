@@ -295,9 +295,8 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
   // "Asignar mesa" en el Panel del PCV), no debe poder escribir un número distinto
   // a mano -el campo se muestra bloqueado con la mesa que le corresponde de verdad-.
   const mesaAsignadaOficialmente = !!perfil?.mesa_asignada
-  // SAN ISIDRO: por ahora solo se envía con foto del acta (el conteo manual se
-  // habilitará después). VES y Cercado mantienen las dos opciones.
-  const sinManual = normTxt(perfil?.distrito_asignado ?? perfil?.distrito_vota ?? '') === 'SAN ISIDRO'
+  // SAN ISIDRO: escaneo con prompt propio de su acta y textos propios del PCV.
+  const esSanIsidro = normTxt(perfil?.distrito_asignado ?? perfil?.distrito_vota ?? '') === 'SAN ISIDRO'
 
   // En modo asistido la mesa ya viene oficial (asignada por el propio PCV que está
   // entrando), así que se confirma sola -no tiene sentido pedirle al PCV un check
@@ -539,7 +538,7 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
       try {
         const base64 = dataUrl.split(',')[1]
         const partidosActa = filasActa.map(f => f.partido)
-        const resultado = await procesarActa(base64, mime, geminiKey, partidosActa, sinManual)
+        const resultado = await procesarActa(base64, mime, geminiKey, partidosActa, esSanIsidro)
 
         // Cada fila reconocida trae un valor Provincial y uno Distrital juntos
         // (mismo formato que el acta física real): se matchea por partido y se
@@ -601,7 +600,7 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
           setFotoPatch({ ocrMetodo: resultado.metodo, ocrSinMatch: true, ocrGeminiError: resultado.geminiError ?? '' })
         }
       } catch (err) {
-        setError(sinManual && err instanceof Error
+        setError(esSanIsidro && err instanceof Error
           ? err.message
           : 'No se pudo procesar el acta automáticamente. Ingresa los votos manualmente.')
       }
@@ -781,7 +780,7 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
           {esAsistido && (
             <span className={`text-[9px] normal-case tracking-normal font-bold rounded-full px-2 py-0.5 border ${
               esMesaSinPersonero ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-sky-500/15 text-sky-300 border-sky-500/30'}`}>
-              {esMesaSinPersonero ? (sinManual ? `Mesa ${mesaPCV}` : `Mesa ${mesaPCV} sin personero`) : 'Registrado por tu PCV'}
+              {esMesaSinPersonero ? (esSanIsidro ? `Mesa ${mesaPCV}` : `Mesa ${mesaPCV} sin personero`) : 'Registrado por tu PCV'}
             </span>
           )}
         </p>
@@ -840,7 +839,7 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
                   : 'bg-[#0b0f1d] border-white/10 text-white focus:border-sky-500/50'}`} />
             {mesaAsignadaOficialmente ? (
               <p className="text-emerald-400 text-[10px] mt-1 flex items-center gap-1">
-                <CheckCircle size={11} /> {esMesaSinPersonero ? (sinManual ? 'Mesa de tu local: el acta queda a tu nombre' : 'Mesa de tu local sin personero: el acta queda a tu nombre') : 'Asignada por tu Personero de Centro de Votación'}
+                <CheckCircle size={11} /> {esMesaSinPersonero ? (esSanIsidro ? 'Mesa de tu local: el acta queda a tu nombre' : 'Mesa de tu local sin personero: el acta queda a tu nombre') : 'Asignada por tu Personero de Centro de Votación'}
               </p>
             ) : (
               <>
@@ -927,15 +926,15 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
           <span className="text-white/30 text-[11px] font-mono">Mesa de sufragio {mesa.trim() || '---'}</span>
         </div>
 
-        <div className={`grid gap-2.5 ${sinManual ? 'grid-cols-1' : 'grid-cols-2'}`}>
-          {!sinManual && <TarjetaEscrutinio
+        <div className="grid gap-2.5 grid-cols-2">
+          <TarjetaEscrutinio
             color="sky" icon={PencilLine}
             titulo="Registro Manual"
             desc="Ingreso casilla por casilla para candidatos y actas."
             botonLabel="Registro Manual"
             onIniciar={() => { setModo('MANUAL'); setVista('conteo') }}
             onVer={() => setVerModal('MANUAL')}
-          />}
+          />
           <TarjetaEscrutinio
             color="violet" icon={Camera}
             titulo="Conteo por Imagen (OCR)"
