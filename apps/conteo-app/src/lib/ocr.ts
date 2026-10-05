@@ -7,11 +7,23 @@
 
 declare const cv: any
 
-const GEMINI_PROMPT = `Analiza esta imagen de un acta electoral peruana (Elecciones Regionales y Municipales 2026).
-Extrae TODOS los votos numéricos por partido o candidato.
+function geminiPrompt(partidos: string[]): string {
+  const lista = partidos.length
+    ? `\nEstos son los partidos que postulan en este distrito (úsalos como referencia para reconocer cada fila):\n${partidos.map(p => `- ${p}`).join('\n')}\n`
+    : ''
+  return `Analiza esta foto de un ACTA ELECTORAL peruana (Elecciones Regionales y Municipales 2026).
+El acta es una tabla: cada fila es una organización política (con su número de orden y logo) y al final están las filas de VOTOS EN BLANCO, VOTOS NULOS y VOTOS IMPUGNADOS.
+Las columnas de votos son, de izquierda a derecha: MUNICIPAL PROVINCIAL y MUNICIPAL DISTRITAL (si solo hay una columna de votos, pon el mismo valor en ambas).
+Los números suelen estar escritos A MANO: léelos con cuidado, dígito por dígito.
+${lista}
+Reglas:
+- Recorre TODAS las filas de arriba hacia abajo, sin saltarte ninguna, incluidas BLANCO, NULOS e IMPUGNADOS.
+- En "partido" copia el nombre de la organización tal como está impreso en el acta.
+- Si la casilla está vacía, tachada o con una raya, el valor es 0.
+- No confundas el número de orden de la fila con los votos.
 Devuelve SOLO un JSON válido con este formato exacto:
-{"votos": [{"partido": "nombre del partido o candidato", "provincial": número, "distrital": número}]}
-Si un valor no está claro, usa 0. No incluyas texto adicional, solo el JSON.`
+{"votos": [{"partido": "nombre de la organización", "provincial": número, "distrital": número}]}`
+}
 
 // ── 1. Preprocesar con OpenCV ─────────────────────────────────────────────
 export async function preprocesarImagen(base64: string): Promise<string> {
@@ -65,12 +77,36 @@ export async function preprocesarImagen(base64: string): Promise<string> {
   })
 }
 
+// Achica la foto (a color) a máx. 2000px: una foto de celular pesa varios MB
+// y con datos móviles tarda en subir; a 2000px los números se siguen leyendo bien.
+async function reducirFoto(base64: string, mimeType: string): Promise<{ data: string; mime: string }> {
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, 2000 / Math.max(img.width, img.height))
+        if (scale === 1) return resolve({ data: base64, mime: mimeType })
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+        resolve({ data: canvas.toDataURL('image/jpeg', 0.9).split(',')[1], mime: 'image/jpeg' })
+      } catch {
+        resolve({ data: base64, mime: mimeType })
+      }
+    }
+    img.onerror = () => resolve({ data: base64, mime: mimeType })
+    img.src = `data:${mimeType};base64,${base64}`
+  })
+}
+
 // ── 2. OCR con Gemini ─────────────────────────────────────────────────────
 async function ocrGemini(
   imageBase64: string,
   mimeType: string,
   apiKey: string,
-  modelo: string
+  modelo: string,
+  partidos: string[]
 ): Promise<{ partido: string; provincial: number; distrital: number }[]> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`
 
@@ -80,11 +116,11 @@ async function ocrGemini(
     body: JSON.stringify({
       contents: [{
         parts: [
-          { text: GEMINI_PROMPT },
+          { text: geminiPrompt(partidos) },
           { inlineData: { mimeType, data: imageBase64 } },
         ],
       }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
+      generationConfig: { temperature: 0, maxOutputTokens: 8192, responseMimeType: 'application/json' },
     }),
   })
 
@@ -98,7 +134,9 @@ async function ocrGemini(
   if (!match) throw new Error('Gemini no devolvió JSON válido')
 
   const parsed = JSON.parse(match[0])
-  return parsed.votos ?? []
+  // Asegura números (a veces vienen como texto: "67")
+  const num = (x: unknown) => { const n = parseInt(String(x ?? '').replace(/\D/g, ''), 10); return Number.isFinite(n) ? n : 0 }
+  return (parsed.votos ?? []).map((v: any) => ({ partido: String(v?.partido ?? ''), provincial: num(v?.provincial), distrital: num(v?.distrital) }))
 }
 
 // ── 3. Fallback Tesseract ────────────────────────────────────────────────
@@ -147,7 +185,10 @@ async function ocrTesseract(
 export async function procesarActa(
   imageBase64: string,
   mimeType: string,
-  geminiKey?: string
+  geminiKey?: string,
+  // Nombres de los partidos del distrito: se le pasan a Gemini para que
+  // reconozca cada fila del acta con más seguridad.
+  partidos: string[] = []
 ): Promise<{
   votos: { partido: string; provincial: number; distrital: number }[]
   metodo: 'GEMINI' | 'TESSERACT'
@@ -157,8 +198,7 @@ export async function procesarActa(
   // Gemini se perdía en un console.warn y parecía que nunca se intentó.
   geminiError?: string
 }> {
-  // 1. Preprocesar con OpenCV si está disponible
-  const imagenProcesada = await preprocesarImagen(imageBase64.split(',')[1] ?? imageBase64)
+  const original = imageBase64.split(',')[1] ?? imageBase64
 
   // 2. Intentar Gemini primero. 'flash-lite' va antes que el 'flash' grande:
   // en la práctica el grande devuelve 503 "alta demanda" con mucha frecuencia
@@ -167,9 +207,13 @@ export async function procesarActa(
   // falla igual, se reintenta una vez con el grande antes de caer a Tesseract.
   let geminiError: string | undefined
   if (geminiKey?.trim()) {
+    const foto = await reducirFoto(original, mimeType)
     for (const modelo of ['gemini-flash-lite-latest', 'gemini-flash-latest']) {
       try {
-        const votos = await ocrGemini(imagenProcesada, mimeType, geminiKey.trim(), modelo)
+        // Gemini recibe la foto ORIGINAL: el preprocesado blanco/negro de
+        // OpenCV ayuda a Tesseract pero a Gemini le borra trazos de los
+        // números escritos a mano.
+        const votos = await ocrGemini(foto.data, foto.mime, geminiKey.trim(), modelo, partidos)
         return { votos, metodo: 'GEMINI' }
       } catch (e) {
         geminiError = e instanceof Error ? e.message : String(e)
@@ -178,7 +222,8 @@ export async function procesarActa(
     }
   }
 
-  // 3. Fallback Tesseract
+  // 3. Fallback Tesseract (con la imagen preprocesada por OpenCV)
+  const imagenProcesada = await preprocesarImagen(original)
   const votos = await ocrTesseract(imagenProcesada)
   return { votos, metodo: 'TESSERACT', geminiError }
 }
