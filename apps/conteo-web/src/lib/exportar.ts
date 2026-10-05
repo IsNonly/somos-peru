@@ -20,7 +20,10 @@ export async function exportarPersoneros(distritos: string[] | null, colegio: st
     if (!data || data.length < PAGINA) break
   }
 
-  const actas = await traerTodo<any>((a, b) => supabase.from('actas').select('id, personero_id, personero_dni, metodo, estado').order('id').range(a, b))
+  const actas = await traerTodo<any>((a, b) => supabase.from('actas').select('id, mesa_numero, personero_id, personero_dni, metodo, estado').order('id').range(a, b))
+  // Padrón oficial de mesas: TODAS salen en el Excel, aunque no tengan personero.
+  const mesas = await traerTodo<any>((a, b) => supabase.from('mesas').select('numero, colegio_nombre').order('numero').range(a, b))
+    .catch(() => [] as any[])
   // Mismo criterio que la página de Personeros: acta transmitida, por id o por DNI.
   const envio = new Map<string, string>()
   for (const a of (actas ?? []) as any[]) {
@@ -30,9 +33,11 @@ export async function exportarPersoneros(distritos: string[] | null, colegio: st
   }
 
   const centroDe = (p: any) => (p.local_asignado || p.local_votacion || '').trim()
+  // Orden correlativo por N° de mesa; quien no tiene mesa va al final, por colegio.
   const filas = perfiles
     .filter(p => !colegio || centroDe(p) === colegio)
-    .sort((a, b) => centroDe(a).localeCompare(centroDe(b), 'es') || String(a.mesa_asignada ?? '').localeCompare(String(b.mesa_asignada ?? '')))
+    .sort((a, b) => String(a.mesa_asignada || '999999').localeCompare(String(b.mesa_asignada || '999999'))
+      || centroDe(a).localeCompare(centroDe(b), 'es') || String(a.nombre_completo).localeCompare(String(b.nombre_completo), 'es'))
     .map(p => ({
       'Centro de Votación': centroDe(p),
       'Mesa Designada': p.mesa_asignada ?? '',
@@ -48,7 +53,29 @@ export async function exportarPersoneros(distritos: string[] | null, colegio: st
       Credencial: p.credencial_estado ?? 'Pendiente',
     }))
 
+  // Hoja "Mesas": una fila por cada mesa oficial, en orden correlativo, con su
+  // colegio, el personero asignado (vacío si no tiene) y si ya se envió su acta.
+  const actaPorMesa = new Map<string, any>()
+  for (const a of (actas ?? []) as any[]) if (a.mesa_numero && (!a.estado || a.estado === 'TRANSMITIDA')) actaPorMesa.set(a.mesa_numero, a)
+  const personeroPorMesa = new Map<string, any[]>()
+  for (const p of perfiles) if (p.mesa_asignada && /mesa/i.test(p.rol)) personeroPorMesa.set(p.mesa_asignada, [...(personeroPorMesa.get(p.mesa_asignada) ?? []), p])
+  const hojaMesas = (mesas as any[])
+    .filter(m => !colegio || (m.colegio_nombre ?? '').trim() === colegio)
+    .map(m => {
+      const ps = personeroPorMesa.get(m.numero) ?? []
+      const acta = actaPorMesa.get(m.numero)
+      return {
+        'Local de Votación': m.colegio_nombre ?? '',
+        Mesa: m.numero,
+        Personero: ps.map(p => p.nombre_completo).join(' / '),
+        DNI: ps.map(p => p.dni ?? '').join(' / '),
+        Celular: ps.map(p => p.celular ?? '').join(' / '),
+        'Acta enviada': acta ? (String(acta.metodo).toUpperCase() === 'IMAGEN' ? 'Imagen' : 'Manual') : 'Sin envío',
+      }
+    })
+
   const wb = XLSX.utils.book_new()
+  if (hojaMesas.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaMesas), 'Mesas')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), 'Personeros')
   const ambito = (distritos?.length === 1 ? distritos[0] : AMBITO_DISTRITOS.join('_')).replace(/\s+/g, '_')
   XLSX.writeFile(wb, `Personeros_${ambito}_${new Date().toISOString().split('T')[0]}.xlsx`)
