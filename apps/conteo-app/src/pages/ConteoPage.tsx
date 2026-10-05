@@ -188,9 +188,11 @@ interface FotoActaState {
   ocrMetodo: 'GEMINI' | 'TESSERACT' | null
   ocrSinMatch: boolean
   ocrGeminiError: string
+  // Aviso cuando la suma leída no cuadra con el TOTAL escrito en el acta
+  ocrAvisoTotal: string
 }
 const FOTO_ACTA_VACIA: FotoActaState = {
-  imgSrc: null, imgMime: 'image/jpeg', ocrLoading: false, ocrMetodo: null, ocrSinMatch: false, ocrGeminiError: '',
+  imgSrc: null, imgMime: 'image/jpeg', ocrLoading: false, ocrMetodo: null, ocrSinMatch: false, ocrGeminiError: '', ocrAvisoTotal: '',
 }
 
 // Una fila del acta = una organización política, con el candidato (si postula)
@@ -532,12 +534,12 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
     const reader = new FileReader()
     reader.onload = async ev => {
       const dataUrl = ev.target?.result as string
-      setFotoPatch({ imgSrc: dataUrl, imgMime: mime, ocrLoading: true, ocrSinMatch: false, ocrGeminiError: '' })
+      setFotoPatch({ imgSrc: dataUrl, imgMime: mime, ocrLoading: true, ocrSinMatch: false, ocrGeminiError: '', ocrAvisoTotal: '' })
 
       try {
         const base64 = dataUrl.split(',')[1]
         const partidosActa = filasActa.map(f => f.partido)
-        const resultado = await procesarActa(base64, mime, geminiKey, partidosActa)
+        const resultado = await procesarActa(base64, mime, geminiKey, partidosActa, sinManual)
 
         // Cada fila reconocida trae un valor Provincial y uno Distrital juntos
         // (mismo formato que el acta física real): se matchea por partido y se
@@ -580,7 +582,21 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
             PROVINCIAL: { ...prev.PROVINCIAL, ...nuevos.PROVINCIAL },
             DISTRITAL: { ...prev.DISTRITAL, ...nuevos.DISTRITAL },
           }))
-          setFotoPatch({ ocrMetodo: resultado.metodo, ocrGeminiError: resultado.geminiError ?? '' })
+          // Control con la fila "TOTAL DE VOTOS EMITIDOS" del acta (si la IA la leyó)
+          const avisos: string[] = []
+          const control: [NivelCandidatura, number | undefined, string][] = [
+            ['PROVINCIAL', resultado.totalProvincial, 'provincial'],
+            ['DISTRITAL', resultado.totalDistrital, 'distrital'],
+          ]
+          for (const [n, total, etiqueta] of control) {
+            if (!total || !nivelesPresentes.includes(n)) continue
+            const suma = Object.values(nuevos[n]).reduce((a, b) => a + (b || 0), 0)
+            if (suma !== total) avisos.push(`${etiqueta}: suma ${suma}, el acta dice ${total}`)
+          }
+          setFotoPatch({
+            ocrMetodo: resultado.metodo, ocrGeminiError: resultado.geminiError ?? '',
+            ocrAvisoTotal: avisos.length ? `Los votos leídos no cuadran con el TOTAL del acta (${avisos.join('; ')}). Toma la foto de nuevo, más cerca y con buena luz.` : '',
+          })
         } else {
           setFotoPatch({ ocrMetodo: resultado.metodo, ocrSinMatch: true, ocrGeminiError: resultado.geminiError ?? '' })
         }
@@ -1037,9 +1053,16 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
                   )}
                 </div>
               ) : (
-                <p className={`flex items-center gap-1.5 text-xs font-medium ${foto.ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
-                  <CheckCircle size={13} /> Votos reconocidos ({foto.ocrMetodo}) — revísalos abajo.
-                </p>
+                <div className="space-y-1">
+                  <p className={`flex items-center gap-1.5 text-xs font-medium ${foto.ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
+                    <CheckCircle size={13} /> Votos reconocidos ({foto.ocrMetodo}) — revísalos abajo.
+                  </p>
+                  {foto.ocrAvisoTotal && (
+                    <p className="flex items-start gap-1.5 text-xs font-medium text-amber-300">
+                      <AlertTriangle size={13} className="shrink-0 mt-0.5" /> {foto.ocrAvisoTotal}
+                    </p>
+                  )}
+                </div>
               )
             )}
             <input ref={fotoInputRef} type="file" accept="image/*" capture="environment"

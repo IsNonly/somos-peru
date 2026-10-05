@@ -7,10 +7,26 @@
 
 declare const cv: any
 
-function geminiPrompt(partidos: string[]): string {
+function geminiPrompt(partidos: string[], sanIsidro: boolean): string {
   const lista = partidos.length
     ? `\nEstos son los partidos que postulan en este distrito (úsalos como referencia para reconocer cada fila):\n${partidos.map(p => `- ${p}`).join('\n')}\n`
     : ''
+  if (sanIsidro) return `Esta es la foto de un ACTA DE ESCRUTINIO de San Isidro (Elecciones Municipales 2026).
+Lee SOLO la tabla "ORGANIZACIONES POLÍTICAS". Ignora todo lo demás (encabezados, firmas, logos, sellos).
+La tabla tiene exactamente estas columnas que importan:
+- "TOTAL DE VOTOS MUNICIPAL PROVINCIAL" (primera columna de votos) → "provincial"
+- "TOTAL DE VOTOS MUNICIPAL DISTRITAL" (segunda columna de votos) → "distrital"
+Cómo leer cada casilla de votos:
+- Cada casilla tiene 3 cuadritos (centenas, decenas, unidades) con dígitos escritos A MANO. Junta los dígitos de la casilla en un solo número: "1 0 0" = 100, "8 4" = 84, "6 7" = 67, "2 2 7" = 227.
+- Si la casilla tiene "0" o está vacía, el valor es 0.
+- Si la casilla de la columna DISTRITAL está pintada de GRIS/NEGRO (sombreada), ese partido no postula en distrital: distrital = 0.
+- Los números chicos de los bordes izquierdo y derecho (1, 2, 3 … 26) son el número de fila, NO son votos.
+Recorre TODAS las filas de arriba hacia abajo sin saltarte ninguna: las organizaciones políticas, luego VOTOS EN BLANCO, VOTOS NULOS y VOTOS IMPUGNADOS.
+En "partido" copia el nombre tal como está impreso en la fila.
+${lista}
+Lee también la última fila "TOTAL DE VOTOS EMITIDOS" de cada columna. La suma de todas las filas (incluidos blanco, nulos e impugnados) debe dar ese total: si no cuadra, vuelve a mirar las casillas.
+Devuelve SOLO un JSON válido con este formato exacto:
+{"votos": [{"partido": "nombre", "provincial": número, "distrital": número}], "total_provincial": número, "total_distrital": número}`
   return `Analiza esta foto de un ACTA ELECTORAL peruana (Elecciones Regionales y Municipales 2026).
 El acta es una tabla: cada fila es una organización política (con su número de orden y logo) y al final están las filas de VOTOS EN BLANCO, VOTOS NULOS y VOTOS IMPUGNADOS.
 Las columnas de votos son, de izquierda a derecha: MUNICIPAL PROVINCIAL y MUNICIPAL DISTRITAL (si solo hay una columna de votos, pon el mismo valor en ambas).
@@ -24,6 +40,9 @@ Reglas:
 Devuelve SOLO un JSON válido con este formato exacto:
 {"votos": [{"partido": "nombre de la organización", "provincial": número, "distrital": número}]}`
 }
+
+export interface VotoOCR { partido: string; provincial: number; distrital: number }
+export interface LecturaOCR { votos: VotoOCR[]; totalProvincial?: number; totalDistrital?: number }
 
 // ── 1. Preprocesar con OpenCV ─────────────────────────────────────────────
 export async function preprocesarImagen(base64: string): Promise<string> {
@@ -106,8 +125,9 @@ async function ocrGemini(
   mimeType: string,
   apiKey: string,
   modelo: string,
-  partidos: string[]
-): Promise<{ partido: string; provincial: number; distrital: number }[]> {
+  partidos: string[],
+  sanIsidro: boolean
+): Promise<LecturaOCR> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`
 
   const res = await fetch(url, {
@@ -116,7 +136,7 @@ async function ocrGemini(
     body: JSON.stringify({
       contents: [{
         parts: [
-          { text: geminiPrompt(partidos) },
+          { text: geminiPrompt(partidos, sanIsidro) },
           { inlineData: { mimeType, data: imageBase64 } },
         ],
       }],
@@ -136,7 +156,12 @@ async function ocrGemini(
   const parsed = JSON.parse(match[0])
   // Asegura números (a veces vienen como texto: "67")
   const num = (x: unknown) => { const n = parseInt(String(x ?? '').replace(/\D/g, ''), 10); return Number.isFinite(n) ? n : 0 }
-  return (parsed.votos ?? []).map((v: any) => ({ partido: String(v?.partido ?? ''), provincial: num(v?.provincial), distrital: num(v?.distrital) }))
+  const votos: VotoOCR[] = (parsed.votos ?? []).map((v: any) => ({ partido: String(v?.partido ?? ''), provincial: num(v?.provincial), distrital: num(v?.distrital) }))
+  return {
+    votos,
+    totalProvincial: parsed.total_provincial != null ? num(parsed.total_provincial) : undefined,
+    totalDistrital: parsed.total_distrital != null ? num(parsed.total_distrital) : undefined,
+  }
 }
 
 // ── 3. Fallback Tesseract ────────────────────────────────────────────────
@@ -188,9 +213,14 @@ export async function procesarActa(
   geminiKey?: string,
   // Nombres de los partidos del distrito: se le pasan a Gemini para que
   // reconozca cada fila del acta con más seguridad.
-  partidos: string[] = []
+  partidos: string[] = [],
+  // San Isidro usa un prompt específico de su acta (columnas Provincial /
+  // Distrital, casillas de 3 dígitos, celdas sombreadas, fila de TOTAL).
+  sanIsidro = false
 ): Promise<{
-  votos: { partido: string; provincial: number; distrital: number }[]
+  votos: VotoOCR[]
+  totalProvincial?: number
+  totalDistrital?: number
   metodo: 'GEMINI' | 'TESSERACT'
   textoRaw?: string
   // Si Gemini se intentó y falló (ej. "alta demanda"), queda el motivo acá
@@ -213,8 +243,8 @@ export async function procesarActa(
         // Gemini recibe la foto ORIGINAL: el preprocesado blanco/negro de
         // OpenCV ayuda a Tesseract pero a Gemini le borra trazos de los
         // números escritos a mano.
-        const votos = await ocrGemini(foto.data, foto.mime, geminiKey.trim(), modelo, partidos)
-        return { votos, metodo: 'GEMINI' }
+        const lectura = await ocrGemini(foto.data, foto.mime, geminiKey.trim(), modelo, partidos, sanIsidro)
+        return { ...lectura, metodo: 'GEMINI' }
       } catch (e) {
         geminiError = e instanceof Error ? e.message : String(e)
         console.warn(`Gemini OCR (${modelo}) falló:`, e)
