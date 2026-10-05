@@ -144,7 +144,12 @@ async function ocrGemini(
     }),
   })
 
-  if (!res.ok) throw new Error(`Gemini error ${res.status}`)
+  if (!res.ok) {
+    // Motivo que da Google (clave inválida, cuota agotada, alta demanda…)
+    let motivo = ''
+    try { motivo = (await res.json())?.error?.message ?? '' } catch { /* sin cuerpo */ }
+    throw new Error(`Gemini error ${res.status}${motivo ? `: ${motivo.slice(0, 160)}` : ''}`)
+  }
 
   const data = await res.json()
   const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
@@ -238,7 +243,12 @@ export async function procesarActa(
   let geminiError: string | undefined
   if (geminiKey?.trim()) {
     const foto = await reducirFoto(original, mimeType)
-    for (const modelo of ['gemini-flash-lite-latest', 'gemini-flash-latest']) {
+    // Con mucha gente escaneando a la vez Google responde 429/503 por ratos:
+    // se reintenta (con una pausa) antes de rendirse.
+    const intentos = ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-flash-latest']
+    for (let i = 0; i < intentos.length; i++) {
+      const modelo = intentos[i]
+      if (i > 0) await new Promise(r => setTimeout(r, 1500 * i))
       try {
         // Gemini recibe la foto ORIGINAL: el preprocesado blanco/negro de
         // OpenCV ayuda a Tesseract pero a Gemini le borra trazos de los
@@ -251,6 +261,12 @@ export async function procesarActa(
       }
     }
   }
+
+  // San Isidro: sin respaldo Tesseract. Lee la hoja entera y llena números
+  // equivocados; mejor avisar que la IA no respondió para volver a intentar.
+  if (sanIsidro) throw new Error(geminiError
+    ? `La IA no respondió (${geminiError}). Espera unos segundos y vuelve a subir la foto.`
+    : 'No hay clave de IA configurada para escanear el acta.')
 
   // 3. Fallback Tesseract (con la imagen preprocesada por OpenCV)
   const imagenProcesada = await preprocesarImagen(original)

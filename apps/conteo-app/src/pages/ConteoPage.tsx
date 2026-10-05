@@ -600,8 +600,10 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
         } else {
           setFotoPatch({ ocrMetodo: resultado.metodo, ocrSinMatch: true, ocrGeminiError: resultado.geminiError ?? '' })
         }
-      } catch {
-        setError('No se pudo procesar el acta automáticamente. Ingresa los votos manualmente.')
+      } catch (err) {
+        setError(sinManual && err instanceof Error
+          ? err.message
+          : 'No se pudo procesar el acta automáticamente. Ingresa los votos manualmente.')
       }
       setFotoPatch({ ocrLoading: false })
     }
@@ -1057,6 +1059,11 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
                   <p className={`flex items-center gap-1.5 text-xs font-medium ${foto.ocrMetodo === 'GEMINI' ? 'text-green-300' : 'text-yellow-300'}`}>
                     <CheckCircle size={13} /> Votos reconocidos ({foto.ocrMetodo}) — revísalos abajo.
                   </p>
+                  {foto.ocrMetodo === 'TESSERACT' && foto.ocrGeminiError && (
+                    <p className="text-[11px] text-amber-300/80 pl-[19px]">
+                      La IA no respondió ({foto.ocrGeminiError}) — se usó el lector de respaldo, que suele equivocarse. Vuelve a subir la foto en unos segundos.
+                    </p>
+                  )}
                   {foto.ocrAvisoTotal && (
                     <p className="flex items-start gap-1.5 text-xs font-medium text-amber-300">
                       <AlertTriangle size={13} className="shrink-0 mt-0.5" /> {foto.ocrAvisoTotal}
