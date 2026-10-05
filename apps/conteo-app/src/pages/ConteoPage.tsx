@@ -49,21 +49,41 @@ const similitud = (a: string, b: string) => {
   return (2 * inter) / (A.size + B.size)
 }
 
-// Umbral mínimo para aceptar una coincidencia: por debajo de esto el texto que
-// leyó el OCR está demasiado distorsionado como para confiar en qué partido es
-// -mejor no contarlo (queda en 0, se llena a mano) que asignarlo al equivocado.
-const UMBRAL_COINCIDENCIA = 0.4
+// Palabras genéricas que la ONPE antepone al nombre en el acta ("PARTIDO
+// DEMOCRÁTICO SOMOS PERÚ", "PARTIDO POLÍTICO NACIONAL PERÚ LIBRE"...) y que en
+// nuestra lista no están. Sin quitarlas, "Partido Democrático Somos Perú" se
+// parecía más a "Partido Demócrata Verde" que a "Somos Perú" y los votos de
+// Somos Perú se iban a otro partido.
+const PALABRAS_GENERICAS = new Set(['PARTIDO', 'POLITICO', 'NACIONAL', 'DEMOCRATICO', 'DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS', 'Y', 'POR', 'EN', 'A', 'SOCIAL', 'INTEGRACION'])
+const palabras = (s: string) => normTxt(s).split(' ').filter(w => w && !PALABRAS_GENERICAS.has(w))
+
+// Umbral para aceptar una coincidencia aproximada (texto con ruido del OCR):
+// por debajo, mejor no contarlo (queda en 0, se llena a mano) que asignarlo al
+// partido equivocado.
+const UMBRAL_COINCIDENCIA = 0.6
+
+function puntaje(texto: string, nombre: string): number {
+  const t = palabras(texto), n = palabras(nombre)
+  if (!t.length || !n.length) return 0
+  // 1) Todas las palabras del nombre de la lista aparecen en lo leído del acta
+  //    (ej. "SOMOS PERU" dentro de "PARTIDO DEMOCRATICO SOMOS PERU"): coincidencia
+  //    segura; entre varias, gana la más específica (más palabras).
+  if (n.every(w => t.includes(w))) return 1 + n.length / 100
+  // 2) Lo leído es parte del nombre (el OCR cortó el renglón).
+  if (t.length >= 2 && t.every(w => n.includes(w))) return 0.95
+  // 3) Si no, parecido aproximado (tolera letras mal leídas).
+  return similitud(t.join(' '), n.join(' '))
+}
 
 // Busca, entre TODOS los candidatos, el que más se parece al texto reconocido
-// por OCR (no el primero que "casi" calza) y solo lo acepta si supera el umbral.
+// por OCR y solo lo acepta si supera el umbral.
 function matchCandidato(lista: Candidato[], texto: string): Candidato | undefined {
-  const t = normTxt(texto)
-  if (!t) return undefined
+  if (!normTxt(texto)) return undefined
   let mejor: Candidato | undefined
   let mejorScore = 0
   for (const c of lista) {
     for (const nombre of [c.partido, c.nombre].filter(Boolean) as string[]) {
-      const score = similitud(t, normTxt(nombre))
+      const score = puntaje(texto, nombre)
       if (score > mejorScore) { mejorScore = score; mejor = c }
     }
   }
