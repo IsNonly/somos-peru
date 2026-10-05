@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { supabase, AMBITO_DEPARTAMENTO, AMBITO_DISTRITOS } from '../../lib/supabase'
 import {
-  usePanelData, rolNorm, norm, claveLocal, type CentroFila, type ZonaGrupo, type Persona, type Perfil,
+  usePanelData, rolNorm, norm, claveLocal, fetchTodasLasMesas, type CentroFila, type ZonaGrupo, type Persona, type Perfil,
   ROL_MESA, ROL_LOCAL, ROL_COORD_DIST, ROL_ZONAL,
 } from '../../lib/panel'
 import {
@@ -216,8 +216,18 @@ export default function PanelGeneral() {
     d.perfiles.filter(p => rolNorm(p.rol) === ROL_MESA && p.mesa_asignada).map(p => p.mesa_asignada as string),
   ), [d.perfiles])
 
-  const exportar = () => {
-    const filas = vista === 'territorio' && USA_TERRITORIOS ? territorios.flatMap(g => g.centros) : centrosFlat
+  const exportar = async () => {
+    // Orden correlativo: colegios por su primera mesa y, dentro, por N° de mesa.
+    const todasMesas = await fetchTodasLasMesas().catch(() => [] as { numero: string; colegio_nombre: string | null }[])
+    const primeraMesa = new Map<string, string>()
+    for (const m of todasMesas) {
+      const k = norm(m.colegio_nombre ?? '')
+      if (!primeraMesa.has(k) || m.numero < primeraMesa.get(k)!) primeraMesa.set(k, m.numero)
+    }
+    const ordenColegio = (nombre: string) => primeraMesa.get(norm(nombre)) ?? '999999'
+    const base = vista === 'territorio' && USA_TERRITORIOS ? territorios.flatMap(g => g.centros) : centrosFlat
+    const filas = USA_TERRITORIOS && vista === 'territorio' ? base
+      : [...base].sort((a, b) => ordenColegio(a.nombre).localeCompare(ordenColegio(b.nombre)) || a.nombre.localeCompare(b.nombre, 'es'))
     const rows = filas.map(c => ({
       ...(USA_TERRITORIOS ? { Sector: territorioDe(c.distrito, c.nombre) ?? '' } : {}),
       Distrito: c.distrito ?? '', Colegio: c.nombre, Dirección: c.direccion ?? '',
@@ -229,7 +239,8 @@ export default function PanelGeneral() {
     // Segunda hoja: una fila por persona (PCV y personeros de mesa) con su mesa designada.
     const personas = filas.flatMap(c => [
       ...(c.pcv ? [{ c, p: c.pcv, rol: 'Personero de Centro de Votación' }] : []),
-      ...c.personeros.map(p => ({ c, p, rol: 'Personero de Mesa' })),
+      ...[...c.personeros].sort((x, y) => (x.mesa_asignada ?? '999999').localeCompare(y.mesa_asignada ?? '999999'))
+        .map(p => ({ c, p, rol: 'Personero de Mesa' })),
     ]).map(({ c, p, rol }) => ({
       ...(USA_TERRITORIOS ? { Sector: territorioDe(c.distrito, c.nombre) ?? '' } : {}),
       Distrito: c.distrito ?? '', Colegio: c.nombre, Rol: rol,
@@ -240,6 +251,17 @@ export default function PanelGeneral() {
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Centros y Mesas')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(personas), 'Personeros y Mesas')
+    // Tercera hoja: TODAS las mesas oficiales en orden correlativo, con su colegio
+    // y el personero asignado (vacío si nadie la cubre).
+    if (todasMesas.length) {
+      const porMesa = new Map<string, { nombre: string; dni: string | null; celular: string | null }>()
+      for (const c of filas) for (const p of c.personeros) if (p.mesa_asignada) porMesa.set(p.mesa_asignada, { nombre: p.nombre, dni: p.dni ?? null, celular: p.celular ?? null })
+      const hojaMesas = [...todasMesas].sort((a, b) => a.numero.localeCompare(b.numero)).map(m => {
+        const p = porMesa.get(m.numero)
+        return { 'Local de Votación': m.colegio_nombre ?? '', Mesa: m.numero, Personero: p?.nombre ?? '', DNI: p?.dni ?? '', Celular: p?.celular ?? '' }
+      })
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hojaMesas), 'Mesas (orden correlativo)')
+    }
     if (sinAsignar.length) {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sinAsignar.map(p => ({
         Nombre: p.nombre_completo, DNI: p.dni ?? '', Celular: p.celular ?? '', Rol: rolNorm(p.rol),
