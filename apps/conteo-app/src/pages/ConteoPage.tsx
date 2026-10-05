@@ -57,10 +57,11 @@ const similitud = (a: string, b: string) => {
 const PALABRAS_GENERICAS = new Set(['PARTIDO', 'POLITICO', 'NACIONAL', 'DEMOCRATICO', 'DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS', 'Y', 'POR', 'EN', 'A', 'SOCIAL', 'INTEGRACION'])
 const palabras = (s: string) => normTxt(s).split(' ').filter(w => w && !PALABRAS_GENERICAS.has(w))
 
-// Umbral para aceptar una coincidencia aproximada (texto con ruido del OCR):
-// por debajo, mejor no contarlo (queda en 0, se llena a mano) que asignarlo al
-// partido equivocado.
-const UMBRAL_COINCIDENCIA = 0.6
+// Umbral para aceptar una coincidencia: por debajo, mejor no contarlo (queda en
+// 0, se llena a mano) que asignarlo al partido equivocado. San Isidro usa la
+// comparación por palabras (más estricta); VES y Cercado siguen como estaban.
+const UMBRAL_COINCIDENCIA = 0.4
+const UMBRAL_COINCIDENCIA_SAN_ISIDRO = 0.6
 
 function puntaje(texto: string, nombre: string): number {
   const t = palabras(texto), n = palabras(nombre)
@@ -77,17 +78,18 @@ function puntaje(texto: string, nombre: string): number {
 
 // Busca, entre TODOS los candidatos, el que más se parece al texto reconocido
 // por OCR y solo lo acepta si supera el umbral.
-function matchCandidato(lista: Candidato[], texto: string): Candidato | undefined {
-  if (!normTxt(texto)) return undefined
+function matchCandidato(lista: Candidato[], texto: string, sanIsidro: boolean): Candidato | undefined {
+  const t = normTxt(texto)
+  if (!t) return undefined
   let mejor: Candidato | undefined
   let mejorScore = 0
   for (const c of lista) {
     for (const nombre of [c.partido, c.nombre].filter(Boolean) as string[]) {
-      const score = puntaje(texto, nombre)
+      const score = sanIsidro ? puntaje(texto, nombre) : similitud(t, normTxt(nombre))
       if (score > mejorScore) { mejorScore = score; mejor = c }
     }
   }
-  return mejorScore >= UMBRAL_COINCIDENCIA ? mejor : undefined
+  return mejorScore >= (sanIsidro ? UMBRAL_COINCIDENCIA_SAN_ISIDRO : UMBRAL_COINCIDENCIA) ? mejor : undefined
 }
 
 // Carga la clave Gemini guardada en Supabase (tabla app_config, por auth user id)
@@ -548,7 +550,7 @@ function ConteoPageInner({ asistidoPersoneroId, mesaPCV, onSalirAsistido }: {
         const nuevos: VotosPorNivel = { REGIONAL: {}, PROVINCIAL: {}, DISTRITAL: {} }
         let huboMatch = false
         resultado.votos.forEach(v => {
-          const c = matchCandidato(listaCompleta, v.partido)
+          const c = matchCandidato(listaCompleta, v.partido, sinManual)
           if (!c) return
           const esEspecial = VOTOS_ESPECIALES.some(e2 => e2.id === c.id)
           const valorPara = (n: NivelCandidatura) =>
